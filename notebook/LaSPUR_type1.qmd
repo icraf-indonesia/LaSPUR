@@ -6,3 +6,49 @@ editor: visual
 ---
 
 ## LaSPUR Komponen 1 - Rekonsiliasi Tumpang Tindih
+
+```{r load-libraries}
+#| message: false
+#| warning: false
+#| include: false
+
+source("R/functions.R")
+source("R/helpers.R")
+
+library(terra)
+library(sf)
+library(openxlsx)
+library(tibble)
+library(dplyr)
+```
+
+```{r input-data-paths}
+# Main input data
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RTRW_Int.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RZWP3K_Int.shp"
+
+rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_prioritas_RTRW.xlsx"
+rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
+
+
+```
+
+```{r read-input-data}
+rtrw_vect <- load_and_validate_shapefile(rtrw_path)
+rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
+
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+```
+
+```{r generate_matrix_serasi}
+matrix_serasi <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
+print(matrix_serasi)
+```
+
+
+
+
+
+
+
