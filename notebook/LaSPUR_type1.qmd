@@ -1,16 +1,23 @@
 ---
-title: "LaSPUR Component 1 Implementation"
+title: "LaSPUR Type 1 Implementation"
 author: "RG2 ICRAF Indonesia"
 format: html
 editor: visual
 ---
 
-## LaSPUR Komponen 1 - Rekonsiliasi Tumpang Tindih
+# LaSPUR Tipe 1 - Overlap Area Reconcilliation
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahapan teknis hanya untuk penyelesaian kasus tipe 1, yakni rekonsilitasi area tumpang tindih antara peta RTRW dan RZWP3K dengan penambahan aspek konektivitas ekologis (KE) sebagai komponen yang dipertimbangkan.
+
+# Step 0. Load libraries, functions, and input data
 
 ```{r load-libraries}
-#| message: false
+#| error: true
 #| warning: false
-#| include: false
+#| message: false
+#| include: true
 
 source("R/functions.R")
 source("R/helpers.R")
@@ -20,35 +27,272 @@ library(sf)
 library(openxlsx)
 library(tibble)
 library(dplyr)
+library(landscapemetrics)
+library(purrr)
+library(tidyr)
 ```
 
+Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel.
+
 ```{r input-data-paths}
-# Main input data
-rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RTRW_Int.shp"
-rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RZWP3K_Int.shp"
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Main input data for SERASI index calculation
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RTRW_Pra.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/ST_RZWP3K.shp"
 
 rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
 
+matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_serasi_dummy.xlsx"
+
+# Supporting input data for PADU-CE calculation
+lulc_rast_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/01_Raster/clip/lc2024_palu.tif"
+lulc_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/02_Vector/LULC/PL2024_AR_250K_SULAWESI_TENGAH.shp"
+
+lulc_ref_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_penutupan_lahan_sulteng_solusi.xlsx"
+lulc_ref_klhk_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
+
+matriks_padu_ke_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke_dummy.xlsx"
+matriks_padu_ke_path_klhk <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke_klhk_dummy.xlsx"
 
 ```
 
+Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file.
+
 ```{r read-input-data}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Main input data for SERASI index calculation
 rtrw_vect <- load_and_validate_shapefile(rtrw_path)
 rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
 
 rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
 rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+
+# Supporting input data for PADU-CE calculation
+lulc_rast <- load_and_validate_raster(lulc_rast_path)
+lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
+
+lulc_ref <- load_and_validate_table(lulc_ref_path) 
+lulc_ref_klhk <- load_and_validate_table(lulc_ref_klhk_path)
 ```
+
+# Step 1. Overlap area identification and SERASI index calculation
+
+Pada tahap ini modul akan melakukan serangkaian analisis SERASI untuk menilai tingkat kesesuaian ruang darat dan laut apabila bertumpang tindih ataupun berdampingan dalam rentang tertentu melalui matriks kompatibilitas.
+
+## Step 1.1. Generate and load SERASI index compability matrix
+
+Sel pada matriks berisikan nilai kompatibilitas antara kategori zona dan pola ruang pada kolom dan baris terkait. Nilai yang diinput dapat berasal dari penilaian ahli atau kesepakatan parapihak dan dapat berupa:
+
+-   0 = Tidak kompatibel (konflik mendasar/harus dihindari)
+
+-   0.5 = Kompatibel bersyarat (dapat berdampingan dengan pengaturan/mitigasi)
+
+-   1 = Kompatibel (sangat sesuai/tidak menimbulkan gangguan)
+
+Matriks yang dimuat akan dikonversi ke dalam bentuk *long format matrix*.
 
 ```{r generate_matrix_serasi}
-matrix_serasi <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
-print(matrix_serasi)
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Generate matrix serasi template to be filled
+matrix_serasi_template <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
+write.xlsx(matrix_serasi_template, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_serasi.xlsx", overwrite = TRUE)
+
+# Load a filled matrix serasi
+matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+print(matriks_serasi)
 ```
 
+## Step 1.2. Overlap area identification process
 
+Area tumpang tindih diidentifikasi melalui proses *union* peta RTRW dan RZWP3K dengan function `identify_overlaps()` untuk menghasilkan daftar lokasi tumpang tindih yang unik. Area tumpang tindih yang dihasilkan akan menjadi "*AOI*" dalam analisis SERASI hingga PADU-KE.
 
+```{r identify-filter-validate-overlaps}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
+# Identify the overlaps area 
+union_sf <- identify_overlaps(rtrw_vect, rzwp3k_vect)
+filtered_union_sf <- filter_overlaps(union_sf)
 
+# Filter only qualified overlaps with minimum area size of 156.25 ha
+intersection_large <- filtered_union_sf %>%
+  filter(stat_pu == "intersection", area_flag == "luas terpenuhi")
+plot(intersection_large["area_flag"])
 
+# Validate zone class with lookup table
+valid_class <- validate_zone_class(filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas)
+```
 
+## Step 1.3. Merge SERASI index value into filtered overlap area
+
+Tahap ini mengintegrasikan nilai indeks SERASI yang diperoleh dari matriks kompatibiltas/SERASI dari pengguna dengan area tumpang tindih yang berkorespondensi di dalam peta area tumpang tindih yang telah terfilter/terseleksi.
+
+```{r add-idx-serasi-to-map}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Merge serasi index to filtered overlap area just if the zone class name is matched
+if (is.na(valid_class$mismatch_col3) && is.na(valid_class$mismatch_col4)) {
+  idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) # use intersection_large to select the unit with sufficient area size
+  idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
+  
+  write_sf(idx_serasi_map, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/idx_serasi.shp", overwrite = TRUE)
+  
+  plot(idx_serasi_map["idx_serasi"])
+  print(idx_serasi_table)
+  
+  message("✓ All class names matched. Compatibility values merged successfully.")
+} else {
+  stop("✗ Class name mismatch detected. Please check your input data.")
+}
+
+```
+
+# Step 2. PADU-CE index calculation
+
+Analisis PADU menilai skor integrasi antar ruang darat dan laut melalui penghitungan 7 Indeks Integrasi Lingkungan (IL). Pada dokumen ini, analisis PADU terbatas pada salah satu indeks IL, yakni PADU-KE (konektivitas ekologi) yang mengukur seberapa penting unit area tumpang tindaih dalam menjaga koneksi ekosistem darat–laut.
+
+Analisis PADU-KE melibatkan penilaian ketetanggaan/*adjacency* kelas tutupan/penggunaan lahan yang dapat mendukung fungsi ekologis lintas batas darat–laut, misalnya hutan mangrove yang berdampingan dengan padang lamun.
+
+## Step 2.1. Generate and load PADU-CE index matrix
+
+Indeks PADU-KE dihasilkan melalui penilaian pengguna terhadap hubungan antar kelas tutupan/penggunaan lahan yang dinyatakan dalam bentuk matriks dengan rentang nilai 0-3, dengan interpretasi sebagai berikut:
+
+-   *Konektivitas alami tinggi → 3*\
+    Contoh: Sungai/Estuari ↔ Mangrove, Mangrove ↔ Padang Lamun, Padang Lamun ↔ Terumbu Karang, Hutan Alam ↔ Hutan Pesisir, Nearshore ↔ Lamun/Karang.
+
+-   *Bisa berdampingan dengan pengaturan → 2*\
+    Contoh: Pertanian/Agroforestry ↔ Mangrove (zona penyangga), Permukiman ↔ Sungai/Estuari (sem padang banjir), Perkebunan ↔ Hutan Pesisir (buffer).
+
+-   *Kurang sesuai/risiko → 1*\
+    Contoh: Permukiman/Industri ↔ Terumbu Karang/Lamun, Pertanian basah ↔ Karang/Lamun (risiko sedimentasi/eutrofikasi).
+
+-   *Tidak sesuai/terlarang → 0*\
+    Contoh: Alur Pelayaran ↔ Budidaya Rumput Laut/Marikultur padat, Kabel/Pipa melintasi zona inti konservasi sensitif (tanpa koridor yang jelas).
+
+```{r generate-load-matriks-padu-ke}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Generate PADU-CE matrix template
+matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
+write.xlsx(matriks_padu_ke_template, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke.xlsx", overwrite = TRUE)
+
+# Load a filled PADU-CE matrix
+matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
+
+print(matriks_padu_ke)
+
+# matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref_klhk)
+# 
+# write.xlsx(matriks_padu_ke_template, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke_klhk.xlsx", overwrite = TRUE)
+# 
+# matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path_klhk, title = "padu_ke")
+```
+
+## Step 2.2. Calculate LULC adjacency
+
+Pada tahap ini, untuk setiap unit tumpang tindih, akan dihitung jumlah sisi setiap unit kelas LULC (pixel/feature) yang berbatasan (*edge count*) secara berpasangan dengan kelas LULC yang bertetangga di sekitarnya. Perhitungan meliputi persentase jumlah *edge count* dalam setiap unit. Setiap pasangan kelas yang unik hanya dihitung satu kali (misalnya, pasangan Hutan–Semak dan Semak–Hutan diperlakukan sebagai kasus ketetanggaan yang sama, *edge count* = 1).
+
+Dalam hal ini, modul akan menyediakan 2 opsi format peta LULC yang dapat dihitung, yakni raster dan vector. Keduanya memiliki kekurangan dan kelebihan tersendiri. Format raster lebih unggul dalam kecepatan proses, namun resolusi spasial menjadi faktor pembatas untuk perhitungan *adjacency* bagi unit tumpang tindih yang berukuran lebih kecil dari pixelnya. Sementara format vector memungkinkan perhitungan *adjacency* bagi unit tumpang tindih yang kecil, namun memerlukan waktu proses yang lebih lama.
+
+```{r calculate-lulc-adjacency}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate adjacency for LULC raster input
+lulc_adjacencies <- calculate_lulc_adjacency(
+  lulc_rast,
+  idx_serasi_map,
+  "id_pu"
+)
+
+# Calculate adjacency for LULC vector input
+# lulc_adjacencies <- calculate_lulc_adjacency(
+#   lulc_vect,
+#   idx_serasi_map,
+#   id_col = "id_pu",
+#   class_col = "PL2024_ID"
+# )
+
+print(lulc_adjacencies)
+```
+
+## Step 2.3. Calculate PADU-CE index
+
+Indeks PADU-KE dihitung sebagai jumlah dari rerata bobot perhitungan *adjacency* antar pasangan kelas LULC yang berdampingan. Nilai PADU-KE yang dihasilkan merupakan hasil normalisasi dengan rentang indeks 0-1.
+
+```{r calculate-padu-ke}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Set class id as LULC class combination identifier
+matriks_padu_ke_id <- matriks_padu_ke %>%
+  # For raster format LULC map
+  mutate(
+    class1   = lulc_ref[[1]][match(class1, lulc_ref[[2]])],
+    class2 = lulc_ref[[1]][match(class2, lulc_ref[[2]])]
+  )
+  # For vector format LULC map
+  # mutate(
+  #   class1   = lulc_ref_klhk[[1]][match(class1, lulc_ref_klhk[[2]])],
+  #   class2 = lulc_ref_klhk[[1]][match(class2, lulc_ref_klhk[[2]])]
+  # )
+names(matriks_padu_ke_id) <- c("class_id1", "class_id2", "adj_index")
+
+# Set class id as LULC class combination identifier
+lulc_adjacencies <- lulc_adjacencies %>%
+  mutate(
+    Class_A = as.integer(as.character(Class_A)),
+    Class_B = as.integer(as.character(Class_B))
+  )
+
+# Calculate PADU-CE index
+idx_padu_ke <- calculate_padu_ke(lulc_adjacencies, matriks_padu_ke_id)
+print(idx_padu_ke)
+```
+
+## Step 2.4. Merge PADU-CE index value into filtered overlap area
+
+```{r merge-idx-padu-ke-to-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Merge padu-ke index to filtered overlap area 
+idx_padu_ke_map <- idx_serasi_map %>%
+  mutate(id_pu = as.character(id_pu)) %>%
+  left_join(idx_padu_ke, by = "id_pu")
+
+idx_padu_ke_table <- as.tibble(idx_padu_ke_map %>% st_drop_geometry())
+
+write_sf(idx_padu_ke_map, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/idx_padu_ke.shp", overwrite = TRUE)
+
+plot(idx_padu_ke_map["idx_padu_ke_norm"], border = NA)
+```
+
+# Step 3. PADAN index calculation
