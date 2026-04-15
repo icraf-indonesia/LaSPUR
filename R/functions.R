@@ -538,7 +538,7 @@ calculate_lulc_adjacency.sf <- function(lulc, admin_vector, id_col = "id_pu", cl
 #' @param index_matrix Data frame with columns: `class_id1`, `class_id2`, `adj_index`
 #' @param normalize Logical; if TRUE scales index to 0-1 range
 #'
-#' @return Data frame with `id_pu`, `idx_padu_ke`, and optionally `idx_padu_ke_norm`
+#' @return Data frame with `id_pu`, `idx_padu_ke_abs`, and optionally `idx_padu_ke`
 #'
 #' @examples
 #' \dontrun{
@@ -573,17 +573,131 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
     dplyr::filter(!is.na(adj_index)) |>
     dplyr::mutate(weighted = percentage * adj_index) |>
     dplyr::group_by(id_pu) |>
-    dplyr::summarise(idx_padu_ke = sum(weighted, na.rm = TRUE), .groups = "drop")
+    dplyr::summarise(idx_padu_ke_abs = sum(weighted, na.rm = TRUE), .groups = "drop")
   
   if (normalize) {
     max_val <- max(index_matrix$adj_index, na.rm = TRUE)
     result <- result |>
-      dplyr::mutate(idx_padu_ke_norm = idx_padu_ke / (max_val * 100))
+      dplyr::mutate(idx_padu_ke = idx_padu_ke_abs / (max_val * 100))
   }
   
   return(result)
 }
 
+
+# Perhitungan Indeks PADU Final -------------------------------------------
+
+#' Calculate composite PADU index from multiple indicators
+#'
+#' @description
+#' Joins multiple PADU index vectors into a single spatial object and computes a composite index.
+#' Each input vector must contain an `id_pu` column and one `idx_padu_*` column.
+#' The function dynamically detects available indices and applies:
+#' \itemize{
+#'   \item Weighted sum if all expected indices (7) are available
+#'   \item Simple average if fewer than 7 indices are available
+#' }
+#' Weights are matched to index suffixes (e.g., `idx_padu_ke` → `"ke"`) using a lookup table.
+#'
+#' @param padu_list A list of `sf` objects containing individual PADU indices.
+#'   Each object must include `id_pu` and one column matching pattern `idx_padu_*`.
+#' @param idx_padu_map An `sf` object serving as the base spatial layer (e.g., planning units),
+#'   containing at least the `id_pu` column.
+#' @param padu_idx_weight A `data.frame` or tibble with at least two columns:
+#'   the first column representing index codes (e.g., "KE", "HS") and the second column
+#'   representing corresponding weights.
+#'
+#' @return An `sf` object with all joined `idx_padu_*` columns and an additional column:
+#' \describe{
+#'   \item{idx_padu_final}{Composite PADU index calculated per feature}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Prepare list of PADU index layers
+#' padu_list <- list(
+#'   idx_padu_ke,
+#'   idx_padu_hs,
+#'   idx_padu_kl
+#' )
+#'
+#' # Base spatial layer
+#' idx_padu_map <- idx_serasi_map
+#'
+#' # Weight table
+#' padu_idx_weight <- tibble::tibble(
+#'   Kode = c("KE", "HS", "KL"),
+#'   Bobot = c(0.2, 0.2, 0.15)
+#' )
+#'
+#' # Calculate composite index
+#' result <- calculate_padu_index(
+#'   padu_list = padu_list,
+#'   idx_padu_map = idx_padu_map,
+#'   padu_idx_weight = padu_idx_weight
+#' )
+#' }
+#'
+#' @export
+calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
+  # Join all PADU indices
+  idx_padu_map <- reduce(
+    padu_list,
+    .init = idx_padu_map,
+    .f = function(x, y) {
+      
+      idx_col <- names(y)[grepl("^idx_padu_[a-z]+$", names(y))]
+      
+      y_clean <- y %>%
+        st_drop_geometry() %>%
+        mutate(id_pu = as.integer(id_pu)) %>%
+        select(id_pu, all_of(idx_col))
+      
+      left_join(x, y_clean, by = "id_pu")
+    }
+  )
+  
+  # Prepare weights 
+  weights <- padu_idx_weight %>%
+    mutate(
+      code  = tolower(.[[1]]),
+      value = .[[2]]
+    )
+  
+  # Detect index columns
+  idx_cols <- names(idx_padu_map)[grepl("^idx_padu_", names(idx_padu_map))]
+  idx_code <- stringr::str_remove(idx_cols, "idx_padu_")
+  
+  # Count available indices
+  n_idx <- length(idx_cols)
+  
+  if (n_idx < 7) {
+    message(paste0(
+      "Only ", n_idx, " PADU indices detected. ",
+      "Using simple average instead of weighted calculation."
+    ))
+  } else {
+    message("All 7 PADU indices detected. Using weighted calculation.")
+  }
+  
+  # Calculate final index
+  idx_padu_map <- idx_padu_map %>%
+    rowwise() %>%
+    mutate(
+      idx_padu_final = if (n_idx < 7) {
+        mean(c_across(all_of(idx_cols)), na.rm = TRUE)
+      } else {
+        sum(
+          c_across(all_of(idx_cols)) *
+            weights$value[match(idx_code, weights$code)],
+          na.rm = TRUE
+        )
+      }
+    ) %>%
+    ungroup()
+  
+  return(idx_padu_map)
+}
 
 # Perhitungan Indeks PADAN ------------------------------------------------
 

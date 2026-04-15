@@ -30,6 +30,7 @@ library(dplyr)
 library(landscapemetrics)
 library(purrr)
 library(tidyr)
+library(stringr)
 ```
 
 Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel.
@@ -58,6 +59,9 @@ lulc_ref_klhk_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Dat
 
 matriks_padu_ke_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke_dummy.xlsx"
 matriks_padu_ke_path_klhk <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/matriks_padu_ke_klhk_dummy.xlsx"
+
+# Parameterization
+padu_idx_weight_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/03_Tabular/tabel_acuan_bobot_PADU.xlsx"
 
 ```
 
@@ -132,7 +136,7 @@ filtered_union_sf <- filter_overlaps(union_sf)
 # Filter only qualified overlaps with minimum area size of 156.25 ha
 intersection_large <- filtered_union_sf %>%
   filter(stat_pu == "intersection", area_flag == "luas terpenuhi")
-plot(intersection_large["area_flag"])
+plot(intersection_large)
 
 # Validate zone class with lookup table
 valid_class <- validate_zone_class(filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas)
@@ -292,7 +296,51 @@ idx_padu_ke_table <- as.tibble(idx_padu_ke_map %>% st_drop_geometry())
 
 write_sf(idx_padu_ke_map, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/idx_padu_ke.shp", overwrite = TRUE)
 
-plot(idx_padu_ke_map["idx_padu_ke_norm"], border = NA)
+plot(idx_padu_ke_map["idx_padu_ke"], border = NA)
 ```
 
-# Step 3. PADAN index calculation
+# Step 3. PADU index calculation
+
+Tahapan ini menghitung nilai indeks PADU dari sejumlah analisi PADU yang dilakukan.
+
+```{r calculate-padu-final}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load weight reference lookup table
+padu_idx_weight <- load_and_validate_table(padu_idx_weight_path)
+weight_sum <- sum(padu_idx_weight[2])
+
+if (weight_sum == 1){
+  # Remove unecessary fields
+  idx_padu_map <- idx_serasi_map %>%
+    select(-area_ha, -area_flag)
+  
+  # List all PADU analysis
+  padu_list <- list(
+    idx_padu_ke
+    # idx_padu_hs,
+    # idx_padu_kl,
+    # idx_padu_kh,
+    # idx_padu_rtp,
+    # idx_padu_se,
+    # idx_padu_ki
+  )
+  
+  # Calculate PADU index
+  idx_padu_map <- calculate_padu_index(
+    padu_list = padu_list,
+    idx_padu_map = idx_padu_map,
+    padu_idx_weight = padu_idx_weight
+  )
+  
+  plot(idx_padu_map["idx_padu_final"], border = NA)
+} else {
+  stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
+}
+
+```
+
+# Step 4. PADAN index calculation
