@@ -1,5 +1,79 @@
 # Identifikasi Area Tumpang Tindih ----------------------------------------
 
+#' Identify intersections between two polygon layers
+#'
+#' @description
+#' Performs a spatial intersection operation between two polygon layers, returning
+#' only the overlapping areas with preserved attributes from both layers.
+#'
+#' @param x First layer: `sf` object with polygons
+#' @param y Second layer: `sf` object with polygons
+#'
+#' @return An `sf` object with columns:
+#'   - `id_pu`: Sequential ID
+#'   - `stat_pu`: Type ("intersection")
+#'   - All attributes from both inputs
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' poly1 <- st_read("layer1.shp")
+#' poly2 <- st_read("layer2.shp")
+#' result <- identify_overlaps(poly1, poly2)
+#' }
+#'
+#' @importFrom sf st_geometry_type st_as_sf st_sfc st_crs st_is_empty
+#' @importFrom terra vect makeValid same.crs project intersect nrow crs
+#' @importFrom dplyr mutate select
+#'
+#' @export
+identify_overlaps <- function(x, y) {
+  if (!inherits(x, "sf")) stop("x must be an sf object")
+  if (!inherits(y, "sf")) stop("y must be an sf object")
+  
+  geom_type <- c("POLYGON", "MULTIPOLYGON")
+  if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
+    stop("x must contain polygons or multipolygons")
+  if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
+    stop("y must contain polygons or multipolygons")
+  
+  x_v <- terra::vect(x) |> terra::makeValid()
+  y_v <- terra::vect(y) |> terra::makeValid()
+  
+  if (!terra::same.crs(x_v, y_v)) {
+    warning("CRS differ. Reprojecting y to the CRS of x.")
+    y_v <- terra::project(y_v, terra::crs(x_v))
+  }
+  
+  # Intersection 
+  intersect_v <- terra::intersect(x_v, y_v)
+  
+  if (terra::nrow(intersect_v) == 0) {
+    result <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+  } else {
+    result <- sf::st_as_sf(intersect_v)
+    result$stat_pu <- "intersection"
+  }
+
+  all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
+  for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
+  
+  # Remove empty geometries
+  result <- result[!sf::st_is_empty(result), ]
+  
+  # Add sequential ID and reorder columns if there are results
+  if (nrow(result) > 0) {
+    result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
+    result <- result |> 
+      dplyr::mutate(id_pu = dplyr::row_number()) |>
+      dplyr::select(id_pu, stat_pu, dplyr::everything())
+  } else {
+    result$id_pu <- integer(0)
+  }
+  
+  return(result)
+}
+
 #' Identify overlaps between two polygon layers (ArcMap-like union)
 #'
 #' @description
@@ -28,68 +102,68 @@
 #' @importFrom dplyr bind_rows mutate select
 #'
 #' @export
-identify_overlaps <- function(x, y) {
-  if (!inherits(x, "sf")) stop("x must be an sf object")
-  if (!inherits(y, "sf")) stop("y must be an sf object")
-  
-  geom_type <- c("POLYGON", "MULTIPOLYGON")
-  if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
-    stop("x must contain polygons or multipolygons")
-  if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
-    stop("y must contain polygons or multipolygons")
-  
-  x_v <- terra::vect(x) |> terra::makeValid()
-  y_v <- terra::vect(y) |> terra::makeValid()
-  
-  if (!terra::same.crs(x_v, y_v)) {
-    warning("CRS differ. Reprojecting y to the CRS of x.")
-    y_v <- terra::project(y_v, terra::crs(x_v))
-  }
-  
-  # Intersection
-  intersect_v <- terra::intersect(x_v, y_v)
-  if (terra::nrow(intersect_v) == 0) {
-    intersect_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-  } else {
-    intersect_sf <- sf::st_as_sf(intersect_v)
-    intersect_sf$stat_pu <- "intersection"
-  }
-  
-  # X only
-  x_only_v <- terra::erase(x_v, y_v)
-  if (terra::nrow(x_only_v) == 0) {
-    x_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-  } else {
-    x_only_sf <- sf::st_as_sf(x_only_v)
-    x_only_sf$stat_pu <- as.character(names(x)[1])
-    y_attr <- setdiff(names(y_v), names(x_only_sf))
-    for (col in y_attr) x_only_sf[[col]] <- NA
-  }
-  
-  # Y only
-  y_only_v <- terra::erase(y_v, x_v)
-  if (terra::nrow(y_only_v) == 0) {
-    y_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-  } else {
-    y_only_sf <- sf::st_as_sf(y_only_v)
-    y_only_sf$stat_pu <- as.character(names(y)[1])
-    x_attr <- setdiff(names(x_v), names(y_only_sf))
-    for (col in x_attr) y_only_sf[[col]] <- NA
-  }
-  
-  # Combine
-  result <- dplyr::bind_rows(x_only_sf, y_only_sf, intersect_sf)
-  all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
-  for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
-  
-  result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
-  result <- result[!sf::st_is_empty(result), ]
-  result <- result |> 
-    dplyr::mutate(id_pu = dplyr::row_number()) |>
-    dplyr::select(id_pu, stat_pu, dplyr::everything())
-  
-  return(result)
-}
+# identify_overlaps <- function(x, y) {
+#   if (!inherits(x, "sf")) stop("x must be an sf object")
+#   if (!inherits(y, "sf")) stop("y must be an sf object")
+#   
+#   geom_type <- c("POLYGON", "MULTIPOLYGON")
+#   if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
+#     stop("x must contain polygons or multipolygons")
+#   if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
+#     stop("y must contain polygons or multipolygons")
+#   
+#   x_v <- terra::vect(x) |> terra::makeValid()
+#   y_v <- terra::vect(y) |> terra::makeValid()
+#   
+#   if (!terra::same.crs(x_v, y_v)) {
+#     warning("CRS differ. Reprojecting y to the CRS of x.")
+#     y_v <- terra::project(y_v, terra::crs(x_v))
+#   }
+#   
+#   # Intersection
+#   intersect_v <- terra::intersect(x_v, y_v)
+#   if (terra::nrow(intersect_v) == 0) {
+#     intersect_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+#   } else {
+#     intersect_sf <- sf::st_as_sf(intersect_v)
+#     intersect_sf$stat_pu <- "intersection"
+#   }
+#   
+#   # X only
+#   x_only_v <- terra::erase(x_v, y_v)
+#   if (terra::nrow(x_only_v) == 0) {
+#     x_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+#   } else {
+#     x_only_sf <- sf::st_as_sf(x_only_v)
+#     x_only_sf$stat_pu <- as.character(names(x)[1])
+#     y_attr <- setdiff(names(y_v), names(x_only_sf))
+#     for (col in y_attr) x_only_sf[[col]] <- NA
+#   }
+#   
+#   # Y only
+#   y_only_v <- terra::erase(y_v, x_v)
+#   if (terra::nrow(y_only_v) == 0) {
+#     y_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+#   } else {
+#     y_only_sf <- sf::st_as_sf(y_only_v)
+#     y_only_sf$stat_pu <- as.character(names(y)[1])
+#     x_attr <- setdiff(names(x_v), names(y_only_sf))
+#     for (col in x_attr) y_only_sf[[col]] <- NA
+#   }
+#   
+#   # Combine
+#   result <- dplyr::bind_rows(x_only_sf, y_only_sf, intersect_sf)
+#   all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
+#   for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
+#   
+#   result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
+#   result <- result[!sf::st_is_empty(result), ]
+#   result <- result |> 
+#     dplyr::mutate(id_pu = dplyr::row_number()) |>
+#     dplyr::select(id_pu, stat_pu, dplyr::everything())
+#   
+#   return(result)
+# }
 
 #' Process overlap results: add IDs, area, and size flag
 #'

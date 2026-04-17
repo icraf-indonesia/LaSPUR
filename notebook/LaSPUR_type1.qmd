@@ -153,7 +153,8 @@ Tahap ini mengintegrasikan nilai indeks SERASI yang diperoleh dari matriks kompa
 #| include: true
 
 # Merge serasi index to filtered overlap area just if the zone class name is matched
-if (is.na(valid_class$mismatch_col3) && is.na(valid_class$mismatch_col4)) {
+if (length(valid_class$mismatch_col3) == 0 &&
+    length(valid_class$mismatch_col4) == 0) {
   idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) # use intersection_large to select the unit with sufficient area size
   idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
   
@@ -296,7 +297,7 @@ idx_padu_ke_table <- as.tibble(idx_padu_ke_map %>% st_drop_geometry())
 
 write_sf(idx_padu_ke_map, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/idx_padu_ke.shp", overwrite = TRUE)
 
-plot(idx_padu_ke_map["idx_padu_ke"], border = NA)
+plot(idx_padu_ke_map["idx_padu_ke"], border = 1)
 ```
 
 # Step 3. PADU index calculation
@@ -336,7 +337,7 @@ if (weight_sum == 1){
     padu_idx_weight = padu_idx_weight
   )
   
-  plot(idx_padu_map["idx_padu_final"], border = NA)
+  plot(idx_padu_map["idx_padu_final"], border = 1)
 } else {
   stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
 }
@@ -344,3 +345,18 @@ if (weight_sum == 1){
 ```
 
 # Step 4. PADAN index calculation
+
+```{r calculate-padan}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+
+alpha <- 0.5
+
+idx_padan_map <- idx_padu_map %>%
+  mutate(
+    idx_padan = (alpha * idx_serasi) + ((1 - alpha) * idx_padu_final)
+  )
+```
