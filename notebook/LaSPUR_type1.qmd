@@ -360,3 +360,113 @@ idx_padan_map <- idx_padu_map %>%
     idx_padan = (alpha * idx_serasi) + ((1 - alpha) * idx_padu_final)
   )
 ```
+
+# Step 5. Calculate Recommendation
+
+## Step 5.1 Calculate Zone Alternative
+
+```{r calculate-alternative-zone}
+
+idx_padan_map_alt <- idx_padan_map %>%
+  rowwise() %>%
+  mutate(
+    alt_RTRW = get_alternative_zone(RZWP3K, RTRW, "RTRW", matriks_serasi),
+    alt_RZWP3K = get_alternative_zone(RTRW, RZWP3K, "RZWP3K", matriks_serasi)
+  ) %>%
+  ungroup()
+```
+
+## Step 5.2 Calculate SERASI Index for Alternative Zone
+
+```{r calculate-serasi-idx-for-alternative-zone}
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  rowwise() %>%
+  mutate(
+    idx_serasi_rtrw_alt = get_alternative_serasi(RZWP3K, alt_RTRW, matriks_serasi),
+    idx_serasi_rzwp3k_alt = get_alternative_serasi(RTRW, alt_RZWP3K, matriks_serasi)
+  ) %>%
+  ungroup()
+```
+
+## Step 5.3 Calculate PADAN Index for Alternative Zone
+
+```{r calculate-padan-idx-for-alternative-zone}
+
+alpha <- 0.5
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    idx_padan_rtrw_alt = (alpha * idx_serasi_rtrw_alt) + ((1 - alpha) * idx_padu_final),
+    idx_padan_rzwp3k_alt = (alpha * idx_serasi_rzwp3k_alt) + ((1 - alpha) * idx_padu_final)
+  )
+```
+
+## Step 5.4 Calculate Recommendation
+
+```{r calculate-recommendation}
+
+# Thresholds
+threshold_serasi <- 0.7
+threshold_padu   <- 0.8
+
+# Extract priority zone class (Prioritas == 1)
+priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
+priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
+
+# Add recommendation
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    recommendation = case_when(
+      is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
+      RTRW %in% priority_rtrw ~ "",
+      RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
+      idx_serasi >= threshold_serasi ~ "Koordinasi",
+      idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
+      idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
+    )
+  )
+```
+
+## Step 5.5 Calculate Decision
+
+```{r calculate-decision}
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    decision = case_when(
+      is.na(recommendation) | is.na(idx_padan_rzwp3k_alt) | is.na(idx_padan) | 
+      is.na(alt_RZWP3K) | is.na(idx_padan_rtrw_alt) | is.na(alt_RTRW) ~ NA_character_,
+      recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
+        paste("Ubah RZWP3K ke", alt_RZWP3K),
+      
+      recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
+      
+      recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
+        paste("Ubah RTRW ke", alt_RTRW),
+      
+      recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
+      
+      TRUE ~ "Tetap/Koordinasi"
+    )
+  )
+```
+
+## Step 5.6 Calculate The Final PADAN Index
+
+```{r calculate-final-padan}
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    idx_padan_final = case_when(
+      grepl("Ubah RTRW", decision, fixed = TRUE) ~ idx_padan_rtrw_alt,
+      grepl("Ubah RZWP3K", decision, fixed = TRUE) ~ idx_padan_rzwp3k_alt,
+      grepl("Tetap/Koordinasi", decision, fixed = TRUE) ~ idx_padan,
+      TRUE ~ NA_real_
+    )
+  )
+
+idx_padan_alt_table <- idx_padan_map_alt %>% st_drop_geometry()
+
+write.xlsx(idx_padan_alt_table, "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Results/idx_padan_alternative.xlsx", overwrite = TRUE)
+```

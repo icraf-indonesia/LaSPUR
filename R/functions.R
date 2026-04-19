@@ -777,3 +777,145 @@ calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
 
 # 9. calculate_padan()
 # 10. calculate_recommendation()
+
+# Perhitungan Rekomendasi -------------------------------------------------
+
+# calculate_alternative_zone
+
+#' Determine alternative zone using compatibility matrix
+#'
+#' @description
+#' Given a pair zone (e.g., RZWP3K or RTRW) and a current zone value, this function
+#' returns either the best‑matching or second‑best‑matching zone from the opposite
+#' classification system, based on a compatibility matrix. If the current zone
+#' equals the best match, the second best is returned; otherwise the best match is
+#' returned.
+#'
+#' @param pair_zone Character: the zone value used as the filter criterion.
+#'   For `return_type = "RTRW"`, this should be an RZWP3K value.
+#'   For `return_type = "RZWP3K"`, this should be an RTRW value.
+#' @param current_zone Character: the current value of the zone type we are
+#'   trying to replace. Used for comparison with the best match.
+#' @param return_type Character: either `"RTRW"` or `"RZWP3K"`.
+#'   - `"RTRW"`: filter by `class2` (RZWP3K), return a `class1` (RTRW) zone.
+#'   - `"RZWP3K"`: filter by `class1` (RTRW), return a `class2` (RZWP3K) zone.
+#' @param df A data frame (or tibble) containing the compatibility matrix with
+#'   exactly three columns in this order:
+#'   \enumerate{
+#'     \item `class1` – RTRW zone names
+#'     \item `class2` – RZWP3K zone names
+#'     \item `idx_serasi` – numeric compatibility scores
+#'   }
+#'
+#' @return A character string with the chosen alternative zone name, or `NA`
+#'   if no valid alternative exists (e.g., input missing, no data, or no second
+#'   best when needed).
+#'
+#' @examples
+#' \dontrun{
+#' # Example compatibility matrix (first few rows)
+#' mat <- tibble::tribble(
+#'   ~class1,                          ~class2,                  ~idx_serasi,
+#'   "Kawasan Lindung",                "Suaka",                  1.0,
+#'   "Kawasan Perikanan",              "Suaka",                  0.5,
+#'   "Kawasan Lindung",                "Taman",                  0.8,
+#'   "Kawasan Perikanan",              "Taman",                  1.0
+#' )
+#'
+#' # Alternative RTRW for a polygon with RZWP3K = "Suaka" and current RTRW = "Kawasan Lindung"
+#' get_alternative_zone("Suaka", "Kawasan Lindung", "RTRW", mat)
+#' # Returns "Kawasan Perikanan" (second best)
+#'
+#' # Alternative RZWP3K for a polygon with RTRW = "Kawasan Lindung" and current RZWP3K = "Suaka"
+#' get_alternative_zone("Kawasan Lindung", "Suaka", "RZWP3K", mat)
+#' # Returns "Taman" (best match because "Suaka" is already best? Actually "Suaka" has score 1.0,
+#' # which equals current, so second best "Taman" is returned)
+#' }
+#'
+#' @importFrom dplyr filter
+#' @importFrom tibble tibble
+#'
+#' @export
+get_alternative_zone <- function(pair_zone, current_zone, return_type, df) {
+  
+  if (is.na(pair_zone) || pair_zone == "") return(NA_character_)
+  
+  # Determine filter column and return column based on return_type
+  if (return_type == "RTRW") {
+    filter_col <- 2   # class2 (RZWP3K)
+    return_col <- 1   # class1 (RTRW)
+  } else if (return_type == "RZWP3K") {
+    filter_col <- 1   # class1 (RTRW)
+    return_col <- 2   # class2 (RZWP3K)
+  } else {
+    stop("return_type must be 'RTRW' or 'RZWP3K'")
+  }
+  
+  # Filter rows where the filter column equals pair_zone
+  filtered <- df[df[[filter_col]] == pair_zone, ]
+  if (nrow(filtered) == 0) return(NA_character_)
+  
+  scores <- filtered[[3]]          # idx_serasi
+  candidates <- filtered[[return_col]]
+  
+  max_score <- max(scores, na.rm = TRUE)
+  best_idx <- which(scores == max_score)[1]
+  best_zone <- candidates[best_idx]
+  
+  if (!is.na(current_zone) && best_zone == current_zone) {
+    # Second best
+    sorted_scores <- sort(scores, decreasing = TRUE)
+    second_score <- sorted_scores[2]
+    if (is.na(second_score)) return(NA_character_)
+    second_idx <- which(scores == second_score)[1]
+    return(candidates[second_idx])
+  } else {
+    return(best_zone)
+  }
+}
+
+# determine serasi index for the alternative zones
+
+#' Look up idx_serasi value from a compatibility matrix, trying both class orders
+#'
+#' @description
+#' Searches for a matching pair `(class_a, class_b)` in the reference matrix
+#' `serasi_df`. If no exact match is found, it tries the reversed order
+#' `(class_b, class_a)`. Returns `NA` if neither order yields a match or if
+#' any input is `NA`.
+#'
+#' @param class_a Character string: first class name
+#' @param class_b Character string: second class name
+#' @param serasi_df Data frame with columns `class1`, `class2`, `idx_serasi`
+#'                  (the compatibility matrix)
+#'
+#' @return A numeric value (the `idx_serasi`) or `NA_real_` if not found.
+#'
+#' @examples
+#' \dontrun{
+#' # Sample matrix
+#' mat <- data.frame(
+#'   class1 = c("A", "B"),
+#'   class2 = c("B", "C"),
+#'   idx_serasi = c(0.5, 1)
+#' )
+#'
+#' get_alternative_serasi("A", "B", mat)  # returns 0.5 (original order)
+#' get_alternative_serasi("B", "A", mat)  # returns 0.5 (reversed order)
+#' get_alternative_serasi("X", "Y", mat)  # returns NA
+#' }
+#'
+#' @export
+get_alternative_serasi <- function(class_a, class_b, serasi_df) {
+  if (is.na(class_a) || is.na(class_b)) return(NA_real_)
+  
+  # Try original order
+  match_row <- serasi_df[serasi_df$class1 == class_a & serasi_df$class2 == class_b, ]
+  if (nrow(match_row) == 1) return(match_row$idx_serasi)
+  
+  # Try reversed order
+  match_row <- serasi_df[serasi_df$class1 == class_b & serasi_df$class2 == class_a, ]
+  if (nrow(match_row) == 1) return(match_row$idx_serasi)
+
+  return(NA_real_)
+}
