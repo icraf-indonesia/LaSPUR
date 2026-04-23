@@ -22,15 +22,17 @@ Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahap
 source("R/functions.R")
 source("R/helpers.R")
 
-library(terra)
-library(sf)
-library(openxlsx)
-library(tibble)
-library(dplyr)
-library(landscapemetrics)
-library(purrr)
-library(tidyr)
-library(stringr)
+install_load(
+  "terra",
+  "sf",
+  "openxlsx",
+  "tibble",
+  "dplyr",
+  "landscapemetrics",
+  "purrr",
+  "tidyr",
+  "stringr"
+)
 ```
 
 Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel.
@@ -50,16 +52,19 @@ rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
 
 matriks_serasi_path <- "data/tabular/matriks_serasi_dummy.xlsx"
 
-# Supporting input data for PADU-CE calculation
+# PADU_KE input data
 lulc_rast_path <- "data/raster/LaS_2024.tif"
 lulc_rast_klhk_path <- "data/raster/LaS_KLHK_2024_100m.tif"
-lulc_vect_path <- "data/vector/PL2024_AR_250K_SULAWESI_TENGAH_dis_utm.shp"
+lulc_vect_path <- "data/vector/PL2024_Coral_Seagrass_Union.shp"
 
 lulc_ref_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_solusi.xlsx"
 lulc_ref_klhk_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
 
 matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_dummy.xlsx"
 matriks_padu_ke_path_klhk <- "data/tabular/matriks_padu_ke_klhk_dummy.xlsx"
+
+# PADU-KL input data
+protected_area_vect_path <- "data/vector/Kawasan_Lindung_Sulteng.shp"
 
 # Parameterization
 padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
@@ -81,13 +86,16 @@ rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
 rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
 rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
 
-# Supporting input data for PADU-CE calculation
+# Load PADU-KE input
 # lulc_rast <- load_and_validate_raster(lulc_rast_path)
 lulc_rast <- load_and_validate_raster(lulc_rast_klhk_path)
 lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
 
 lulc_ref <- load_and_validate_table(lulc_ref_path) 
 lulc_ref_klhk <- load_and_validate_table(lulc_ref_klhk_path)
+
+# Load PADU-KL input
+protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path)
 ```
 
 # Step 1. Overlap area identification and SERASI index calculation
@@ -131,9 +139,12 @@ Area tumpang tindih diidentifikasi melalui proses *union* peta RTRW dan RZWP3K d
 #| message: false
 #| include: true
 
+# Set minimum area treshold
+threshold_ha = 156.25
+
 # Identify the overlaps area 
 union_sf <- identify_overlaps(rtrw_vect, rzwp3k_vect)
-filtered_union_sf <- filter_overlaps(union_sf)
+filtered_union_sf <- filter_overlaps(union_sf, threshold_ha)
 
 # Filter only qualified overlaps with minimum area size of 156.25 ha
 # intersection_large <- filtered_union_sf %>%
@@ -172,13 +183,13 @@ if (length(valid_class$mismatch_col3) == 0 &&
 
 ```
 
-# Step 2. PADU-CE index calculation
+# Step 2. PADU-KE index calculation
 
 Analisis PADU menilai skor integrasi antar ruang darat dan laut melalui penghitungan 7 Indeks Integrasi Lingkungan (IL). Pada dokumen ini, analisis PADU terbatas pada salah satu indeks IL, yakni PADU-KE (konektivitas ekologi) yang mengukur seberapa penting unit area tumpang tindaih dalam menjaga koneksi ekosistem darat–laut.
 
 Analisis PADU-KE melibatkan penilaian ketetanggaan/*adjacency* kelas tutupan/penggunaan lahan yang dapat mendukung fungsi ekologis lintas batas darat–laut, misalnya hutan mangrove yang berdampingan dengan padang lamun.
 
-## Step 2.1. Generate and load PADU-CE index matrix
+## Step 2.1. Generate and load PADU-KE index matrix
 
 Indeks PADU-KE dihasilkan melalui penilaian pengguna terhadap hubungan antar kelas tutupan/penggunaan lahan yang dinyatakan dalam bentuk matriks dengan rentang nilai 0-3, dengan interpretasi sebagai berikut:
 
@@ -200,16 +211,16 @@ Indeks PADU-KE dihasilkan melalui penilaian pengguna terhadap hubungan antar kel
 #| message: false
 #| include: true
 
-# # Generate PADU-CE matrix template
+# # Generate PADU-KE matrix template
 # matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
 # write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke.xlsx", overwrite = TRUE)
 # 
-# # Load a filled PADU-CE matrix
+# # Load a filled PADU-KE matrix
 # matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
 # 
 # print(matriks_padu_ke)
 
-# Generate PADU-CE for KLHK data
+# Generate PADU-KE for KLHK data
 matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref_klhk)
 
 write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke_klhk.xlsx", overwrite = TRUE)
@@ -243,13 +254,13 @@ lulc_adjacencies <- calculate_lulc_adjacency(
   lulc_vect,
   idx_serasi_map,
   id_col = "id_pu",
-  class_col = "PL2024_ID"
+  class_col = "ID"
 )
 
 print(lulc_adjacencies)
 ```
 
-## Step 2.3. Calculate PADU-CE index
+## Step 2.3. Calculate PADU-KE index
 
 Indeks PADU-KE dihitung sebagai rerata bobot perhitungan *adjacency* antar pasangan kelas LULC yang berdampingan. Nilai PADU-KE yang dihasilkan merupakan hasil normalisasi dengan rentang indeks 0-1.
 
@@ -280,12 +291,12 @@ lulc_adjacencies <- lulc_adjacencies %>%
     Class_B = as.integer(as.character(Class_B))
   )
 
-# Calculate PADU-CE index
+# Calculate PADU-KE index
 idx_padu_ke <- calculate_padu_ke(lulc_adjacencies, matriks_padu_ke_id)
 print(idx_padu_ke)
 ```
 
-## Step 2.4. Merge PADU-CE index value into filtered overlap area
+## Step 2.4. Merge PADU-KE index value into filtered overlap area
 
 Tahap ini mengintegrasikan nilai indeks PADU-KE yang diperoleh dari matriks PADU-KE yang telah didefinisikan oleh pengguna dengan area tumpang tindih zona.
 
@@ -300,9 +311,23 @@ idx_padu_ke_map <- idx_serasi_map %>%
   mutate(id_pu = as.character(id_pu)) %>%
   left_join(idx_padu_ke, by = "id_pu")
 
-idx_padu_ke_table <- as.tibble(idx_padu_ke_map %>% st_drop_geometry())
-
 plot(idx_padu_ke_map["idx_padu_ke"], border = 1)
+```
+
+# Step 3. PADU-KL index calculation
+
+Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian antara kawasan lindung darat (hutan lindung, suaka margasatwa) dengan kawasan konservasi laut pada area tumpang tindih RTRW dan RZWP3K.
+
+```{r calculate-padu-kl}
+
+idx_padu_kl_map <- calculate_protected_pct(idx_serasi_map, protected_area_vect) %>%
+  mutate(
+    idx_padu_kl = protected_area_pct/100
+  )
+
+idx_padu_kl <- as.tibble(idx_padu_kl_map %>% st_drop_geometry())
+
+plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
 ```
 
 # Step 3. PADU index calculation
@@ -328,9 +353,9 @@ if (weight_sum == 1){
   
   # List all PADU analysis
   padu_list <- list(
-    idx_padu_ke
+    idx_padu_ke,
     # idx_padu_hs,
-    # idx_padu_kl,
+    idx_padu_kl
     # idx_padu_kh,
     # idx_padu_rtp,
     # idx_padu_se,
