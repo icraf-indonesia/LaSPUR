@@ -39,7 +39,7 @@ pacman::p_load(
 )
 ```
 
-Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel.
+Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel. Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file dilakukan pada setiap tahap yang berkaitan dengan data tersebut.
 
 ```{r input-data-paths}
 #| error: true
@@ -70,36 +70,14 @@ matriks_padu_ke_path_klhk <- "data/tabular/matriks_padu_ke_klhk_dummy.xlsx"
 # PADU-KL input data
 protected_area_vect_path <- "data/vector/Kawasan_Lindung_Sulteng.shp"
 
+# PADU-KH input data
+coral_vect_path <- "data/vector/AC_Coral_Sulteng_dis.shp"
+seagrass_vect_path <- "data/vector/AC_Seagrass_Sulteng_dis.shp"
+mangrove_vect_path <- "data/vector/mangrove_sulteng.shp"
+
 # Parameterization
 padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
 
-```
-
-Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file.
-
-```{r read-input-data}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Main input data for SERASI index calculation
-rtrw_vect <- load_and_validate_shapefile(rtrw_path)
-rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
-
-rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
-rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
-
-# Load PADU-KE input
-# lulc_rast <- load_and_validate_raster(lulc_rast_path)
-lulc_rast <- load_and_validate_raster(lulc_rast_klhk_path)
-lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
-
-lulc_ref <- load_and_validate_table(lulc_ref_path) 
-lulc_ref_klhk <- load_and_validate_table(lulc_ref_klhk_path)
-
-# Load PADU-KL input
-protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path)
 ```
 
 # Step 1. Overlap area identification and SERASI index calculation
@@ -142,6 +120,10 @@ Area tumpang tindih diidentifikasi melalui proses *union* peta RTRW dan RZWP3K d
 #| warning: false
 #| message: false
 #| include: true
+
+# Load the input data for SERASI index calculation
+rtrw_vect <- load_and_validate_shapefile(rtrw_path)
+rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
 
 # Set minimum area treshold
 threshold_ha = 156.25
@@ -215,6 +197,10 @@ Indeks PADU-KE dihasilkan melalui penilaian pengguna terhadap hubungan antar kel
 #| message: false
 #| include: true
 
+# Load PADU-KE input
+lulc_ref <- load_and_validate_table(lulc_ref_path) 
+lulc_ref_klhk <- load_and_validate_table(lulc_ref_klhk_path)
+
 # # Generate PADU-KE matrix template
 # matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
 # write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke.xlsx", overwrite = TRUE)
@@ -245,6 +231,11 @@ Dalam hal ini, modul akan menyediakan 2 opsi format peta LULC yang dapat dihitun
 #| warning: false
 #| message: false
 #| include: true
+
+# Load PADU-KE input
+# lulc_rast <- load_and_validate_raster(lulc_rast_path)
+lulc_rast <- load_and_validate_raster(lulc_rast_klhk_path)
+lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
 
 # # Calculate adjacency for LULC raster input
 # lulc_adjacencies <- calculate_lulc_adjacency(
@@ -326,12 +317,16 @@ Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian
 
 ```{r calculate-padu-kl}
 
+# Load PADU-KL input
+protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path)
+
+# Calculate percentage of protected area that overlay with planning unit
 idx_padu_kl_map <- calculate_overlay_pct(idx_serasi_map, protected_area_vect, title = "protected") %>%
   mutate(
     idx_padu_kl = protected_pct/100
   )
 
-idx_padu_kl <- as.tibble(idx_padu_kl_map %>% st_drop_geometry())
+idx_padu_kl <- as_tibble(idx_padu_kl_map %>% st_drop_geometry())
 
 plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
 ```
@@ -340,23 +335,46 @@ plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
 
 Analisis PADU-KH (Kualitas/Keberadaan Habitat) memberikan pertimbangan terkait kondisi habitat di zona pesisir yang berbatasan langsung dengan laut (mangrove, lamun, terumbu) dalam hal penyelesaian konflik tumpang tindih peta RTRW dan RZWP3K.
 
+Area habitat pesisir yang digunakan dalam analisis PADU-KH dapat diperoleh setidaknya berdasarkan dua kondisi. Pertama, area mangrove, lamun, dan terumbu karang diambil dari peta LULC dengan melakukan subset pada ketiga kelas tersebut. Kedua, pengguna dapat menambahkan ketiga peta habitat secara mandiri satu persatu. Function `calculate_overlay_pct()` dapat mengakomodasi kedua kondisi sumber peta habitat pesisir.
+
 ```{r calculate-padu-kh}
 
-# Define mangrove, seagreass, and coral class id
-mangrove <- c(5,6)
-coral <- 24
-seagrass <- 25
+# Define source of habitat map
+habitat_from_lulc <- "Yes"
+id_column <- "ID"
 
-# Combina habitat area
-coastal_habitat_lulc <- lulc_vect[lulc_vect$ID %in% c(as.numeric(mangrove, coral, seagrass)), ]
+# Define mangrove, seagrass, and coral class IDs
+habitat_id <- c(
+  5,  # primary mangrove
+  6,  # secondary mangrove
+  24, # coral
+  25  # seagrass
+)
+
+# Conditional calculation based on habitat map source
+if (habitat_from_lulc == "Yes") {
+  coastal_habitat <- lulc_vect[lulc_vect[[id_column]] %in% as.numeric(habitat_id), ]
+} else {
+  # Load PADU-KH input
+  coral_vect <- load_and_validate_shapefile(coral_vect_path)
+  seagrass_vect <- load_and_validate_shapefile(seagrass_vect_path)
+  mangrove_vect <- load_and_validate_shapefile(mangrove_vect_path)
+  
+  coastal_habitat <- list(
+    coral_vect,
+    seagrass_vect,
+    mangrove_vect
+  )
+}
+
 
 # Calculate idx padu kh
-idx_padu_kh_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat_lulc, title = "coastal_habitat") %>%
+idx_padu_kh_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat") %>%
   mutate(
     idx_padu_kh = coastal_habitat_pct/100
   )
 
-idx_padu_kh <- as.tibble(idx_padu_kh_map %>% st_drop_geometry())
+idx_padu_kh <- as_tibble(idx_padu_kh_map %>% st_drop_geometry())
 
 plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
 ```
@@ -514,6 +532,9 @@ threshold_serasi <- 0.6
 threshold_padu   <- 0.65
 
 # Extract priority zone class (Prioritas == 1)
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+
 priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
 priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
 

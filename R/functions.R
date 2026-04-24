@@ -669,8 +669,9 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 #'
 #' @param pu sf object. Planning unit polygons with an `area_ha` column containing
 #'   the area of each unit in hectares.
-#' @param overlay_area sf object. Area polygons to be overlapped with
-#'   the planning units.
+#' @param overlay_area sf object or list of sf objects. Area polygons to be overlapped with
+#'   the planning units. If a list is provided, all sf objects in the list will be 
+#'   combined into a single sf object before processing.
 #' @param title character string. Prefix for the output column names. 
 #'   For example, if title = "protected_area", columns will be named 
 #'   "protected_area_ha" and "protected_area_pct". Default is "overlay_area".
@@ -680,10 +681,12 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 #'   \item{<title>_pct}{Percentage of the planning unit covered by overlay areas}
 #'
 #' @details
-#' The function first ensures both spatial objects share the same CRS, transforming
-#' `overlay_area` to match `pu` if necessary. It then identifies planning units
-#' that intersect with any overlay area and calculates overlaps only for those units,
-#' improving efficiency for large datasets.
+#' The function first checks if `overlay_area` is a list. If so, it combines all
+#' sf objects in the list using `rbind` into a single sf object. It then ensures 
+#' both spatial objects share the same CRS, transforming `overlay_area` to match 
+#' `pu` if necessary. The function then identifies planning units that intersect 
+#' with any overlay area and calculates overlaps only for those units, improving 
+#' efficiency for large datasets.
 #'
 #' Area calculations are performed in square meters and converted to hectares
 #' (1 hectare = 10,000 m²). Results are rounded to two decimal places.
@@ -696,24 +699,35 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 #' \dontrun{
 #' # Load example data
 #' pu <- st_read("planning_units.shp")
+#' 
+#' # Single overlay area
 #' protected <- st_read("protected_areas.shp")
-#'
-#' # Calculate protected area coverage
 #' pu_with_protected <- calculate_overlay_pct(pu, protected, title = "protected_area")
 #'
-#' # Calculate agricultural area coverage
-#' agriculture <- st_read("farmland.shp")
-#' pu_with_agri <- calculate_overlay_pct(pu, agriculture, title = "agriculture")
+#' # Multiple overlay areas as a list
+#' forest <- st_read("forest.shp")
+#' wetland <- st_read("wetland.shp")
+#' grassland <- st_read("grassland.shp")
+#' 
+#' all_habitats <- list(forest, wetland, grassland)
+#' pu_with_habitats <- calculate_overlay_pct(pu, all_habitats, title = "habitat")
 #'
 #' # View results
 #' head(pu_with_protected[, c("protected_area_ha", "protected_area_pct")])
-#' head(pu_with_agri[, c("agriculture_ha", "agriculture_pct")])
+#' head(pu_with_habitats[, c("habitat_ha", "habitat_pct")])
 #' }
 #'
 #' @importFrom sf st_crs st_transform st_intersects st_intersection st_area
 #'
 #' @export
 calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
+  
+  # Check if overlay_area is a list and combine if necessary
+  if (is.list(overlay_area) && !inherits(overlay_area, "sf")) {
+    cat("Combining", length(overlay_area), "sf objects from list\n")
+    overlay_area <- do.call(rbind, overlay_area)
+  }
+  
   # Transform overlay_area to match pu CRS
   if (st_crs(pu) != st_crs(overlay_area)) {
     overlay_area <- st_transform(overlay_area, st_crs(pu))
@@ -731,7 +745,7 @@ calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
   intersects_idx <- st_intersects(pu, overlay_area)
   intersecting_pu <- which(lengths(intersects_idx) > 0)
   
-  cat("Processing", length(intersecting_pu), "overlap unit that intersect with", title, "areas\n")
+  cat("Processing", length(intersecting_pu), "planning units that intersect with", title, "areas\n")
   
   # Calculate overlap only for intersecting PU
   for (i in intersecting_pu) {
