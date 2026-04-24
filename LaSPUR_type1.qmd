@@ -1,6 +1,6 @@
 ---
 title: "LaSPUR Type 1 Implementation"
-author: "Faza Mahezs - RG2 ICRAF Indonesia"
+author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
 format: html
 editor: visual
 ---
@@ -22,16 +22,20 @@ Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahap
 source("R/functions.R")
 source("R/helpers.R")
 
-install_load(
-  "terra",
-  "sf",
-  "openxlsx",
-  "tibble",
-  "dplyr",
-  "landscapemetrics",
-  "purrr",
-  "tidyr",
-  "stringr"
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  terra,
+  sf,
+  openxlsx,
+  tibble,
+  dplyr,
+  landscapemetrics,
+  purrr,
+  tidyr,
+  stringr
 )
 ```
 
@@ -314,15 +318,17 @@ idx_padu_ke_map <- idx_serasi_map %>%
 plot(idx_padu_ke_map["idx_padu_ke"], border = 1)
 ```
 
-# Step 3. PADU-KL index calculation
+# Step 3. PADU-HS index calculation
+
+# Step 4. PADU-KL index calculation
 
 Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian antara kawasan lindung darat (hutan lindung, suaka margasatwa) dengan kawasan konservasi laut pada area tumpang tindih RTRW dan RZWP3K.
 
 ```{r calculate-padu-kl}
 
-idx_padu_kl_map <- calculate_protected_pct(idx_serasi_map, protected_area_vect) %>%
+idx_padu_kl_map <- calculate_overlay_pct(idx_serasi_map, protected_area_vect, title = "protected") %>%
   mutate(
-    idx_padu_kl = protected_area_pct/100
+    idx_padu_kl = protected_pct/100
   )
 
 idx_padu_kl <- as.tibble(idx_padu_kl_map %>% st_drop_geometry())
@@ -330,7 +336,38 @@ idx_padu_kl <- as.tibble(idx_padu_kl_map %>% st_drop_geometry())
 plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
 ```
 
-# Step 3. PADU index calculation
+# Step 5. PADU-KH index calculation
+
+Analisis PADU-KH (Kualitas/Keberadaan Habitat) memberikan pertimbangan terkait kondisi habitat di zona pesisir yang berbatasan langsung dengan laut (mangrove, lamun, terumbu) dalam hal penyelesaian konflik tumpang tindih peta RTRW dan RZWP3K.
+
+```{r calculate-padu-kh}
+
+# Define mangrove, seagreass, and coral class id
+mangrove <- c(5,6)
+coral <- 24
+seagrass <- 25
+
+# Combina habitat area
+coastal_habitat_lulc <- lulc_vect[lulc_vect$ID %in% c(as.numeric(mangrove, coral, seagrass)), ]
+
+# Calculate idx padu kh
+idx_padu_kh_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat_lulc, title = "coastal_habitat") %>%
+  mutate(
+    idx_padu_kh = coastal_habitat_pct/100
+  )
+
+idx_padu_kh <- as.tibble(idx_padu_kh_map %>% st_drop_geometry())
+
+plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
+```
+
+# Step 6. PADU-RTp index calculation
+
+# Step 7. PADU-SE index calculation
+
+# Step 8. PADU-KI index calculation
+
+# Step 9. PADU index calculation
 
 Tahapan ini menghitung nilai indeks PADU dari sejumlah analisi PADU yang dilakukan. Perhitungan rerata bobot (nilai bobot didefinisikan oleh pengguna) digunakan untuk menghasilkan index PADU gabungan dari 7 analisis PADU yang dilakukan.
 
@@ -355,8 +392,8 @@ if (weight_sum == 1){
   padu_list <- list(
     idx_padu_ke,
     # idx_padu_hs,
-    idx_padu_kl
-    # idx_padu_kh,
+    idx_padu_kl,
+    idx_padu_kh
     # idx_padu_rtp,
     # idx_padu_se,
     # idx_padu_ki
@@ -377,7 +414,7 @@ if (weight_sum == 1){
 
 ```
 
-# Step 4. PADAN index calculation
+# Step 10. PADAN index calculation
 
 Analisis PADAN menghasilkan nilai akhir integrasi (N Final/Indeks PADAN) berdasarkan penggabungan nilai Indeks SERASI dan Indeks PADU. Indeks PADAN yang dihasilkan pada tahap ini berdasarkan analisis pada kondisi aktual.
 
@@ -396,11 +433,11 @@ idx_padan_map <- idx_padu_map %>%
   )
 ```
 
-# Step 5. Calculate Recommendation
+# Step 11. Calculate Recommendation
 
 Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap unit zona/pola ruang yang bertumpang tindih berdasarkan penentuan opsi keputusan penyelesaian konflik tumpang tindih sesuai pertimbangan pada analisis SERASI dan PADU.
 
-## Step 5.1 Calculate Zone Alternative
+## Step 11.1 Calculate Zone Alternative
 
 Pada tahap ini, sistem menyajikan opsi zona/pola ruang alternatif berdasarkan pencarian nilai indeks SERASI tertinggi dari pasangan tumpang tindih RTRW/RZWP3K saat ini.
 
@@ -421,7 +458,7 @@ idx_padan_map_alt <- idx_padan_map %>%
   ungroup()
 ```
 
-## Step 5.2 Calculate SERASI Index for Alternative Zone
+## Step 11.2 Calculate SERASI Index for Alternative Zone
 
 Perhitungan ulang nilai indeks SERASI dari pasangan zona/pola alternatif.
 
@@ -436,7 +473,7 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
   ungroup()
 ```
 
-## Step 5.3 Calculate PADAN Index for Alternative Zone
+## Step 11.3 Calculate PADAN Index for Alternative Zone
 
 Perhitungan ulang nilai indeks PADAN dari pasangan zona/pola alternatif.
 
@@ -451,7 +488,7 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
   )
 ```
 
-## Step 5.4 Calculate Recommendation
+## Step 11.4 Calculate Recommendation
 
 Rekomendasi dihasilkan dari perbandingan nilai indeks SERASI dan PADU terhadap ambang batas (threshold) yang telah ditentukan untuk kedua indeks tersebut. Terdapat sejumlah aturan untuk menentukan rekomendasi penyelesaian konflik tumpang tindih, yaitu:
 
@@ -494,7 +531,7 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
   )
 ```
 
-## Step 5.5 Calculate Decision
+## Step 11.5 Calculate Decision
 
 Pengambilan keputusan dilakukan berdasarkan hasil penentuan opsi rekomendasi yang dihasilkan.
 
@@ -520,7 +557,7 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
   )
 ```
 
-## Step 5.6 Calculate The Final PADAN Index
+## Step 11.6 Calculate The Final PADAN Index
 
 ```{r calculate-final-padan}
 

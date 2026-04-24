@@ -379,35 +379,3 @@ load_and_validate_raster <- function(raster_path,
 # 5. export_table()
 # 6. export_map()
 # 7. generate_report()
-
-# 8. install_load()
-
-#' Install and Load Required Libraries
-#'
-#' Checks if a list of required packages are installed, installs them if they are not, and then loads them.
-#'
-#' @param package1 A character string of the first package name.
-#' @param ... Additional character strings of package names.
-#'
-#' @return None. This function is called for its side effects of installing and loading packages.
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' install_load("dplyr", "ggplot2")
-#' }
-install_load <- function(package1, ...) {
-  # convert arguments to vector
-  packages <- c(package1, ...)
-  # start loop to determine if each package is installed
-  for (package in packages) {
-    # if package is installed locally, load
-    if (package %in% rownames(installed.packages())) {
-      do.call("library", list(package))
-    } # if package is not installed locally, download, then load
-    else {
-      install.packages(package)
-      do.call("library", list(package))
-    }
-  }
-}

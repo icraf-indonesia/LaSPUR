@@ -661,25 +661,28 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 
 # Perhitungan Indeks PADU-KL ----------------------------------------------
 
-#' Calculate protected area percentage within planning units
+#' Calculate area percentage within planning units
 #'
-#' This function calculates the area and percentage of protected areas overlapping
+#' This function calculates the area and percentage of overlapping areas
 #' with each planning unit (PU) in a spatial dataset. It handles coordinate reference
 #' system transformations and efficiently processes only intersecting features.
 #'
 #' @param pu sf object. Planning unit polygons with an `area_ha` column containing
 #'   the area of each unit in hectares.
-#' @param protected_area sf object. Protected area polygons to be overlapped with
+#' @param overlay_area sf object. Area polygons to be overlapped with
 #'   the planning units.
+#' @param title character string. Prefix for the output column names. 
+#'   For example, if title = "protected_area", columns will be named 
+#'   "protected_area_ha" and "protected_area_pct". Default is "overlay_area".
 #'
 #' @return The input `pu` sf object with two additional columns:
-#'   \item{protected_area_ha}{Area of protected area within each planning unit (hectares)}
-#'   \item{protected_area_pct}{Percentage of the planning unit covered by protected areas}
+#'   \item{<title>_ha}{Area of overlay area within each planning unit (hectares)}
+#'   \item{<title>_pct}{Percentage of the planning unit covered by overlay areas}
 #'
 #' @details
 #' The function first ensures both spatial objects share the same CRS, transforming
-#' `protected_area` to match `pu` if necessary. It then identifies planning units
-#' that intersect with any protected area and calculates overlaps only for those units,
+#' `overlay_area` to match `pu` if necessary. It then identifies planning units
+#' that intersect with any overlay area and calculates overlaps only for those units,
 #' improving efficiency for large datasets.
 #'
 #' Area calculations are performed in square meters and converted to hectares
@@ -693,41 +696,51 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 #' \dontrun{
 #' # Load example data
 #' pu <- st_read("planning_units.shp")
-#' pa <- st_read("protected_areas.shp")
+#' protected <- st_read("protected_areas.shp")
 #'
 #' # Calculate protected area coverage
-#' pu_with_pa <- calculate_protected_pct(pu, pa)
+#' pu_with_protected <- calculate_overlay_pct(pu, protected, title = "protected_area")
 #'
-#' # View results for first few units
-#' head(pu_with_pa[, c("protected_area_ha", "protected_area_pct")])
+#' # Calculate agricultural area coverage
+#' agriculture <- st_read("farmland.shp")
+#' pu_with_agri <- calculate_overlay_pct(pu, agriculture, title = "agriculture")
+#'
+#' # View results
+#' head(pu_with_protected[, c("protected_area_ha", "protected_area_pct")])
+#' head(pu_with_agri[, c("agriculture_ha", "agriculture_pct")])
 #' }
 #'
 #' @importFrom sf st_crs st_transform st_intersects st_intersection st_area
 #'
 #' @export
-calculate_protected_pct <- function(pu, protected_area){
-  # Transform protected_area to match pu CRS
-  if (st_crs(pu) != st_crs(protected_area)) {
-    protected_area <- st_transform(protected_area, st_crs(pu))
+calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
+  # Transform overlay_area to match pu CRS
+  if (st_crs(pu) != st_crs(overlay_area)) {
+    overlay_area <- st_transform(overlay_area, st_crs(pu))
   }
   
-  pu$protected_area_ha <- 0
-  pu$protected_area_pct <- 0
+  # Create column names based on title
+  ha_col <- paste0(title, "_ha")
+  pct_col <- paste0(title, "_pct")
   
-  # Find which PU intersect with protected_area
-  intersects_idx <- st_intersects(pu, protected_area)
+  # Initialize columns
+  pu[[ha_col]] <- 0
+  pu[[pct_col]] <- 0
+  
+  # Find which PU intersect with overlay_area
+  intersects_idx <- st_intersects(pu, overlay_area)
   intersecting_pu <- which(lengths(intersects_idx) > 0)
   
-  cat("Processing", length(intersecting_pu), "overlap unit that intersect with protected areas\n")
+  cat("Processing", length(intersecting_pu), "overlap unit that intersect with", title, "areas\n")
   
   # Calculate overlap only for intersecting PU
   for (i in intersecting_pu) {
-    intersection <- st_intersection(pu[i, ], protected_area)
+    intersection <- st_intersection(pu[i, ], overlay_area)
     
     if (nrow(intersection) > 0) {
-      overlap_area_ha <- sum(as.numeric(st_area(intersection))) / 10000 # Convert utm m2 to ha
-      pu$protected_area_ha[i] <- overlap_area_ha
-      pu$protected_area_pct[i] <- (overlap_area_ha / pu$area_ha[i]) * 100
+      overlap_area_ha <- sum(as.numeric(st_area(intersection))) / 10000 # Convert m2 to ha
+      pu[[ha_col]][i] <- overlap_area_ha
+      pu[[pct_col]][i] <- (overlap_area_ha / pu$area_ha[i]) * 100
     }
   }
   return(pu)
