@@ -658,6 +658,190 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
   return(result)
 }
 
+# Perhitungan Indeks PADU-HS ----------------------------------------------
+
+#' Calculate Euclidean distance from vector features to a set of planning units
+#'
+#' This function computes a Euclidean distance raster for a given set of source
+#' vector features (`vector_obj`) within a planning unit area (`pu`). The source
+#' features are first clipped to the planning unit boundary, then a distance
+#' raster is generated at a specified resolution and masked to the planning units.
+#'
+#' @param vector_obj An `sf` object (points, lines, or polygons) representing the
+#'   source features from which distances are calculated.
+#' @param pu An `sf` object defining the planning unit area (polygon). The raster
+#'   extent and mask are based on this object.
+#' @param resolution Numeric. The resolution of the output distance raster
+#'   (map units, default = 100). Higher values produce coarser rasters.
+#'
+#' @return A `SpatRaster` object (from the `terra` package) where each cell value
+#'   is the Euclidean distance to the nearest source feature. Cells outside the
+#'   planning unit area are `NA`.
+#'
+#' @details
+#' The function performs the following steps:
+#' \enumerate{
+#'   \item Validates that both inputs are `sf` objects and harmonises their CRS
+#'         (reprojecting `vector_obj` to the CRS of `pu` if needed).
+#'   \item Clips `vector_obj` by `pu` using `sf::st_intersection()` and removes
+#'         empty geometries.
+#'   \item Creates a raster template from the bounding box of `pu` at the
+#'         specified resolution.
+#'   \item Computes Euclidean distance from each raster cell to the nearest
+#'         source geometry using `terra::distance()`.
+#'   \item Masks the distance raster to the exact outline of `pu`.
+#' }
+#'
+#' @note
+#' The function stops with an error if no part of `vector_obj` overlaps `pu`
+#' after clipping. Both input objects are repaired with `sf::st_make_valid()`
+#' to avoid geometry issues.
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' library(terra)
+#'
+#' # Example source points
+#' pts <- st_as_sf(data.frame(x = c(10, 20), y = c(15, 25)), coords = c("x", "y"))
+#' st_crs(pts) <- 4326
+#'
+#' # Example planning unit (a simple polygon)
+#' pu_poly <- st_as_sf(data.frame(x = c(0, 30, 30, 0), y = c(0, 0, 30, 30)),
+#'                     coords = c("x", "y"), dim = "XY", crs = 4326) |>
+#'            st_bbox() |> st_as_sfc()
+#'
+#' # Compute distance raster at 1 unit resolution
+#' dist_rast <- calculate_euclidean_dist(pts, pu_poly, resolution = 1)
+#' plot(dist_rast)
+#' }
+#'
+#' @importFrom sf st_make_valid st_crs st_transform st_intersection st_is_empty st_bbox
+#' @importFrom terra rast vect distance mask
+#' @export
+calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100) {
+  # Input validation
+  if (!inherits(vector_obj, "sf")) stop("vector_obj must be an sf object")
+  if (!inherits(pu, "sf")) stop("pu must be an sf object")
+  
+  vector_obj <- sf::st_make_valid(vector_obj)
+  pu <- sf::st_make_valid(pu)
+  
+  # Harmonise CRS
+  if (!identical(sf::st_crs(vector_obj), sf::st_crs(pu))) {
+    message("Reprojecting vector_obj to CRS of pu")
+    vector_obj <- sf::st_transform(vector_obj, sf::st_crs(pu))
+  }
+  
+  # Clip vector_obj by pu 
+  vector_clipped <- sf::st_intersection(vector_obj, pu)
+  vector_clipped <- vector_clipped[!sf::st_is_empty(vector_clipped), ]
+  
+  if (nrow(vector_clipped) == 0) {
+    stop("After intersection, no part of vector_obj overlaps pu")
+  }
+  
+  # Create raster template from pu bounding box
+  bb <- sf::st_bbox(pu)
+  r_template <- terra::rast(
+    xmin = bb["xmin"], xmax = bb["xmax"],
+    ymin = bb["ymin"], ymax = bb["ymax"],
+    resolution = resolution,
+    crs = sf::st_crs(pu)$wkt
+  )
+  
+  # Calculate euclidean distance
+  source_vect <- terra::vect(vector_clipped)
+  dist_raster <- terra::distance(r_template, source_vect)
+  
+  # Mask to pu
+  pu_vect <- terra::vect(pu)
+  dist_raster <- terra::mask(dist_raster, pu_vect)
+  
+  return(dist_raster)
+}
+
+#' Extract raster values to sf polygons using exact extraction
+#'
+#' Extracts raster values for each polygon in an sf object using exactextractr,
+#' which computes area-weighted means for polygons. The function handles CRS
+#' mismatches by reprojecting the polygons to the raster's CRS and allows
+#' filling missing values with a user-specified constant.
+#'
+#' @param pu An sf object (typically planning units or polygons) for which to extract raster values.
+#' @param rast A SpatRaster object (from the \code{terra} package) or a RasterLayer.
+#' @param id_col Character string naming the column in \code{pu} that uniquely identifies each feature.
+#'        Currently not used in the function but reserved for future compatibility.
+#' @param new_col Optional character string for the name of the new column in the output sf object.
+#'        If \code{NULL} (default), the name is generated as \code{"{raster_layer_name}_weighted_mean"}.
+#' @param na.rm Logical. Should missing values (NA) be removed before computing the weighted mean?
+#'        Passed to \code{exactextractr::exact_extract} (default is \code{TRUE}).
+#' @param fill_na Value to use for polygons where extraction results in \code{NA}. Default is \code{0}.
+#'
+#' @return The input sf object \code{pu} with an additional column (named \code{new_col})
+#'         containing the area-weighted mean raster values for each polygon.
+#'
+#' @details
+#' The function first checks if the CRS of \code{pu} matches that of \code{rast}. If not,
+#' it reprojects the polygons to the raster's CRS. It then uses
+#' \code{exactextractr::exact_extract} with \code{fun = "mean"} to compute the
+#' area-weighted mean of raster values for each polygon. This method is more
+#' accurate than using \code{terra::extract} because it accounts for partial
+#' overlap of raster cells with polygon boundaries.
+#'
+#' The \code{id_col} parameter is included for API consistency with related
+#' functions but is not currently used. Missing values (NAs) in the extracted
+#' results are replaced with \code{fill_na}.
+#'
+#' @importFrom sf st_crs st_transform
+#' @importFrom exactextractr exact_extract
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' library(terra)
+#' library(exactextractr)
+#'
+#' # Create example raster
+#' r <- rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10, ymin = 0, ymax = 10)
+#' values(r) <- runif(100)
+#'
+#' # Create example polygon
+#' pol <- st_sfc(st_polygon(list(cbind(c(2,5,5,2,2), c(2,2,5,5,2)))))
+#' pu <- st_sf(id = 1, geometry = pol)
+#'
+#' # Extract weighted mean
+#' result <- extract_raster_to_sf(pu, r, id_col = "id", new_col = "mean_val")
+#' print(result)
+#' }
+#'
+#' @export
+extract_raster_to_sf <- function(pu, rast, id_col, new_col = NULL, na.rm = TRUE, fill_na = 0) {
+  
+  # Input validation
+  if (is.null(new_col)) {
+    new_col <- paste0(names(rast)[1], "_weighted_mean")
+  }
+  
+  if (sf::st_crs(pu) != sf::st_crs(rast)) {
+    message("Reprojecting polygons to match raster CRS...")
+    pu <- sf::st_transform(pu, sf::st_crs(rast))
+  }
+  
+  # Extraction using weighted mean
+  results <- exactextractr::exact_extract(
+    rast, 
+    pu, 
+    fun = "mean", 
+    progress = TRUE
+  )
+  
+  # Assign and Fill NAs
+  pu[[new_col]] <- results
+  pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+  
+  return(pu)
+}
 
 # Perhitungan Indeks PADU-KL ----------------------------------------------
 
