@@ -81,6 +81,10 @@ coral_vect_path <- "data/vector/AC_Coral_Sulteng_dis.shp"
 seagrass_vect_path <- "data/vector/AC_Seagrass_Sulteng_dis.shp"
 mangrove_vect_path <- "data/vector/mangrove_sulteng.shp"
 
+# PADU-RTp input data
+industry_vect_path <- "data/vector/ST_Industri_dis.shp"
+pelayaran_vect_path <- "data/vector/ST_AlurPelayaran_dis.shp"
+
 # Parameterization
 padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
 
@@ -379,6 +383,8 @@ idx_padu_hs_map <- estuari_dist_extracted %>%
     idx_padu_hs = (filter_estuari + tss_mean)/2
   ) %>%
   select(-filter_estuari)
+
+idx_padu_hs <- as_tibble(idx_padu_hs_map %>% st_drop_geometry())
 ```
 
 # Step 4. PADU-KL index calculation
@@ -386,6 +392,10 @@ idx_padu_hs_map <- estuari_dist_extracted %>%
 Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian antara kawasan lindung darat (hutan lindung, suaka margasatwa) dengan kawasan konservasi laut pada area tumpang tindih RTRW dan RZWP3K. Nilai indeks padu dihitung berdasarkan persentase luas area kawasan lindung yang berada di dalam batas area unit tumpang tindih.
 
 ```{r calculate-padu-kl}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 # Load PADU-KL input
 protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path)
@@ -407,7 +417,13 @@ Analisis PADU-KH (Kualitas/Keberadaan Habitat) memberikan pertimbangan terkait k
 
 Analisis ini melihat persentase luas area habitat yang berada di dalam batas area unit tumpang tindih. Area habitat pesisir yang digunakan dalam analisis PADU-KH dapat diperoleh setidaknya berdasarkan dua kondisi. Pertama, area mangrove, lamun, dan terumbu karang diambil dari peta LULC dengan melakukan subset pada ketiga kelas tersebut. Kedua, pengguna dapat menambahkan ketiga peta habitat secara mandiri satu persatu. Function `calculate_overlay_pct()` dapat mengakomodasi kedua kondisi sumber peta habitat pesisir.
 
-```{r calculate-padu-kh}
+## Step 5.1.Prepare habitat map
+
+```{r prepare-habitat-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 # Define source of habitat map
 habitat_from_lulc <- "Yes"
@@ -436,6 +452,15 @@ if (habitat_from_lulc == "Yes") {
     mangrove_vect
   )
 }
+```
+
+## Step 5.2. Calculate PADU-KH index
+
+```{r calculate-padu-kh}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 # Calculate idx padu kh
 idx_padu_kh_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat") %>%
@@ -449,6 +474,37 @@ plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
 ```
 
 # Step 6. PADU-RTp index calculation
+
+```{r prepare-distance-map-padu-rtp}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+industry_vect <- load_and_validate_shapefile(industry_vect_path)
+pelayaran_vect <- load_and_validate_shapefile(pelayaran_vect_path)
+
+# Calculate euclidean distance
+industry_euc_dist <- calculate_euclidean_dist(industry_vect, idx_serasi_map, resolution = 30)
+
+pelayaran_euc_dist <- calculate_euclidean_dist(pelayaran_vect, idx_serasi_map, resolution = 30)
+
+# Extract euclidean distance to overlap area
+industry_dist_extracted <- extract_raster_to_sf(
+  idx_serasi_map,
+  industry_euc_dist,
+  id_col = "id_pu",
+  new_col = "industry_dist_mean"
+)
+
+pelayaran_dist_extracted <- extract_raster_to_sf(
+  idx_serasi_map,
+  pelayaran_euc_dist,
+  id_col = "id_pu",
+  new_col = "pelayaran_dist_mean"
+)
+```
 
 # Step 7. PADU-SE index calculation
 
@@ -478,7 +534,7 @@ if (weight_sum == 1){
   # List all PADU analysis
   padu_list <- list(
     idx_padu_ke,
-    # idx_padu_hs,
+    idx_padu_hs,
     idx_padu_kl,
     idx_padu_kh
     # idx_padu_rtp,
@@ -535,6 +591,10 @@ Pada tahap ini, sistem menyajikan opsi zona/pola ruang alternatif berdasarkan pe
     Kelas RTRW saat ini dipasangkan dengan kelas RZWP3K lainnya. Jika nilai indeks SERASI dari kelas RZWP3K alternatif sama dengan nilai kelas RZWP3K saat ini, maka kelas dengan nilai tertinggi kedua dipilih sebagai kelas alternatif. Namun, jika kelas RZWP3K alternatif memiliki nilai indeks SERASI yang lebih tinggi daripada kelas saat ini, maka kelas tersebut langsung dipilih sebagai kelas alternatif.
 
 ```{r calculate-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 idx_padan_map_alt <- idx_padan_map %>%
   rowwise() %>%
@@ -550,6 +610,10 @@ idx_padan_map_alt <- idx_padan_map %>%
 Perhitungan ulang nilai indeks SERASI dari pasangan zona/pola alternatif.
 
 ```{r calculate-serasi-idx-for-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 idx_padan_map_alt <- idx_padan_map_alt %>%
   rowwise() %>%
@@ -565,6 +629,10 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
 Perhitungan ulang nilai indeks PADAN dari pasangan zona/pola alternatif.
 
 ```{r calculate-padan-idx-for-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 alpha <- 0.5
 
@@ -595,6 +663,10 @@ Rekomendasi dihasilkan dari perbandingan nilai indeks SERASI dan PADU terhadap a
     → Rekomendasi: **Ubah RTRW**.
 
 ```{r calculate-recommendation}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 # Thresholds
 threshold_serasi <- 0.6
@@ -623,6 +695,10 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
 Pengambilan keputusan dilakukan berdasarkan hasil penentuan opsi rekomendasi yang dihasilkan.
 
 ```{r calculate-decision}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 idx_padan_map_alt <- idx_padan_map_alt %>%
   mutate(
@@ -647,6 +723,10 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
 ## Step 11.6 Calculate The Final PADAN Index
 
 ```{r calculate-final-padan}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
 idx_padan_map_alt <- idx_padan_map_alt %>%
   mutate(

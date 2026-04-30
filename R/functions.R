@@ -735,6 +735,7 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100) {
   
   # Clip vector_obj by pu 
   vector_clipped <- sf::st_intersection(vector_obj, pu)
+  vector_clipped <- handle_geom_collection(vector_clipped)
   vector_clipped <- vector_clipped[!sf::st_is_empty(vector_clipped), ]
   
   if (nrow(vector_clipped) == 0) {
@@ -942,6 +943,66 @@ calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
     }
   }
   return(pu)
+}
+
+# Perhitungan Indeks PADU-RTp ---------------------------------------------
+
+#' Handle geometry collections and multisurfaces in an sf object
+#'
+#' Converts geometry collections and multisurfaces to multipolygons by extracting
+#' polygon components. Rows without any polygon data are dropped, and a warning
+#' is issued if rows are removed.
+#'
+#' @param sf_obj An sf object containing simple feature geometries.
+#'
+#' @return An sf object with all geometries converted to `MULTIPOLYGON` type.
+#'   Rows that contained no polygon data after extraction are removed.
+#'
+#' @details
+#' The function first checks if any geometry type in `sf_obj` is either
+#' `"GEOMETRYCOLLECTION"` or `"MULTISURFACE"`. If such types are present, it:
+#' \enumerate{
+#'   \item Applies `st_make_valid()` to repair invalid geometries.
+#'   \item Extracts `"POLYGON"` components using `st_collection_extract()`.
+#'   \item Casts the result to `"MULTIPOLYGON"` for consistency.
+#' }
+#' If the number of rows decreases after processing, a warning reports how many
+#' rows were dropped (those without any polygon geometry).
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' # Create an sf object with a geometry collection
+#' gc <- st_sfc(st_geometrycollection(list(st_point(c(0,0)), st_linestring(cbind(0:1,0:1)))))
+#' poly <- st_sfc(st_polygon(list(cbind(c(0,1,1,0,0), c(0,0,1,1,0)))))
+#' sf_mixed <- st_sf(geom = c(gc, poly), id = 1:2)
+#' result <- handle_geom_collection(sf_mixed)
+#' }
+#' @export
+#'
+#' @importFrom sf st_geometry_type st_make_valid st_collection_extract st_cast
+#' @importFrom magrittr %>%
+handle_geom_collection <- function(sf_obj) {
+  
+  geom_types <- as.character(st_geometry_type(sf_obj))
+  # Detect if any row is a collection type
+  is_collection <- any(geom_types %in% c("GEOMETRYCOLLECTION", "MULTISURFACE"))
+  
+  if (is_collection) {
+    n_before <- nrow(sf_obj)
+    
+    sf_obj <- sf_obj %>%
+      st_make_valid() %>%
+      st_collection_extract("POLYGON") %>%
+      st_cast("MULTIPOLYGON")
+    
+    n_after <- nrow(sf_obj)
+    
+    if (n_before != n_after) {
+      warning(paste("Dropped", n_before - n_after, "rows with no polygon data."))
+    }
+  }
+  return(sf_obj)
 }
 
 # Perhitungan Indeks PADU Final -------------------------------------------
