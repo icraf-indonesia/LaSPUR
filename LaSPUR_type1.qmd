@@ -475,6 +475,10 @@ plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
 
 # Step 6. PADU-RTp index calculation
 
+Analisis PADU-RTp (Risiko dan Tekanan) menggambarkan bagaimana tekanan aktivitas manusia (industri, tambak, pariwisata) berdampak terhadap bentang lahan darat dan laut di sekitarnya.
+
+## Step 6.1. Prepare distance map
+
 ```{r prepare-distance-map-padu-rtp}
 #| error: true
 #| warning: false
@@ -504,6 +508,36 @@ pelayaran_dist_extracted <- extract_raster_to_sf(
   id_col = "id_pu",
   new_col = "pelayaran_dist_mean"
 )
+```
+
+## Step 6.2. Calculate PADU-RTp index
+
+```{r calculate-padu-rtp}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Combine both vector
+industry_to_merge <- industry_dist_extracted %>%
+  st_drop_geometry() %>%
+  select(id_pu, industry_dist_mean)
+
+# Calculate index PADU-RTp
+idx_padu_rtp_map <- pelayaran_dist_extracted %>%
+  left_join(industry_to_merge, by = "id_pu") %>% 
+  mutate(
+    industry_clean = if_else(is.na(industry_dist_mean), 0, pmax(industry_dist_mean, 0)),
+    pelayaran_clean = if_else(is.na(pelayaran_dist_mean), 0, pmax(pelayaran_dist_mean, 0)),
+    
+    filter_industry = 1 - pmin(industry_clean / 8000, 1),
+    filter_pelayaran = 1 - pmin(pelayaran_clean / 5000, 1),
+    
+    idx_padu_rtp = pmax(0, 1 - (filter_industry + filter_pelayaran) / 2)
+  ) %>%
+  select(-industry_clean, -pelayaran_clean, -filter_industry, -filter_pelayaran)
+
+idx_padu_rtp <- as_tibble(idx_padu_rtp_map %>% st_drop_geometry())
 ```
 
 # Step 7. PADU-SE index calculation
@@ -536,8 +570,8 @@ if (weight_sum == 1){
     idx_padu_ke,
     idx_padu_hs,
     idx_padu_kl,
-    idx_padu_kh
-    # idx_padu_rtp,
+    idx_padu_kh,
+    idx_padu_rtp
     # idx_padu_se,
     # idx_padu_ki
   )
