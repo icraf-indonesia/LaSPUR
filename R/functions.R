@@ -1005,6 +1005,116 @@ handle_geom_collection <- function(sf_obj) {
   return(sf_obj)
 }
 
+# Perhitungan Indeks PADU-KI ----------------------------------------------
+
+#' Extract area-weighted mean from a spatial layer to planning units
+#'
+#' Intersects a set of planning units (polygons) with a source spatial layer
+#' containing a value column, computes the overlap area for each intersection,
+#' and calculates the area-weighted mean of the value within each planning unit.
+#' Optionally reprojects the source layer to match the CRS of the planning units.
+#'
+#' @param pu          An `sf` polygon object representing planning units.
+#' @param value_sf    An `sf` object (typically polygons or multi-polygons) that
+#'                    contains a numeric attribute to be transferred. The function
+#'                    assumes that the geometries have area (polygons).
+#' @param value_col   Character string. Name of the column in `value_sf` holding
+#'                    the numeric values to be averaged.
+#' @param pu_id       Character string. Name of a unique identifier column in `pu`.
+#'                    If `NULL` (default), a temporary ID column is created and
+#'                    removed before returning.
+#' @param new_col     Character string. Name of the new column to be added to `pu`
+#'                    containing the weighted mean. Default is `"weighted_mean"`.
+#' @param fill_na     Numeric value. Used to fill planning units that have no
+#'                    overlap with `value_sf` (default = 0).
+#'
+#' @return The input `pu` object with an additional column named `new_col`
+#'         containing the area-weighted mean of `value_col` for each planning unit.
+#'
+#' @details
+#' The weighted mean for a planning unit \eqn{i} is computed as:
+#' \deqn{\bar{v}_i = \frac{\sum_j v_j \cdot a_{ij}}{\sum_j a_{ij}}}
+#' where \eqn{v_j} is the value from `value_sf` polygon \eqn{j}, and \eqn{a_{ij}} is
+#' the area of intersection between planning unit \eqn{i} and polygon \eqn{j}.
+#'
+#' If the CRS of `pu` and `value_sf` differ, `value_sf` is reprojected to the CRS
+#' of `pu` (a message is printed). The function uses `sf::st_area()` to compute
+#' overlap areas; therefore, the CRS should be a projected (Cartesian) coordinate
+#' system to obtain meaningful areas. If no overlap exists between a planning unit
+#' and the source layer, the `fill_na` value is assigned.
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#'
+#' # Create two overlapping square polygons as planning units
+#' pu <- st_sf(id = 1:2,
+#'             geometry = st_sfc(
+#'               st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))),
+#'               st_polygon(list(rbind(c(0.5,0.5), c(1.5,0.5), c(1.5,1.5),
+#'                                     c(0.5,1.5), c(0.5,0.5))))
+#'             ))
+#'
+#' # Source layer: two rectangles with different values
+#' vals <- st_sf(value = c(10, 20),
+#'               geometry = st_sfc(
+#'                 st_polygon(list(rbind(c(0,0), c(0.8,0), c(0.8,0.8),
+#'                                       c(0,0.8), c(0,0)))),
+#'                 st_polygon(list(rbind(c(0.7,0.7), c(1.7,0.7),
+#'                                       c(1.7,1.7), c(0.7,1.7), c(0.7,0.7))))
+#'               ))
+#'
+#' # Extract area-weighted mean
+#' pu_result <- extract_sf_to_sf(pu, vals, value_col = "value",
+#'                               pu_id = "id", new_col = "wmean")
+#' plot(pu_result["wmean"])
+#' }
+#'
+#' @importFrom sf st_crs st_transform st_intersection st_area
+#' @export
+extract_sf_to_sf <- function(pu, value_sf, value_col, pu_id = NULL, 
+                             new_col = "weighted_mean", fill_na = 0) {
+  
+  # Handle projection
+  if (!sf::st_crs(pu) == sf::st_crs(value_sf)) {
+    message("Reprojecting value_sf to match pu CRS...")
+    value_sf <- sf::st_transform(value_sf, sf::st_crs(pu))
+  }
+  
+  # Add a temporary ID to pu if none provided
+  if (is.null(pu_id)) {
+    pu$.tmp_id <- seq_len(nrow(pu))
+    pu_id <- ".tmp_id"
+  }
+  
+  # Intersection
+  inter <- sf::st_intersection(pu[, pu_id, drop = FALSE], value_sf[, value_col, drop = FALSE])
+  if (nrow(inter) == 0) {
+    warning("No overlap between pu and value_sf. Returning fill_na for all units.")
+    pu[[new_col]] <- fill_na
+    if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+    return(pu)
+  }
+  
+  # Compute area and weighted mean of each intersected piece
+  inter$area_overlap <- as.numeric(sf::st_area(inter))
+  inter$weighted <- inter[[value_col]] * inter$area_overlap
+  
+  # Aggregate by the pu ID column
+  agg <- aggregate(cbind(weighted, area_overlap) ~ inter[[pu_id]], data = inter, FUN = sum)
+  names(agg)[1] <- pu_id
+  agg$mean <- agg$weighted / agg$area_overlap
+  
+  # Merge back to pu
+  pu <- merge(pu, agg[, c(pu_id, "mean")], by = pu_id, all.x = TRUE)
+  pu[[new_col]] <- pu$mean
+  pu$mean <- NULL  
+  pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+  if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+  
+  return(pu)
+}
+
 # Perhitungan Indeks PADU Final -------------------------------------------
 
 #' Calculate composite PADU index from multiple indicators
@@ -1060,13 +1170,13 @@ handle_geom_collection <- function(sf_obj) {
 #'
 #' @export
 calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
-  # Join all PADU indices
-  idx_padu_map <- reduce(
+  
+  idx_padu_map <- purrr::reduce(
     padu_list,
     .init = idx_padu_map,
     .f = function(x, y) {
       
-      idx_col <- names(y)[grepl("^idx_padu_[a-z]+$", names(y))]
+      idx_col <- names(y)[grepl("^idx_padu_", names(y))][1]
       
       y_clean <- y %>%
         st_drop_geometry() %>%
@@ -1077,40 +1187,45 @@ calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
     }
   )
   
-  # Prepare weights 
+  # Replace NA to 0
+  idx_padu_map <- idx_padu_map %>%
+    mutate(across(matches("^idx_padu_"), ~replace_na(., 0)))
+  
+  # Prepare weights
   weights <- padu_idx_weight %>%
     mutate(
       code  = tolower(.[[1]]),
       value = .[[2]]
     )
   
-  # Detect index columns
   idx_cols <- names(idx_padu_map)[grepl("^idx_padu_", names(idx_padu_map))]
   idx_code <- stringr::str_remove(idx_cols, "idx_padu_")
   
-  # Count available indices
+  # Validate weights
+  if (!all(idx_code %in% weights$code)) {
+    stop(paste(
+      "Missing weights for:",
+      paste(setdiff(idx_code, weights$code), collapse = ", ")
+    ))
+  }
+  
   n_idx <- length(idx_cols)
   
   if (n_idx < 7) {
-    message(paste0(
-      "Only ", n_idx, " PADU indices detected. ",
-      "Using simple average instead of weighted calculation."
-    ))
+    message(paste0("Only ", n_idx, " indices detected → using mean"))
   } else {
-    message("All 7 PADU indices detected. Using weighted calculation.")
+    message("All indices detected → using weighted sum")
   }
   
-  # Calculate final index
   idx_padu_map <- idx_padu_map %>%
     rowwise() %>%
     mutate(
       idx_padu_final = if (n_idx < 7) {
-        mean(c_across(all_of(idx_cols)), na.rm = TRUE)
+        mean(c_across(all_of(idx_cols)))
       } else {
         sum(
           c_across(all_of(idx_cols)) *
-            weights$value[match(idx_code, weights$code)],
-          na.rm = TRUE
+            weights$value[match(idx_code, weights$code)]
         )
       }
     ) %>%

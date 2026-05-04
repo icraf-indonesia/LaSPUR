@@ -85,6 +85,9 @@ mangrove_vect_path <- "data/vector/mangrove_sulteng.shp"
 industry_vect_path <- "data/vector/ST_Industri_dis.shp"
 pelayaran_vect_path <- "data/vector/ST_AlurPelayaran_dis.shp"
 
+# PADU-KI input data
+disaster_risk_vect_path <- "data/vector/08_ST_KRB_clim_diss.shp"
+
 # Parameterization
 padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
 
@@ -171,7 +174,7 @@ if (length(valid_class$mismatch_col3) == 0 &&
   idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) # use intersection_large to select the unit with sufficient area size
   idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
   
-  write_sf(idx_serasi_map, "output/idx_serasi.shp", overwrite = TRUE)
+  write_sf(idx_serasi_map, "output/idx_serasi.gpkg", overwrite = TRUE)
   
   plot(idx_serasi_map["idx_serasi"])
   print(idx_serasi_table)
@@ -301,7 +304,8 @@ lulc_adjacencies <- lulc_adjacencies %>%
   )
 
 # Calculate PADU-KE index
-idx_padu_ke <- calculate_padu_ke(lulc_adjacencies, matriks_padu_ke_id)
+idx_padu_ke <- calculate_padu_ke(lulc_adjacencies, matriks_padu_ke_id) %>%
+  select(id_pu, idx_padu_ke)
 print(idx_padu_ke)
 ```
 
@@ -343,7 +347,8 @@ estuari_vect <- load_and_validate_shapefile(estuari_vect_path)
 tss_rast <- load_and_validate_raster(tss_rast_path)
 
 # Calculate euclidean distance
-estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
+# estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
+estuari_euc_dist <- rast("output/estuari_euc_dist.tif")
 
 # Extract estuari euclidean distance to overlap area
 estuari_dist_extracted <- extract_raster_to_sf(
@@ -462,8 +467,11 @@ if (habitat_from_lulc == "Yes") {
 #| message: false
 #| include: true
 
+# Calculate overlay
+coastal_habitat_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat")
+
 # Calculate idx padu kh
-idx_padu_kh_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat") %>%
+idx_padu_kh_map <- coastal_habitat_map %>%
   mutate(
     idx_padu_kh = coastal_habitat_pct/100
   )
@@ -490,9 +498,11 @@ industry_vect <- load_and_validate_shapefile(industry_vect_path)
 pelayaran_vect <- load_and_validate_shapefile(pelayaran_vect_path)
 
 # Calculate euclidean distance
-industry_euc_dist <- calculate_euclidean_dist(industry_vect, idx_serasi_map, resolution = 30)
+# industry_euc_dist <- calculate_euclidean_dist(industry_vect, idx_serasi_map, resolution = 30)
+industry_euc_dist <- rast("data/raster/EuDist_Industri.tif")
 
-pelayaran_euc_dist <- calculate_euclidean_dist(pelayaran_vect, idx_serasi_map, resolution = 30)
+# pelayaran_euc_dist <- calculate_euclidean_dist(pelayaran_vect, idx_serasi_map, resolution = 30)
+pelayaran_euc_dist <- rast("data/raster/EUDist_AlurPl.tif")
 
 # Extract euclidean distance to overlap area
 industry_dist_extracted <- extract_raster_to_sf(
@@ -544,6 +554,46 @@ idx_padu_rtp <- as_tibble(idx_padu_rtp_map %>% st_drop_geometry())
 
 # Step 8. PADU-KI index calculation
 
+Indeks PADU-KI (Ketahanan Iklim) menunjukkan daya tahan ruang terhadap dampak perubahan iklim (rob, abrasi, kenaikan muka laut).
+
+## Step 8.1. Extract value from disaster risk map
+
+```{r prepare-disaster-risk-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path)
+
+# Extract vector value to overlap unit
+disaster_risk_extracted <- extract_sf_to_sf(pu = idx_serasi_map, 
+                                value_sf = disaster_risk_vect, 
+                                value_col = "Kerawanan",
+                                new_col = "disaster_risk_mean",
+                                pu_id = "id_pu")
+```
+
+## Step 8.2. Calculate PADU-KI index
+
+```{r calculate-padu-ki}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate idx padu ki
+idx_padu_ki_map <- disaster_risk_extracted %>%
+  mutate(
+    idx_padu_ki = if_else(is.na(disaster_risk_mean), NA_real_, 1 - disaster_risk_mean)
+  ) %>% 
+  select(-disaster_risk_mean)
+
+idx_padu_ki <- as_tibble(idx_padu_ki_map %>% st_drop_geometry())
+
+```
+
 # Step 9. PADU index calculation
 
 Tahapan ini menghitung nilai indeks PADU dari sejumlah analisi PADU yang dilakukan. Perhitungan rerata bobot (nilai bobot didefinisikan oleh pengguna) digunakan untuk menghasilkan index PADU gabungan dari 7 analisis PADU yang dilakukan.
@@ -571,9 +621,9 @@ if (weight_sum == 1){
     idx_padu_hs,
     idx_padu_kl,
     idx_padu_kh,
-    idx_padu_rtp
+    idx_padu_rtp,
     # idx_padu_se,
-    # idx_padu_ki
+    idx_padu_ki
   )
   
   # Calculate PADU index
@@ -583,7 +633,7 @@ if (weight_sum == 1){
     padu_idx_weight = padu_idx_weight
   )
   
-  write_sf(idx_padu_map, "output/idx_padu.shp", overwrite = TRUE)
+  st_write(idx_padu_map, "output/idx_padu.gpkg", overwrite = TRUE)
   plot(idx_padu_map["idx_padu_final"], border = 1)
 } else {
   stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
@@ -776,5 +826,5 @@ idx_padan_alt_table <- idx_padan_map_alt %>% st_drop_geometry()
 
 write.xlsx(idx_padan_alt_table, "output/idx_padan_alternative_KLHK_vect.xlsx", overwrite = TRUE)
 
-write_sf(idx_padan_map_alt, "output/idx_padan_alternative_KLHK_vect.shp", overwrite = TRUE)
+st_write(idx_padan_map_alt, "output/idx_padan_alternative_KLHK_vect.gpkg", append=FALSE)
 ```
