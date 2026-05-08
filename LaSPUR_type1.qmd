@@ -21,23 +21,6 @@ Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahap
 
 source("R/functions.R")
 source("R/helpers.R")
-
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
-}
-
-pacman::p_load(
-  terra,
-  sf,
-  openxlsx,
-  tibble,
-  dplyr,
-  landscapemetrics,
-  purrr,
-  tidyr,
-  stringr,
-  exactextractr
-)
 ```
 
 Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel. Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file dilakukan pada setiap tahap yang berkaitan dengan data tersebut.
@@ -90,6 +73,9 @@ disaster_risk_vect_path <- "data/vector/08_ST_KRB_clim_diss.shp"
 
 # Parameterization
 padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
+
+# Output directory
+output_dir <- "output/"
 
 ```
 
@@ -150,9 +136,9 @@ union_sf <- identify_overlaps(rtrw_vect, rzwp3k_vect)
 filtered_union_sf <- filter_overlaps(union_sf, threshold_ha)
 
 # Filter only qualified overlaps with minimum area size of 156.25 ha
-# intersection_large <- filtered_union_sf %>%
+# filtered_union_sf <- filtered_union_sf %>%
 #   filter(stat_pu == "intersection", area_flag == "luas terpenuhi")
-# plot(intersection_large)
+# plot(filtered_union_sf)
 
 # Validate zone class with lookup table
 valid_class <- validate_zone_class(filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas)
@@ -468,7 +454,8 @@ if (habitat_from_lulc == "Yes") {
 #| include: true
 
 # Calculate overlay
-coastal_habitat_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat")
+# coastal_habitat_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat")
+coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
 
 # Calculate idx padu kh
 idx_padu_kh_map <- coastal_habitat_map %>%
@@ -633,7 +620,7 @@ if (weight_sum == 1){
     padu_idx_weight = padu_idx_weight
   )
   
-  st_write(idx_padu_map, "output/idx_padu.gpkg", overwrite = TRUE)
+  st_write(idx_padu_map, "output/idx_padu.gpkg", append=FALSE)
   plot(idx_padu_map["idx_padu_final"], border = 1)
 } else {
   stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
@@ -827,4 +814,59 @@ idx_padan_alt_table <- idx_padan_map_alt %>% st_drop_geometry()
 write.xlsx(idx_padan_alt_table, "output/idx_padan_alternative_KLHK_vect.xlsx", overwrite = TRUE)
 
 st_write(idx_padan_map_alt, "output/idx_padan_alternative_KLHK_vect.gpkg", append=FALSE)
+```
+
+# Step 12. Generate Report
+
+```{r generate-report}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# List all necessary variables
+out <- list(
+    inputs = list(
+      rtrw_path = rtrw_path,
+      rzwp3k_path = rzwp3k_path,
+      rtrw_prioritas_path = rtrw_prioritas_path,
+      rzwp3k_prioritas_path = rzwp3k_prioritas_path,
+      matriks_serasi_path = matriks_serasi_path,
+      matriks_padu_ke_path = matriks_padu_ke_path,
+      padu_idx_weight_path = padu_idx_weight_path,
+      lulc_vect_path = lulc_vect_path,
+      lulc_ref_path = lulc_ref_path,
+      estuari_vect_path = estuari_vect_path,
+      river_vect_path = river_vect_path,
+      tss_rast_path = tss_rast_path,
+      protected_area_vect_path = protected_area_vect_path,
+      coral_vect_path = coral_vect_path,
+      seagrass_vect_path = seagrass_vect_path,
+      mangrove_vect_path = mangrove_vect_path,
+      industry_vect_path = industry_vect_path,
+      pelayaran_vect_path = pelayaran_vect_path,
+      disaster_risk_vect_path = disaster_risk_vect_path,
+      output_dir = output_dir
+    ),
+    result = list(
+      rtrw_vect = rtrw_vect,
+      rzwp3k_vect = rzwp3k_vect,
+      matriks_serasi = matriks_serasi,
+      rtrw_prioritas = rtrw_prioritas,
+      rzwp3k_prioritas = rzwp3k_prioritas,
+      lulc_vect = lulc_vect,
+      matriks_padu_ke = matriks_padu_ke,
+      estuari_vect = estuari_vect,
+      tss_rast = tss_rast,
+      protected_area_vect = protected_area_vect,
+      coastal_habitat = coastal_habitat,
+      industry_vect = industry_vect,
+      pelayaran_vect = pelayaran_vect,
+      disaster_risk_vect = disaster_risk_vect
+      
+    )
+  )
+
+generate_report(output = out, dir = output_dir)
+
 ```

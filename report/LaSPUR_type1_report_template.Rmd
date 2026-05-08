@@ -1,0 +1,188 @@
+---
+title: "LaSPUR - Land & Sea Planning Unit Reconcilliation Report (Type 1)"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+<details>
+
+<summary>Klik disini untuk membuka log analisis</summary>
+
+```{r analysis-log, echo=FALSE}
+analysis_log <- tribble(
+  ~Category,                         ~Details,
+  # "Analysis Start",                  params$start_time,
+  # "Analysis End",                    params$end_time,
+  
+  "Spatial Planning & Matrices",     "",
+  "1. RTRW Path",                    params$inputs$rtrw_path,
+  "2. RZWP3K Path",                  params$inputs$rzwp3k_path,
+  "3. RTRW Priority Path",           params$inputs$rtrw_prioritas_path,
+  "4. RZWP3K Priority Path",         params$inputs$rzwp3k_prioritas_path,
+  "5. Compatibility Matrix (SERASI)", params$inputs$matriks_serasi_path,
+  "6. Integration Matrix (PADU)",    params$inputs$matriks_padu_ke_path,
+  "7. PADU Index Weight",            params$inputs$padu_idx_weight_path,
+  
+  "Land Use & Environmental Data",   "",
+  "1. LULC Vector Path",             params$inputs$lulc_vect_path,
+  "2. LULC Reference Path",          params$inputs$lulc_ref_path,
+  "3. Estuary Vector",               params$inputs$estuari_vect_path,
+  "4. River Vector",                 params$inputs$river_vect_path,
+  "5. TSS Raster",                   params$inputs$tss_rast_path,
+  "6. Disaster Risk Vector",         params$inputs$disaster_risk_vect_path,
+  
+  "Coastal & Marine Data",         "",
+  "1. Protected Areas",              params$inputs$protected_area_vect_path,
+  "2. Coral Reefs",                  params$inputs$coral_vect_path,
+  "3. Seagrass",                     params$inputs$seagrass_vect_path,
+  "4. Mangrove",                     params$inputs$mangrove_vect_path,
+  "5. Industry Areas",               params$inputs$industry_vect_path,
+  "6. Shipping/Navigation",          params$inputs$pelayaran_vect_path,
+  
+  "Output Workspace",                params$inputs$output_dir,
+)
+
+# Render the formatted table
+analysis_log %>% 
+  kbl(caption = "Analysis Log", escape = FALSE) %>%
+  kable_paper("hover", full_width = FALSE)
+```
+
+</details>
+
+# Ringkasan
+
+isi dengan ringkasan eksekutif:
+1. jumlah unit tumpang tindih
+2. kombinasi tumpang tindih
+3. luas ara unit tumpang tindih
+4. nilai indeks padu
+5. nilai indeks padan
+6. 
+
+# Tentang Modul
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+# Data dan Metode
+
+## Data Utama {.tabset}
+
+### Peta RTRW
+```{r input-peta-rtrw, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$rtrw_vect)
+```
+
+### Peta RZWP3K
+```{r input-peta-rzwp3k, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$rzwp3k_vect)
+```
+
+### Matriks Kompabilitas (SERASI)
+```{r matriks-serasi, echo=FALSE, message=FALSE, warning=FALSE}
+DT::datatable(params$result$matriks_serasi)
+```
+
+## Data Analisis PADU {.tabset}
+
+### PADU-KE (Konektivitas Ekologis)
+
+#### Peta Tutupan dan Penggunaan Lahan
+```{r input-peta-tuplah, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$lulc_vect)
+```
+#### Matriks Ketetanggaan Kelas Tutupan dan Penggunaan Lahan
+```{r input-matriks-padu-ke, echo=FALSE, message=FALSE, warning=FALSE}
+DT::datatable(params$result$matriks_padu_ke)
+```
+
+### PADU-HS (Hidrologi Sedimentasi)
+
+#### Peta Estuari
+```{r input-peta-estuari, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$estuari_vect)
+```
+#### Peta TSS
+```{r input-peta-tss, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$tss_rast)
+```
+
+### PADU-KL (Kawasan Lindung)
+
+#### Peta Penunjukkan Kawasan Lindung
+```{r input-peta-lindung, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$protected_area_vect)
+```
+
+### PADU-KH (Kualitas/Keberadaan Habitat)
+
+#### Peta Ekosistem Habitat Biota
+```{r input-peta-habitat, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$coastal_habitat)
+```
+
+### PADU-RTp (Risiko dan Tekanan)
+
+#### Peta Kawasan Industri
+```{r input-peta-industri, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$industry_vect)
+```
+#### Peta Alur Pelayaran
+```{r input-peta-pelayaran, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$pelayaran_vect)
+```
+
+### PADU-KI (Ketahanan Iklim)
+
+#### Peta Kerentanan Bencana
+```{r input-peta-bencana, echo=FALSE, message=FALSE, warning=FALSE}
+plot(params$result$disaster_risk_vect)
+```
+
+## Metodologi
+
+
+
+# Hasil
+
+1. berapa tumpang tindih
+2. jumlah rekomendasi (apa saja dan berapa unit)
+3. mengapa rekomendasinya itu seperti itu:
+   - dijelaskan berdasarkan nilai masing2 analisis padu
+   
+# Tindak Lanjut
+
+apa yang pengguna dapat lakukan setelah memperoleh hasil rekomendasi?
+Di mana posisi analisis integrasi ini berada di rangkaian integrasi keseluruhan?
+
+
+
+
+
+
+
+
+
+
+
+
