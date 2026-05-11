@@ -3,6 +3,7 @@ title: "LaSPUR Type 1 Implementation"
 author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
 format: html
 editor: visual
+---idx
 ---
 
 # LaSPUR Tipe 1 - Overlap Area Reconcilliation
@@ -32,13 +33,13 @@ Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam forma
 #| include: true
 
 # Main input data for SERASI index calculation
-rtrw_path <- "data/vector/ST_RTRW_Pra.shp"
-rzwp3k_path <- "data/vector/ST_RZWP3K.shp"
+rtrw_path <- "data/vector/serasi/RTRW_Sulteng.shp"
+rzwp3k_path <- "data/vector/serasi/RZWP3K_Sulteng.shp"
 
 rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
 
-matriks_serasi_path <- "data/tabular/matriks_serasi_dummy.xlsx"
+matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
 
 # PADU_KE input data
 lulc_rast_path <- "data/raster/LaS_2024.tif"
@@ -48,8 +49,8 @@ lulc_vect_path <- "data/vector/PL2024_Coral_Seagrass_Union.shp"
 lulc_ref_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_solusi.xlsx"
 lulc_ref_klhk_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
 
-matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_dummy.xlsx"
-matriks_padu_ke_path_klhk <- "data/tabular/matriks_padu_ke_klhk_dummy.xlsx"
+matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_solusi.xlsx"
+matriks_padu_ke_path_klhk <- "data/tabular/matriks_padu_ke_klhk.xlsx"
 
 # PADU-HS input data
 estuari_vect_path <- "data/vector/ST_Estuari_PT.shp"
@@ -599,8 +600,7 @@ weight_sum <- sum(padu_idx_weight[2])
 
 if (weight_sum == 1){
   # Remove unecessary fields
-  idx_padu_map <- idx_serasi_map %>%
-    select(-area_ha, -area_flag)
+  idx_padu_map <- idx_serasi_map
   
   # List all PADU analysis
   padu_list <- list(
@@ -862,8 +862,8 @@ out <- list(
       coastal_habitat = coastal_habitat,
       industry_vect = industry_vect,
       pelayaran_vect = pelayaran_vect,
-      disaster_risk_vect = disaster_risk_vect
-      
+      disaster_risk_vect = disaster_risk_vect,
+      idx_padan_map_alt = idx_padan_map_alt      
     )
   )
 
