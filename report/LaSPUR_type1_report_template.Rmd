@@ -8,6 +8,8 @@ output:
     theme: united
     highlight: tango
     df_print: kable
+  pdf_document: default
+always_allow_html: true
 params:
   start_time: NA
   end_time: NA
@@ -38,6 +40,8 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
   }
 }
 ```
+
+untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong
 
 ```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
 source(here::here("R/functions.R"))
@@ -146,11 +150,11 @@ summary <- list(
 summary_overall_t <- summary$overall %>%
   pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
   mutate(Komponen = case_when(
-    Komponen == "total_unit"                 ~ "Jumlah Unit Konflik",
+    Komponen == "total_unit"                 ~ "Jumlah Kasus Tumpang Tindih",
     Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
     Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
-    Komponen == "total_ha"                   ~ "Luas Area Konflik (ha)",
-    Komponen == "qualified_treshold_area"    ~ "Jumlah Unit Konflik Memenuhi Ambang Luas",
+    Komponen == "total_ha"                   ~ "Luas Area Kasus Tumpang Tindih (ha)",
+    Komponen == "qualified_treshold_area"    ~ "Jumlah Kasus Tumpang Tindih Memenuhi Ambang Luas",
     TRUE                                   ~ Komponen  
   ))
 
@@ -197,6 +201,8 @@ summary_idx_recom_t <- summary$idx_recommendation %>%
 
 DT::datatable(summary_idx_recom_t, rownames = FALSE)
 ```
+
+tambahkan toggle untuk menunjukkan narasi interpretasi indeks padu dan padan (seperti modul 4 luma)
 
 # Tentang Modul
 
@@ -650,6 +656,12 @@ tagList(
 # Tindak Lanjut
 
 <!-- apa yang pengguna dapat lakukan setelah memperoleh hasil rekomendasi? -->
+<!-- apa kah hasilnya sudah sesuai? jika belum, apa saja yang dapat disesuaikan dari segi input? -->
+<!-- Jika sudah sesuai, bagaiamana output keluaran laspur dapat digunakan untuk keperluan pengguna? -->
+<!-- tambahkan diagram alir opsi flow apa saja yang dapat pengguna lakukan: -->
+<!-- 1. lanjut step 2 -->
+<!-- 2. perbaiki input step 1, lalu rerun -->
+<!-- 3. gunakan keluaran step 1 untuk proses integrasi peta darat laut -->
 <!-- Di mana posisi analisis integrasi ini berada di rangkaian integrasi keseluruhan? -->
 
 ------------------------------------------------------------------------

@@ -1,21 +1,21 @@
-# ui/modules/mod_padu_ke.R
+# ui/modules/mod_padu_kl.R
 # ============================================================
-#  MODULE: PADU-KE (2.1 PADU-KE)
+#  MODULE: PADU-KL (2.3 Conservation Area Analysis)
 # ============================================================
 
 source("../R/functions.R")
 source("../R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
-padu_ke_ui <- function(id) {
+padu_kl_ui <- function(id) {
   ns <- NS(id)
   tagList(
 
     div(
       style = "margin-bottom: 20px;",
-      h4("2.1 PADU-KE: Analisis Ketetanggaan Tutupan Lahan", style = "margin: 0; font-weight: 700;"),
+      h4("2.3 PADU-KL: Analisis Kawasan Konservasi", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menghitung indeks PADU-KE berdasarkan ketetanggaan tutupan lahan dan matriks kompatibilitas.",
+        "Menghitung persentase unit perencanaan yang tumpang tindih dengan Kawasan Lindung.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -41,39 +41,22 @@ padu_ke_ui <- function(id) {
 
         hr(),
 
-        tags$p(tags$i(class = "bi bi-map me-1"),
-               "Shapefile Tutupan Lahan",
+        tags$p(tags$i(class = "bi bi-shield-check me-1"),
+               "Shapefile Kawasan Lindung",
                style = "font-weight: 600; margin-bottom: 4px;"),
         tags$small(
           style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Layer poligon dengan kelas tutupan lahan (contoh: PL2024_Coral_Seagrass_Union.shp)."
+          "Layer vektor kawasan lindung/konservasi yang akan ditumpangtindihkan dengan unit perencanaan."
         ),
-        fileInput(ns("lulc_file"),
+        fileInput(ns("protected_area_file"),
                   label    = NULL,
                   accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
 
         hr(),
 
-        tags$p(tags$i(class = "bi bi-table me-1"),
-               "Tabel Matriks PADU-KE (.xlsx)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        tags$small(
-          style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Kolom yang diperlukan: class1, class2, adj_index."
-        ),
-        fileInput(ns("matriks_padu_ke_file"),
-                  label  = NULL,
-                  accept = ".xlsx"),
-
-        hr(),
-
         div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap;",
-          actionButton(ns("btn_generate_matrix"),
-                       tagList(tags$i(class = "bi bi-file-earmark-excel me-1"),
-                               "Buat Template Matriks"),
-                       class = "btn-outline-primary btn-sm"),
+          style = "display: flex; gap: 8px;",
           actionButton(ns("btn_run"),
                        tagList(tags$i(class = "bi bi-play-fill me-1"),
                                "Jalankan Analisis"),
@@ -112,7 +95,7 @@ padu_ke_ui <- function(id) {
 }
 
 # ── Server ───────────────────────────────────────────────────
-padu_ke_server <- function(id, output_dir) {
+padu_kl_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
 
     analysis_result <- reactiveVal(NULL)
@@ -148,102 +131,39 @@ padu_ke_server <- function(id, output_dir) {
       load_and_validate_shapefile(path)
     })
 
-    lulc_vect <- reactive({
-      req(input$lulc_file)
-      load_and_validate_shapefile(extract_shp_path(input$lulc_file))
-    })
-
-    lulc_ref <- reactive({
-      lulc_vect() %>%
-        sf::st_drop_geometry() %>%
-        dplyr::distinct(ID, LC) %>%
-        dplyr::arrange(ID)
-    })
-
-    # ── Generate matrix template ─────────────────────────────
-    observeEvent(input$btn_generate_matrix, {
-      tryCatch({
-        template <- generate_matrix_padu_ke(lulc_ref())
-        out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
-        write.xlsx(template, out_path, overwrite = TRUE)
-        showNotification(paste("Template matriks dibuat →", out_path),
-                         type = "message", duration = 5)
-      }, error = function(e) {
-        showNotification(paste("Gagal membuat template matriks:", e$message),
-                         type = "error", duration = 8)
-      })
+    protected_area_vect <- reactive({
+      req(input$protected_area_file)
+      load_and_validate_shapefile(extract_shp_path(input$protected_area_file))
     })
 
     # ── Run analysis ─────────────────────────────────────────
     observeEvent(input$btn_run, {
-      req(!is_running())
-      req(input$idx_serasi_file, input$lulc_file, input$matriks_padu_ke_file)
+      req(!is_running(), input$idx_serasi_file, input$protected_area_file)
 
       is_running(TRUE)
       analysis_result(NULL)
 
       tryCatch({
-        # Muat tabel matriks PADU-KE
-        matriks_raw <- load_validate_matrix_table(input$matriks_padu_ke_file$datapath, title = "padu_ke")
-        idx_col <- setdiff(names(matriks_raw), c("class1", "class2"))
-        names(matriks_raw)[names(matriks_raw) == idx_col] <- "adj_index"
+        idx_padu_kl_map <- calculate_overlay_pct(
+          pu           = idx_serasi_map(),
+          overlay_area = protected_area_vect(),
+          title        = "protected"
+        ) %>%
+          mutate(idx_padu_kl = protected_pct / 100)
 
-        matriks_padu_ke_id <- matriks_raw %>%
-          mutate(
-            class1_id = lulc_ref()[[1]][match(class1, lulc_ref()[[2]])],
-            class2_id = lulc_ref()[[1]][match(class2, lulc_ref()[[2]])]
-          ) %>%
-          filter(!is.na(class1_id), !is.na(class2_id)) %>%
-          select(
-            class_id1 = class1_id,
-            class_id2 = class2_id,
-            adj_index
-          )
+        out_path <- file.path(output_dir(), "idx_padu_kl.gpkg")
+        sf::write_sf(idx_padu_kl_map, out_path, delete_dsn = TRUE)
 
-        # Muat peta SERASI & peta tutupan lahan
-        idx_map        <- idx_serasi_map()
-        lulc_vect_data <- lulc_vect()
-        class_col      <- intersect(c("ID", "Class", "class", "LULC", "Kelas"), names(lulc_vect_data))[1]
-
-        # Hitung ketetanggaan
-        lulc_adjacencies <- calculate_lulc_adjacency(
-          lulc         = lulc_vect_data,
-          admin_vector = idx_map,
-          id_col       = "id_pu",
-          class_col    = class_col
-        )
-
-        lulc_adjacencies <- lulc_adjacencies %>%
-          mutate(
-            Class_A = as.integer(as.character(Class_A)),
-            Class_B = as.integer(as.character(Class_B))
-          )
-
-        # Hitung indeks PADU-KE
-        idx_padu_ke <- calculate_padu_ke(lulc_adjacencies, matriks_padu_ke_id) %>%
-          select(id_pu, idx_padu_ke)
-
-        # Gabungkan kembali ke peta SERASI
-        idx_padu_ke_map <- idx_map %>%
-          mutate(id_pu = as.character(id_pu)) %>%
-          left_join(idx_padu_ke, by = "id_pu") %>%
-          mutate(idx_padu_ke = ifelse(is.na(idx_padu_ke), 0, idx_padu_ke))
-
-        # Simpan hasil
-        out_path <- file.path(output_dir(), "idx_padu_ke.gpkg")
-        sf::st_write(idx_padu_ke_map, out_path, delete_dsn = TRUE, quiet = TRUE)
-
-        result_table <- as_tibble(sf::st_drop_geometry(idx_padu_ke_map))
-        analysis_result(list(map = idx_padu_ke_map, table = result_table))
-        analysis_log("Analisis PADU-KE berhasil diselesaikan.")
-        showNotification("Analisis selesai! Periksa tab Peta dan Tabel.",
-                         type = "message", duration = 5)
+        analysis_result(list(
+          map   = idx_padu_kl_map,
+          table = as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
+        ))
+        analysis_log(paste0("Analisis PADU-KL selesai. File disimpan ke: ", out_path))
+        showNotification("Analisis selesai!", type = "message", duration = 5)
 
       }, error = function(e) {
-        msg <- conditionMessage(e)
-        if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
-        analysis_log(paste("Error:", msg))
-        showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
+        analysis_log(paste("Error:", e$message))
+        showNotification(paste("Analisis gagal:", e$message), type = "error", duration = 8)
       })
 
       is_running(FALSE)
@@ -269,13 +189,15 @@ padu_ke_server <- function(id, output_dir) {
     # ── Map output ───────────────────────────────────────────
     output$result_map <- renderPlot({
       req(analysis_result())
-      plot(analysis_result()$map["idx_padu_ke"], main = "Peta Indeks PADU-KE")
+      plot(analysis_result()$map["idx_padu_kl"],
+           main = "Peta Indeks PADU-KL (Tumpang Tindih Kawasan Konservasi)",
+           border = "grey60")
     })
 
     # ── Table output ─────────────────────────────────────────
     output$result_table <- renderTable({
       req(analysis_result())
-      analysis_result()$table
+      head(analysis_result()$table, 100)
     })
 
     # ── Validation log ───────────────────────────────────────
