@@ -1,5 +1,27 @@
 # Helper Functions for Data Loading and Validation ------------------------
 
+# Load libraries 
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  terra,
+  sf,
+  openxlsx,
+  tibble,
+  dplyr,
+  landscapemetrics,
+  purrr,
+  tidyr,
+  stringr,
+  exactextractr,
+  here,
+  rmarkdown,
+  kableExtra,
+  DT
+)
+
 #' Load and Validate a Shapefile
 #'
 #' @description
@@ -379,3 +401,30 @@ load_and_validate_raster <- function(raster_path,
 # 5. export_table()
 # 6. export_map()
 # 7. generate_report()
+
+#' Generate LaSPUR Report
+#' 
+#' Generates a report for the LaSPUR using R Markdown.
+#'
+#' @param output List. Output from LaSPUR module.
+#' @param dir Character string. Directory to save the report.
+#' 
+#' @importFrom rmarkdown render
+#'
+#' @export
+generate_report <- function(output, dir) {
+  report_params <- list(
+    inputs = output$inputs,
+    result = output$result
+  )
+  
+  output_file <- paste0("LaSPUR_Report_", Sys.Date(), ".html")
+  
+  rmarkdown::render(
+    input = "report/LaSPUR_type1_report_template.Rmd",
+    output_file = output_file,
+    output_dir = dir,
+    params = report_params,
+    knit_root_dir = getwd() 
+  )
+}

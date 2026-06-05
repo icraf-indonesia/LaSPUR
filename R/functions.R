@@ -658,6 +658,462 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
   return(result)
 }
 
+# Perhitungan Indeks PADU-HS ----------------------------------------------
+
+#' Calculate Euclidean distance from vector features to a set of planning units
+#'
+#' This function computes a Euclidean distance raster for a given set of source
+#' vector features (`vector_obj`) within a planning unit area (`pu`). The source
+#' features are first clipped to the planning unit boundary, then a distance
+#' raster is generated at a specified resolution and masked to the planning units.
+#'
+#' @param vector_obj An `sf` object (points, lines, or polygons) representing the
+#'   source features from which distances are calculated.
+#' @param pu An `sf` object defining the planning unit area (polygon). The raster
+#'   extent and mask are based on this object.
+#' @param resolution Numeric. The resolution of the output distance raster
+#'   (map units, default = 100). Higher values produce coarser rasters.
+#'
+#' @return A `SpatRaster` object (from the `terra` package) where each cell value
+#'   is the Euclidean distance to the nearest source feature. Cells outside the
+#'   planning unit area are `NA`.
+#'
+#' @details
+#' The function performs the following steps:
+#' \enumerate{
+#'   \item Validates that both inputs are `sf` objects and harmonises their CRS
+#'         (reprojecting `vector_obj` to the CRS of `pu` if needed).
+#'   \item Clips `vector_obj` by `pu` using `sf::st_intersection()` and removes
+#'         empty geometries.
+#'   \item Creates a raster template from the bounding box of `pu` at the
+#'         specified resolution.
+#'   \item Computes Euclidean distance from each raster cell to the nearest
+#'         source geometry using `terra::distance()`.
+#'   \item Masks the distance raster to the exact outline of `pu`.
+#' }
+#'
+#' @note
+#' The function stops with an error if no part of `vector_obj` overlaps `pu`
+#' after clipping. Both input objects are repaired with `sf::st_make_valid()`
+#' to avoid geometry issues.
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' library(terra)
+#'
+#' # Example source points
+#' pts <- st_as_sf(data.frame(x = c(10, 20), y = c(15, 25)), coords = c("x", "y"))
+#' st_crs(pts) <- 4326
+#'
+#' # Example planning unit (a simple polygon)
+#' pu_poly <- st_as_sf(data.frame(x = c(0, 30, 30, 0), y = c(0, 0, 30, 30)),
+#'                     coords = c("x", "y"), dim = "XY", crs = 4326) |>
+#'            st_bbox() |> st_as_sfc()
+#'
+#' # Compute distance raster at 1 unit resolution
+#' dist_rast <- calculate_euclidean_dist(pts, pu_poly, resolution = 1)
+#' plot(dist_rast)
+#' }
+#'
+#' @importFrom sf st_make_valid st_crs st_transform st_intersection st_is_empty st_bbox
+#' @importFrom terra rast vect distance mask
+#' @export
+calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100) {
+  # Input validation
+  if (!inherits(vector_obj, "sf")) stop("vector_obj must be an sf object")
+  if (!inherits(pu, "sf")) stop("pu must be an sf object")
+  
+  vector_obj <- sf::st_make_valid(vector_obj)
+  pu <- sf::st_make_valid(pu)
+  
+  # Harmonise CRS
+  if (!identical(sf::st_crs(vector_obj), sf::st_crs(pu))) {
+    message("Reprojecting vector_obj to CRS of pu")
+    vector_obj <- sf::st_transform(vector_obj, sf::st_crs(pu))
+  }
+  
+  # Clip vector_obj by pu 
+  vector_clipped <- sf::st_intersection(vector_obj, pu)
+  vector_clipped <- handle_geom_collection(vector_clipped)
+  vector_clipped <- vector_clipped[!sf::st_is_empty(vector_clipped), ]
+  
+  if (nrow(vector_clipped) == 0) {
+    stop("After intersection, no part of vector_obj overlaps pu")
+  }
+  
+  # Create raster template from pu bounding box
+  bb <- sf::st_bbox(pu)
+  r_template <- terra::rast(
+    xmin = bb["xmin"], xmax = bb["xmax"],
+    ymin = bb["ymin"], ymax = bb["ymax"],
+    resolution = resolution,
+    crs = sf::st_crs(pu)$wkt
+  )
+  
+  # Calculate euclidean distance
+  source_vect <- terra::vect(vector_clipped)
+  dist_raster <- terra::distance(r_template, source_vect)
+  
+  # Mask to pu
+  pu_vect <- terra::vect(pu)
+  dist_raster <- terra::mask(dist_raster, pu_vect)
+  
+  return(dist_raster)
+}
+
+#' Extract raster values to sf polygons using exact extraction
+#'
+#' Extracts raster values for each polygon in an sf object using exactextractr,
+#' which computes area-weighted means for polygons. The function handles CRS
+#' mismatches by reprojecting the polygons to the raster's CRS and allows
+#' filling missing values with a user-specified constant.
+#'
+#' @param pu An sf object (typically planning units or polygons) for which to extract raster values.
+#' @param rast A SpatRaster object (from the \code{terra} package) or a RasterLayer.
+#' @param id_col Character string naming the column in \code{pu} that uniquely identifies each feature.
+#'        Currently not used in the function but reserved for future compatibility.
+#' @param new_col Optional character string for the name of the new column in the output sf object.
+#'        If \code{NULL} (default), the name is generated as \code{"{raster_layer_name}_weighted_mean"}.
+#' @param na.rm Logical. Should missing values (NA) be removed before computing the weighted mean?
+#'        Passed to \code{exactextractr::exact_extract} (default is \code{TRUE}).
+#' @param fill_na Value to use for polygons where extraction results in \code{NA}. Default is \code{0}.
+#'
+#' @return The input sf object \code{pu} with an additional column (named \code{new_col})
+#'         containing the area-weighted mean raster values for each polygon.
+#'
+#' @details
+#' The function first checks if the CRS of \code{pu} matches that of \code{rast}. If not,
+#' it reprojects the polygons to the raster's CRS. It then uses
+#' \code{exactextractr::exact_extract} with \code{fun = "mean"} to compute the
+#' area-weighted mean of raster values for each polygon. This method is more
+#' accurate than using \code{terra::extract} because it accounts for partial
+#' overlap of raster cells with polygon boundaries.
+#'
+#' The \code{id_col} parameter is included for API consistency with related
+#' functions but is not currently used. Missing values (NAs) in the extracted
+#' results are replaced with \code{fill_na}.
+#'
+#' @importFrom sf st_crs st_transform
+#' @importFrom exactextractr exact_extract
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' library(terra)
+#' library(exactextractr)
+#'
+#' # Create example raster
+#' r <- rast(nrows = 10, ncols = 10, xmin = 0, xmax = 10, ymin = 0, ymax = 10)
+#' values(r) <- runif(100)
+#'
+#' # Create example polygon
+#' pol <- st_sfc(st_polygon(list(cbind(c(2,5,5,2,2), c(2,2,5,5,2)))))
+#' pu <- st_sf(id = 1, geometry = pol)
+#'
+#' # Extract weighted mean
+#' result <- extract_raster_to_sf(pu, r, id_col = "id", new_col = "mean_val")
+#' print(result)
+#' }
+#'
+#' @export
+extract_raster_to_sf <- function(pu, rast, id_col, new_col = NULL, na.rm = TRUE, fill_na = 0) {
+  
+  # Input validation
+  if (is.null(new_col)) {
+    new_col <- paste0(names(rast)[1], "_weighted_mean")
+  }
+  
+  if (sf::st_crs(pu) != sf::st_crs(rast)) {
+    message("Reprojecting polygons to match raster CRS...")
+    pu <- sf::st_transform(pu, sf::st_crs(rast))
+  }
+  
+  # Extraction using weighted mean
+  results <- exactextractr::exact_extract(
+    rast, 
+    pu, 
+    fun = "mean", 
+    progress = TRUE
+  )
+  
+  # Assign and Fill NAs
+  pu[[new_col]] <- results
+  pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+  
+  return(pu)
+}
+
+# Perhitungan Indeks PADU-KL ----------------------------------------------
+
+#' Calculate area percentage within planning units
+#'
+#' This function calculates the area and percentage of overlapping areas
+#' with each planning unit (PU) in a spatial dataset. It handles coordinate reference
+#' system transformations and efficiently processes only intersecting features.
+#'
+#' @param pu sf object. Planning unit polygons with an `area_ha` column containing
+#'   the area of each unit in hectares.
+#' @param overlay_area sf object or list of sf objects. Area polygons to be overlapped with
+#'   the planning units. If a list is provided, all sf objects in the list will be 
+#'   combined into a single sf object before processing.
+#' @param title character string. Prefix for the output column names. 
+#'   For example, if title = "protected_area", columns will be named 
+#'   "protected_area_ha" and "protected_area_pct". Default is "overlay_area".
+#'
+#' @return The input `pu` sf object with two additional columns:
+#'   \item{<title>_ha}{Area of overlay area within each planning unit (hectares)}
+#'   \item{<title>_pct}{Percentage of the planning unit covered by overlay areas}
+#'
+#' @details
+#' The function first checks if `overlay_area` is a list. If so, it combines all
+#' sf objects in the list using `rbind` into a single sf object. It then ensures 
+#' both spatial objects share the same CRS, transforming `overlay_area` to match 
+#' `pu` if necessary. The function then identifies planning units that intersect 
+#' with any overlay area and calculates overlaps only for those units, improving 
+#' efficiency for large datasets.
+#'
+#' Area calculations are performed in square meters and converted to hectares
+#' (1 hectare = 10,000 m²). Results are rounded to two decimal places.
+#'
+#' @note
+#' The `pu` object must contain an `area_ha` numeric column with pre-calculated
+#' areas for each planning unit. This function does not recalculate PU areas.
+#'
+#' @examples
+#' \dontrun{
+#' # Load example data
+#' pu <- st_read("planning_units.shp")
+#' 
+#' # Single overlay area
+#' protected <- st_read("protected_areas.shp")
+#' pu_with_protected <- calculate_overlay_pct(pu, protected, title = "protected_area")
+#'
+#' # Multiple overlay areas as a list
+#' forest <- st_read("forest.shp")
+#' wetland <- st_read("wetland.shp")
+#' grassland <- st_read("grassland.shp")
+#' 
+#' all_habitats <- list(forest, wetland, grassland)
+#' pu_with_habitats <- calculate_overlay_pct(pu, all_habitats, title = "habitat")
+#'
+#' # View results
+#' head(pu_with_protected[, c("protected_area_ha", "protected_area_pct")])
+#' head(pu_with_habitats[, c("habitat_ha", "habitat_pct")])
+#' }
+#'
+#' @importFrom sf st_crs st_transform st_intersects st_intersection st_area
+#'
+#' @export
+calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
+  
+  # Check if overlay_area is a list and combine if necessary
+  if (is.list(overlay_area) && !inherits(overlay_area, "sf")) {
+    cat("Combining", length(overlay_area), "sf objects from list\n")
+    overlay_area <- do.call(rbind, overlay_area)
+  }
+  
+  # Transform overlay_area to match pu CRS
+  if (st_crs(pu) != st_crs(overlay_area)) {
+    overlay_area <- st_transform(overlay_area, st_crs(pu))
+  }
+  
+  # Create column names based on title
+  ha_col <- paste0(title, "_ha")
+  pct_col <- paste0(title, "_pct")
+  
+  # Initialize columns
+  pu[[ha_col]] <- 0
+  pu[[pct_col]] <- 0
+  
+  # Find which PU intersect with overlay_area
+  intersects_idx <- st_intersects(pu, overlay_area)
+  intersecting_pu <- which(lengths(intersects_idx) > 0)
+  
+  cat("Processing", length(intersecting_pu), "planning units that intersect with", title, "areas\n")
+  
+  # Calculate overlap only for intersecting PU
+  for (i in intersecting_pu) {
+    intersection <- st_intersection(pu[i, ], overlay_area)
+    
+    if (nrow(intersection) > 0) {
+      overlap_area_ha <- sum(as.numeric(st_area(intersection))) / 10000 # Convert m2 to ha
+      pu[[ha_col]][i] <- overlap_area_ha
+      pu[[pct_col]][i] <- (overlap_area_ha / pu$area_ha[i]) * 100
+    }
+  }
+  return(pu)
+}
+
+# Perhitungan Indeks PADU-RTp ---------------------------------------------
+
+#' Handle geometry collections and multisurfaces in an sf object
+#'
+#' Converts geometry collections and multisurfaces to multipolygons by extracting
+#' polygon components. Rows without any polygon data are dropped, and a warning
+#' is issued if rows are removed.
+#'
+#' @param sf_obj An sf object containing simple feature geometries.
+#'
+#' @return An sf object with all geometries converted to `MULTIPOLYGON` type.
+#'   Rows that contained no polygon data after extraction are removed.
+#'
+#' @details
+#' The function first checks if any geometry type in `sf_obj` is either
+#' `"GEOMETRYCOLLECTION"` or `"MULTISURFACE"`. If such types are present, it:
+#' \enumerate{
+#'   \item Applies `st_make_valid()` to repair invalid geometries.
+#'   \item Extracts `"POLYGON"` components using `st_collection_extract()`.
+#'   \item Casts the result to `"MULTIPOLYGON"` for consistency.
+#' }
+#' If the number of rows decreases after processing, a warning reports how many
+#' rows were dropped (those without any polygon geometry).
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' # Create an sf object with a geometry collection
+#' gc <- st_sfc(st_geometrycollection(list(st_point(c(0,0)), st_linestring(cbind(0:1,0:1)))))
+#' poly <- st_sfc(st_polygon(list(cbind(c(0,1,1,0,0), c(0,0,1,1,0)))))
+#' sf_mixed <- st_sf(geom = c(gc, poly), id = 1:2)
+#' result <- handle_geom_collection(sf_mixed)
+#' }
+#' @export
+#'
+#' @importFrom sf st_geometry_type st_make_valid st_collection_extract st_cast
+#' @importFrom magrittr %>%
+handle_geom_collection <- function(sf_obj) {
+  
+  geom_types <- as.character(st_geometry_type(sf_obj))
+  # Detect if any row is a collection type
+  is_collection <- any(geom_types %in% c("GEOMETRYCOLLECTION", "MULTISURFACE"))
+  
+  if (is_collection) {
+    n_before <- nrow(sf_obj)
+    
+    sf_obj <- sf_obj %>%
+      st_make_valid() %>%
+      st_collection_extract("POLYGON") %>%
+      st_cast("MULTIPOLYGON")
+    
+    n_after <- nrow(sf_obj)
+    
+    if (n_before != n_after) {
+      warning(paste("Dropped", n_before - n_after, "rows with no polygon data."))
+    }
+  }
+  return(sf_obj)
+}
+
+# Perhitungan Indeks PADU-KI ----------------------------------------------
+
+#' Extract area-weighted mean from a spatial layer to planning units
+#'
+#' Intersects a set of planning units (polygons) with a source spatial layer
+#' containing a value column, computes the overlap area for each intersection,
+#' and calculates the area-weighted mean of the value within each planning unit.
+#' Optionally reprojects the source layer to match the CRS of the planning units.
+#'
+#' @param pu          An `sf` polygon object representing planning units.
+#' @param value_sf    An `sf` object (typically polygons or multi-polygons) that
+#'                    contains a numeric attribute to be transferred. The function
+#'                    assumes that the geometries have area (polygons).
+#' @param value_col   Character string. Name of the column in `value_sf` holding
+#'                    the numeric values to be averaged.
+#' @param pu_id       Character string. Name of a unique identifier column in `pu`.
+#'                    If `NULL` (default), a temporary ID column is created and
+#'                    removed before returning.
+#' @param new_col     Character string. Name of the new column to be added to `pu`
+#'                    containing the weighted mean. Default is `"weighted_mean"`.
+#' @param fill_na     Numeric value. Used to fill planning units that have no
+#'                    overlap with `value_sf` (default = 0).
+#'
+#' @return The input `pu` object with an additional column named `new_col`
+#'         containing the area-weighted mean of `value_col` for each planning unit.
+#'
+#' @details
+#' The weighted mean for a planning unit \eqn{i} is computed as:
+#' \deqn{\bar{v}_i = \frac{\sum_j v_j \cdot a_{ij}}{\sum_j a_{ij}}}
+#' where \eqn{v_j} is the value from `value_sf` polygon \eqn{j}, and \eqn{a_{ij}} is
+#' the area of intersection between planning unit \eqn{i} and polygon \eqn{j}.
+#'
+#' If the CRS of `pu` and `value_sf` differ, `value_sf` is reprojected to the CRS
+#' of `pu` (a message is printed). The function uses `sf::st_area()` to compute
+#' overlap areas; therefore, the CRS should be a projected (Cartesian) coordinate
+#' system to obtain meaningful areas. If no overlap exists between a planning unit
+#' and the source layer, the `fill_na` value is assigned.
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#'
+#' # Create two overlapping square polygons as planning units
+#' pu <- st_sf(id = 1:2,
+#'             geometry = st_sfc(
+#'               st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))),
+#'               st_polygon(list(rbind(c(0.5,0.5), c(1.5,0.5), c(1.5,1.5),
+#'                                     c(0.5,1.5), c(0.5,0.5))))
+#'             ))
+#'
+#' # Source layer: two rectangles with different values
+#' vals <- st_sf(value = c(10, 20),
+#'               geometry = st_sfc(
+#'                 st_polygon(list(rbind(c(0,0), c(0.8,0), c(0.8,0.8),
+#'                                       c(0,0.8), c(0,0)))),
+#'                 st_polygon(list(rbind(c(0.7,0.7), c(1.7,0.7),
+#'                                       c(1.7,1.7), c(0.7,1.7), c(0.7,0.7))))
+#'               ))
+#'
+#' # Extract area-weighted mean
+#' pu_result <- extract_sf_to_sf(pu, vals, value_col = "value",
+#'                               pu_id = "id", new_col = "wmean")
+#' plot(pu_result["wmean"])
+#' }
+#'
+#' @importFrom sf st_crs st_transform st_intersection st_area
+#' @export
+extract_sf_to_sf <- function(pu, value_sf, value_col, pu_id = NULL, 
+                             new_col = "weighted_mean", fill_na = 0) {
+  
+  # Handle projection
+  if (!sf::st_crs(pu) == sf::st_crs(value_sf)) {
+    message("Reprojecting value_sf to match pu CRS...")
+    value_sf <- sf::st_transform(value_sf, sf::st_crs(pu))
+  }
+  
+  # Add a temporary ID to pu if none provided
+  if (is.null(pu_id)) {
+    pu$.tmp_id <- seq_len(nrow(pu))
+    pu_id <- ".tmp_id"
+  }
+  
+  # Intersection
+  inter <- sf::st_intersection(pu[, pu_id, drop = FALSE], value_sf[, value_col, drop = FALSE])
+  if (nrow(inter) == 0) {
+    warning("No overlap between pu and value_sf. Returning fill_na for all units.")
+    pu[[new_col]] <- fill_na
+    if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+    return(pu)
+  }
+  
+  # Compute area and weighted mean of each intersected piece
+  inter$area_overlap <- as.numeric(sf::st_area(inter))
+  inter$weighted <- inter[[value_col]] * inter$area_overlap
+  
+  # Aggregate by the pu ID column
+  agg <- aggregate(cbind(weighted, area_overlap) ~ inter[[pu_id]], data = inter, FUN = sum)
+  names(agg)[1] <- pu_id
+  agg$mean <- agg$weighted / agg$area_overlap
+  
+  # Merge back to pu
+  pu <- merge(pu, agg[, c(pu_id, "mean")], by = pu_id, all.x = TRUE)
+  pu[[new_col]] <- pu$mean
+  pu$mean <- NULL  
+  pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+  if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+  
+  return(pu)
+}
 
 # Perhitungan Indeks PADU Final -------------------------------------------
 
@@ -714,13 +1170,13 @@ calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
 #'
 #' @export
 calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
-  # Join all PADU indices
-  idx_padu_map <- reduce(
+  
+  idx_padu_map <- purrr::reduce(
     padu_list,
     .init = idx_padu_map,
     .f = function(x, y) {
       
-      idx_col <- names(y)[grepl("^idx_padu_[a-z]+$", names(y))]
+      idx_col <- names(y)[grepl("^idx_padu_", names(y))][1]
       
       y_clean <- y %>%
         st_drop_geometry() %>%
@@ -731,40 +1187,45 @@ calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
     }
   )
   
-  # Prepare weights 
+  # Replace NA to 0
+  idx_padu_map <- idx_padu_map %>%
+    mutate(across(matches("^idx_padu_"), ~replace_na(., 0)))
+  
+  # Prepare weights
   weights <- padu_idx_weight %>%
     mutate(
       code  = tolower(.[[1]]),
       value = .[[2]]
     )
   
-  # Detect index columns
   idx_cols <- names(idx_padu_map)[grepl("^idx_padu_", names(idx_padu_map))]
   idx_code <- stringr::str_remove(idx_cols, "idx_padu_")
   
-  # Count available indices
+  # Validate weights
+  if (!all(idx_code %in% weights$code)) {
+    stop(paste(
+      "Missing weights for:",
+      paste(setdiff(idx_code, weights$code), collapse = ", ")
+    ))
+  }
+  
   n_idx <- length(idx_cols)
   
   if (n_idx < 7) {
-    message(paste0(
-      "Only ", n_idx, " PADU indices detected. ",
-      "Using simple average instead of weighted calculation."
-    ))
+    message(paste0("Only ", n_idx, " indices detected → using mean"))
   } else {
-    message("All 7 PADU indices detected. Using weighted calculation.")
+    message("All indices detected → using weighted sum")
   }
   
-  # Calculate final index
   idx_padu_map <- idx_padu_map %>%
     rowwise() %>%
     mutate(
       idx_padu_final = if (n_idx < 7) {
-        mean(c_across(all_of(idx_cols)), na.rm = TRUE)
+        mean(c_across(all_of(idx_cols)))
       } else {
         sum(
           c_across(all_of(idx_cols)) *
-            weights$value[match(idx_code, weights$code)],
-          na.rm = TRUE
+            weights$value[match(idx_code, weights$code)]
         )
       }
     ) %>%

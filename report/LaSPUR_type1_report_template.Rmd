@@ -1,0 +1,682 @@
+---
+title: "LaSPUR - Land & Sea Planning Unit Reconcilliation Report (Type 1)"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+---
+
+```{r setup}
+#| include: false
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(
+          obj,
+          key.pos   = 4,        
+          key.width = lcm(width) 
+        )
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+```
+
+untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong
+
+```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+<details>
+
+<summary>Klik disini untuk membuka log analisis</summary>
+
+```{r analysis-log, echo=FALSE}
+analysis_log <- tribble(
+  ~Category,                         ~Details,
+  # "Analysis Start",                  params$start_time,
+  # "Analysis End",                    params$end_time,
+  
+  "Spatial Planning & Matrices",     "",
+  "1. RTRW Path",                    params$inputs$rtrw_path,
+  "2. RZWP3K Path",                  params$inputs$rzwp3k_path,
+  "3. RTRW Priority Path",           params$inputs$rtrw_prioritas_path,
+  "4. RZWP3K Priority Path",         params$inputs$rzwp3k_prioritas_path,
+  "5. Compatibility Matrix (SERASI)", params$inputs$matriks_serasi_path,
+  "6. Integration Matrix (PADU)",    params$inputs$matriks_padu_ke_path,
+  "7. PADU Index Weight",            params$inputs$padu_idx_weight_path,
+  
+  "Land Use & Environmental Data",   "",
+  "1. LULC Vector Path",             params$inputs$lulc_vect_path,
+  "2. LULC Reference Path",          params$inputs$lulc_ref_path,
+  "3. Estuary Vector",               params$inputs$estuari_vect_path,
+  "4. River Vector",                 params$inputs$river_vect_path,
+  "5. TSS Raster",                   params$inputs$tss_rast_path,
+  "6. Disaster Risk Vector",         params$inputs$disaster_risk_vect_path,
+  
+  "Coastal & Marine Data",         "",
+  "1. Protected Areas",              params$inputs$protected_area_vect_path,
+  "2. Coral Reefs",                  params$inputs$coral_vect_path,
+  "3. Seagrass",                     params$inputs$seagrass_vect_path,
+  "4. Mangrove",                     params$inputs$mangrove_vect_path,
+  "5. Industry Areas",               params$inputs$industry_vect_path,
+  "6. Shipping/Navigation",          params$inputs$pelayaran_vect_path,
+  
+  "Output Workspace",                params$inputs$output_dir,
+)
+
+# Render the formatted table
+analysis_log %>% 
+  kbl(caption = "Analysis Log", escape = FALSE) %>%
+  kable_paper("hover", full_width = FALSE)
+```
+
+</details>
+
+# Ringkasan
+
+```{r summary-calculation}
+#| error: true
+#| warning: false
+#| message: false
+
+idx_padan_alt <- params$result$idx_padan_map_alt %>% st_drop_geometry()
+
+summary <- list(
+  # Overall summary table
+  overall = idx_padan_alt %>%
+    summarise(
+      total_unit = n(),
+      total_rtrw = n_distinct(RTRW),
+      total_rzwp3k = n_distinct(RZWP3K),
+      total_ha = sum(area_ha, na.rm = TRUE),
+      qualified_treshold_area = sum(area_flag == "luas terpenuhi", na.rm = TRUE)
+    ) %>%
+    as_tibble(),
+  
+  # Combination count table (RTRW × RZWP3K)
+  combinations = idx_padan_alt %>%
+    group_by(RTRW, RZWP3K) %>%
+    summarise(
+      total_combination = n(),
+      total_area_ha = sum(area_ha, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(total_combination)) %>%
+    as_tibble(),
+  
+  # Range and recommendation counts table
+  idx_recommendation = idx_padan_alt %>%
+    summarise(
+      range_idx_padu = paste(min(idx_padu_final, na.rm = TRUE), "-", max(idx_padu_final, na.rm = TRUE)),
+      range_idx_padan = paste(min(idx_padan, na.rm = TRUE), "-", max(idx_padan, na.rm = TRUE)),
+      range_idx_padan_recom = paste(min(idx_padan_final, na.rm = TRUE), "-", max(idx_padan_final, na.rm = TRUE)),
+      total_no_recommendation = sum(is.na(recommendation) | recommendation == ""),
+      total_ubah_rtrw = sum(recommendation == "Ubah_RTRW", na.rm = TRUE),
+      total_ubah_rzwp3k = sum(recommendation == "Ubah_RZWP3K", na.rm = TRUE)
+    ) %>%
+    as_tibble()
+)
+```
+
+## Ringkasan Identifikasi Tumpang Tindih
+
+```{r summary_overall}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_overall_t <- summary$overall %>%
+  pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
+  mutate(Komponen = case_when(
+    Komponen == "total_unit"                 ~ "Jumlah Kasus Tumpang Tindih",
+    Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
+    Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
+    Komponen == "total_ha"                   ~ "Luas Area Kasus Tumpang Tindih (ha)",
+    Komponen == "qualified_treshold_area"    ~ "Jumlah Kasus Tumpang Tindih Memenuhi Ambang Luas",
+    TRUE                                   ~ Komponen  
+  ))
+
+DT::datatable(summary_overall_t, rownames = FALSE)
+```
+
+## Ringkasan Kombinasi Tumpang Tindih
+
+```{r summary_combinations}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_combinations_t <- summary$combinations %>%
+  rename(
+    "RTRW" = RTRW,
+    "RZWP3K" = RZWP3K,
+    "Jumlah Kombinasi" = total_combination,
+    "Total Luas Area (ha)" = total_area_ha
+  )
+
+DT::datatable(summary_combinations_t, rownames = FALSE)
+```
+
+## Ringkasan Indeks dan Rekomendasi
+
+```{r summary_index}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_idx_recom_t <- summary$idx_recommendation %>%
+  mutate(across(everything(), as.character)) %>%  
+  pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
+  mutate(Komponen = case_when(
+    Komponen == "range_idx_padu"             ~ "Rentang Indeks PADU",
+    Komponen == "range_idx_padan"            ~ "Rentang Indeks PADAN Awal",
+    Komponen == "range_idx_padan_recom"      ~ "Rentang Indeks PADAN Rekomendasi",
+    Komponen == "total_no_recommendation"    ~ "Jumlah Rekomendasi 'Tetap/Koordinasi'",
+    Komponen == "total_ubah_rtrw"            ~ "Jumlah Rekomendasi 'Ubah RTRW'",
+    Komponen == "total_ubah_rzwp3k"          ~ "Jumlah Rekomendasi 'Ubah RZWP3K'",
+    TRUE                                     ~ Komponen
+  ))
+
+DT::datatable(summary_idx_recom_t, rownames = FALSE)
+```
+
+tambahkan toggle untuk menunjukkan narasi interpretasi indeks padu dan padan (seperti modul 4 luma)
+
+# Tentang Modul
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+# Data dan Metode
+
+## Data Utama
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RTRW</summary>
+
+```{r input-peta-rtrw}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+rtrw <- params$result$rtrw_vect["RTRW"]
+plot_with_autokey(rtrw)
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RZWP3K</summary>
+
+```{r input-peta-rzwp3k}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
+plot_with_autokey(rzwp3k)
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Matriks Kompabilitas (SERASI)</summary>
+
+```{r matriks-serasi}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+DT::datatable(params$result$matriks_serasi)
+```
+
+</details>
+
+## Data Analisis PADU
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-KE (Konektivitas Ekologis)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Tutupan dan Penggunaan Lahan
+
+```{r input-peta-tuplah}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+lulc <- params$result$lulc_vect["LC"]
+plot_with_autokey(lulc)
+```
+
+#### Matriks Ketetanggaan Kelas Tutupan dan Penggunaan Lahan
+
+```{r input-matriks-padu-ke}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+DT::datatable(params$result$matriks_padu_ke)
+```
+
+:::
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-HS (Hidrologi Sedimentasi)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Estuari
+
+```{r input-peta-estuari}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+estuari <- params$result$estuari_vect["NAMOBJ"]
+plot_with_autokey(estuari)
+```
+
+#### Peta TSS
+
+```{r input-peta-tss}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+tss_rast <- params$result$tss_rast
+plot_with_autokey(tss_rast)
+```
+
+:::
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-KL (Kawasan Lindung)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Penunjukkan Kawasan Lindung
+
+```{r input-peta-lindung}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+protected <- params$result$protected_area_vect["Fungsi"]
+plot_with_autokey(protected)
+```
+
+:::
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-KH (Kualitas/Keberadaan Habitat)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Ekosistem Habitat Biota
+
+```{r input-peta-habitat}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+coastal_habitat <- params$result$coastal_habitat["LC"]
+plot_with_autokey(coastal_habitat)
+```
+
+:::
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-RTp (Risiko dan Tekanan)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Kawasan Industri
+
+```{r input-peta-industri}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+industry <- params$result$industry_vect["NAMOBJ"]
+plot_with_autokey(industry)
+```
+
+#### Peta Alur Pelayaran
+
+```{r input-peta-pelayaran}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+pelayaran <- params$result$pelayaran_vect["NAMOBJ"]
+plot_with_autokey(pelayaran)
+```
+
+:::
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>PADU-KI (Ketahanan Iklim)</summary>
+
+::: {.panel-tabset}
+
+#### Peta Kerentanan Bencana
+
+```{r input-peta-bencana}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+disaster_risk <- params$result$disaster_risk_vect["KRB_03"]
+plot_with_autokey(disaster_risk)
+```
+
+:::
+
+</details>
+
+
+## Metodologi
+
+
+# Hasil
+
+```{r interactive-map-padan}
+#| echo: false
+#| warning: false
+#| message: false
+
+# Load libraries 
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  leaflet,
+  htmltools,
+  htmlwidgets,
+  RColorBrewer
+)
+
+idx_padan_map_alt <- params$result$idx_padan_map_alt
+
+# ── 1. Reproject to WGS84 (Leaflet requires lat/lng) ──────────────────────────
+map_data <- idx_padan_map_alt |>
+  st_transform(crs = 4326) |>
+  mutate(
+    # row index for JS cross-linking (0-based for JS, 1-based for DT)
+    .row_id = row_number() - 1L
+  )
+
+# ── 2. Colour palette (adjust field as needed) ─────────────────────────────────
+pal <- colorNumeric(
+  palette = "RdYlGn",
+  domain  = map_data$idx_padan_final,
+  na.color = "#808080"
+)
+
+# ── 3. Attribute table columns to display ─────────────────────────────────────
+tbl_cols <- c(
+  "id_pu", "stat_pu", "RTRW", "RZWP3K", "area_ha", "area_flag",
+  "idx_serasi", "idx_padu_ke", "idx_padu_hs", "idx_padu_kl",
+  "idx_padu_kh", "idx_padu_rtp", "idx_padu_ki",
+  "idx_padu_final", "idx_padan", "recommendation", "decision", "idx_padan_final"
+)
+
+tbl_data <- map_data |>
+  st_drop_geometry() |>
+  select(all_of(tbl_cols))
+
+# ── 4. Build Leaflet map ───────────────────────────────────────────────────────
+leaf_map <- leaflet(map_data, elementId = "padan-map") |>
+  addProviderTiles(providers$CartoDB.Positron, group = "Basemap") |>
+  addPolygons(
+    layerId     = ~.row_id,          # used by JS to identify features
+    fillColor   = ~pal(idx_padan_final),
+    fillOpacity = 0.7,
+    color       = "#444",
+    weight      = 0.8,
+    opacity     = 1,
+    highlightOptions = highlightOptions(
+      color        = "#ff6600",
+      weight       = 3,
+      fillOpacity  = 0.9,
+      bringToFront = TRUE
+    ),
+    label = ~paste0(
+      "<b>PU ", id_pu, "</b><br>",
+      "RTRW: ", RTRW, "<br>",
+      "RZWP3K: ", RZWP3K, "<br>",
+      "idx_padan_final: ", round(idx_padan_final, 3)
+    ) |> lapply(HTML),
+    popup = ~paste0(
+      "<b>Planning Unit ", id_pu, "</b><hr>",
+      "<b>Status:</b> ", stat_pu, "<br>",
+      "<b>RTRW:</b> ", RTRW, "<br>",
+      "<b>RZWP3K:</b> ", RZWP3K, "<br>",
+      "<b>Area (ha):</b> ", round(area_ha, 2), "<br>",
+      "<b>Area Flag:</b> ", area_flag, "<br>",
+      "<hr>",
+      "<b>idx_serasi:</b> ", round(idx_serasi, 3), "<br>",
+      "<b>idx_padu_ke:</b> ", round(idx_padu_ke, 3), "<br>",
+      "<b>idx_padu_hs:</b> ", round(idx_padu_hs, 3), "<br>",
+      "<b>idx_padu_kl:</b> ", round(idx_padu_kl, 3), "<br>",
+      "<b>idx_padu_kh:</b> ", round(idx_padu_kh, 3), "<br>",
+      "<b>idx_padu_rtp:</b> ", round(idx_padu_rtp, 3), "<br>",
+      "<b>idx_padu_ki:</b> ", round(idx_padu_ki, 3), "<br>",
+      "<hr>",
+      "<b>idx_padan_final:</b> ", round(idx_padan_final, 3), "<br>",
+      "<b>Recommendation:</b> ", recommendation, "<br>",
+      "<b>Decision:</b> ", decision
+    ) |> lapply(HTML),
+    group = "PADAN"
+  ) |>
+  addLegend(
+    pal      = pal,
+    values   = ~idx_padan_final,
+    title    = "idx_padan_final",
+    position = "bottomright",
+    opacity  = 0.8
+  ) |>
+  addLayersControl(
+    baseGroups    = "Basemap",
+    overlayGroups = "PADAN",
+    options       = layersControlOptions(collapsed = FALSE)
+  )
+
+# ── 5. Build DT table ──────────────────────────────────────────────────────────
+dt_table <- datatable(
+  tbl_data,
+  elementId  = "padan-table",
+  rownames   = FALSE,
+  filter     = "top",
+  extensions = c("Buttons", "Scroller"),
+  options    = list(
+    pageLength  = 10,
+    scrollX     = TRUE,
+    scrollY     = "300px",
+    scroller    = TRUE,
+    dom         = "Bfrtip",
+    buttons     = list(
+      list(extend = "copy",  className = "btn btn-light btn-sm"),
+      list(extend = "csv",   className = "btn btn-light btn-sm"),
+      list(extend = "excel", className = "btn btn-light btn-sm")
+    ),
+    # inject row IDs as data- attributes so JS can find them
+    rowCallback = JS("
+      function(row, data, index) {
+        $(row).attr('data-row-id', index);
+      }
+    ")
+  )
+)
+
+# ── 6. JavaScript: wire map hover → table highlight ───────────────────────────
+sync_js <- HTML("
+<script>
+(function() {
+  // Wait until both widgets are rendered
+  function init() {
+    var mapEl  = document.getElementById('padan-map');
+    var tblEl  = document.getElementById('padan-table');
+    if (!mapEl || !tblEl) { setTimeout(init, 300); return; }
+
+    var leafMap = null;
+    // Retrieve the Leaflet map instance
+    Object.keys(mapEl._leaflet_events || {});
+    try { leafMap = mapEl._leaflet_id ? L.map(mapEl) : null; } catch(e) {}
+    if (!leafMap) {
+      // HTMLWidget approach
+      if (window.HTMLWidgets) {
+        var instances = HTMLWidgets.getInstance(mapEl);
+        if (instances) leafMap = instances.getMap();
+      }
+    }
+    if (!leafMap) { setTimeout(init, 300); return; }
+
+    var dtApi = null;
+    if (window.$) {
+      try { dtApi = $('#padan-table').DataTable(); } catch(e) {}
+    }
+    if (!dtApi) { setTimeout(init, 300); return; }
+
+    var lastHighlighted = null;
+
+    // Map hover → highlight table row
+    leafMap.eachLayer(function(layer) {
+      if (layer.feature) {
+        layer.on('mouseover', function(e) {
+          var rowId = layer.feature.properties['.row_id'];
+          highlightRow(rowId);
+        });
+        layer.on('mouseout', function(e) {
+          clearHighlight();
+        });
+      }
+    });
+
+    function highlightRow(rowId) {
+      if (lastHighlighted !== null) {
+        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
+      }
+      lastHighlighted = rowId;
+      var row = $('tr[data-row-id=\"' + rowId + '\"]');
+      if (row.length) {
+        row.css('background-color', '#fff3cd');
+        // scroll the table to the highlighted row
+        var tblWrapper = document.getElementById('padan-table_wrapper');
+        if (tblWrapper) {
+          var rowTop = row.position() ? row.position().top : 0;
+          var scroller = tblWrapper.querySelector('.dataTables_scrollBody');
+          if (scroller) scroller.scrollTop = rowTop - 50;
+        }
+      }
+    }
+
+    function clearHighlight() {
+      if (lastHighlighted !== null) {
+        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
+        lastHighlighted = null;
+      }
+    }
+
+    // Table row hover → flash map polygon
+    $('#padan-table tbody').on('mouseenter', 'tr', function() {
+      var rowId = parseInt($(this).attr('data-row-id'));
+      if (isNaN(rowId)) return;
+      leafMap.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.properties['.row_id'] === rowId) {
+          layer.setStyle({ color: '#ff6600', weight: 3, fillOpacity: 0.9 });
+          layer.bringToFront();
+        }
+      });
+    }).on('mouseleave', 'tr', function() {
+      leafMap.eachLayer(function(layer) {
+        if (layer.feature) {
+          layer.setStyle({ color: '#444', weight: 0.8, fillOpacity: 0.7 });
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(init, 800);
+  });
+})();
+</script>
+")
+
+# ── 7. Assemble final widget ───────────────────────────────────────────────────
+tagList(
+  tags$style("
+    #padan-map    { height: 500px; width: 100%; margin-bottom: 0; }
+    #padan-table_wrapper { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 10px; }
+    #padan-map    { border-radius: 5px 5px 0 0; border: 1px solid #dee2e6; }
+    .dataTables_scrollBody tr[data-row-id]:hover { background-color: #e8f4f8 !important; cursor: pointer; }
+  "),
+  leaf_map,
+  dt_table,
+  sync_js
+)
+```
+
+   
+# Tindak Lanjut
+
+<!-- apa yang pengguna dapat lakukan setelah memperoleh hasil rekomendasi? -->
+<!-- apa kah hasilnya sudah sesuai? jika belum, apa saja yang dapat disesuaikan dari segi input? -->
+<!-- Jika sudah sesuai, bagaiamana output keluaran laspur dapat digunakan untuk keperluan pengguna? -->
+<!-- tambahkan diagram alir opsi flow apa saja yang dapat pengguna lakukan: -->
+<!-- 1. lanjut step 2 -->
+<!-- 2. perbaiki input step 1, lalu rerun -->
+<!-- 3. gunakan keluaran step 1 untuk proses integrasi peta darat laut -->
+<!-- Di mana posisi analisis integrasi ini berada di rangkaian integrasi keseluruhan? -->
+
+------------------------------------------------------------------------
+
+<!-- Mandatory closing statement for all module -->
+
+<font size="1"> LUMENS adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LUMENS sebagai [a GitHub issue](https://github.com/icraf-indonesia/lumens-shiny/issues). Umpan balik dan pertanyaan dipersilakan [Contact Us URL]. </font size>
+
+
+
+
+
+
+
+
+
+
+
