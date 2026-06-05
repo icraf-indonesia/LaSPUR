@@ -1,0 +1,738 @@
+---
+title: "LaSPUR Type 2 Implementation"
+author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
+format: html
+editor: visual
+---idx
+---
+
+# LaSPUR Step 2 - Rekonsiliasi Area Berdampingan
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahapan teknis hanya untuk penyelesaian kasus tipe 2, yakni rekonsilitasi area yang bersentuhan/bertetangga antara peta RTRW dan RZWP3K dengan penambahan aspek PADU sebagai komponen yang dipertimbangkan.
+
+# Tahap 0. Load libraries, functions, & input data
+
+```{r load-libraries}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+source("R/functions.R")
+source("R/helpers.R")
+```
+
+Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel. Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file dilakukan pada setiap tahap yang berkaitan dengan data tersebut.
+
+```{r input-data-paths}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Main input data for SERASI index calculation
+rtrw_path <- "data/vector/serasi/ST_RTRW_Palu-Parigi.shp"
+rzwp3k_path <- "data/vector/serasi/ST_RZWP3K_Palu-Parigi.shp"
+
+# Output directory
+output_dir <- "output/"
+
+# Input analisis SERASI
+rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
+rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
+matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
+
+# PADU_KE input data
+lulc_vect_path <- "data/vector/PL2024_Coral_Seagrass_Union_Palu-Parigi.shp"
+lulc_ref_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
+matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_klhk.xlsx"
+
+# PADU-HS input data
+estuari_vect_path <- "data/vector/ST_Estuari_PT.shp"
+river_vect_path <- "data/vector/ST_Sungai250k.shp"
+tss_rast_path <- "data/raster/TSS_Sulteng.tif"
+
+# PADU-KL input data
+protected_area_vect_path <- "data/vector/Kawasan_Lindung_Sulteng.shp"
+
+# PADU-KH input data
+coral_vect_path <- "data/vector/AC_Coral_Sulteng_dis.shp"
+seagrass_vect_path <- "data/vector/AC_Seagrass_Sulteng_dis.shp"
+mangrove_vect_path <- "data/vector/mangrove_sulteng.shp"
+
+# PADU-RTp input data
+industry_vect_path <- "data/vector/ST_Industri_dis.shp"
+pelayaran_vect_path <- "data/vector/ST_AlurPelayaran_dis.shp"
+
+# PADU-KI input data
+disaster_risk_vect_path <- "data/vector/08_ST_KRB_clim_diss.shp"
+
+# Parameterization
+padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
+```
+
+# Tahap 1. Identifikasi area berdampingan
+
+Pada tahap ini modul akan melakukan analisis spasial untuk mengidentifikasi area dari peta RTRW dan RZWP3K yang bersentuhan pada garis pantainya dan membentuknya menjadi satu file spasial baru.
+
+```{r identify-adjacent}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load the input data for adjacent identification
+rtrw_vect <- load_and_validate_shapefile(rtrw_path)
+rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
+
+# Run adjacent identification process
+adjacent_map_raw <- identify_adjacent(
+  rtrw = rtrw_vect,
+  rzwp = rzwp3k_vect,
+  min_area_ha = 0
+)
+
+# Process adjacent map
+adjacent_map <- process_adjacent(
+  pu_sf = adjacent_map_raw,
+  buffer_m = 100
+)
+```
+
+# Tahap 2. Analisis SERASI pasangan area berdampingan
+
+```{r generate_matrix_serasi}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Generate matrix serasi template to be filled
+matrix_serasi_template <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
+write.xlsx(matrix_serasi_template, "output/matriks_serasi.xlsx", overwrite = TRUE)
+
+# Load a filled matrix serasi & RTRW-RZWP3K priority reference table
+matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+
+# Validate zone class with lookup table
+valid_class <- validate_zone_class(adjacent_map, rtrw_prioritas, rzwp3k_prioritas)
+```
+
+```{r calculate_idx_serasi}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Merge serasi index to adjacent area just if the zone class name is matched
+if (length(valid_class$mismatch_col3) == 0 &&
+    length(valid_class$mismatch_col4) == 0) {
+  idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) 
+  idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
+  write_sf(idx_serasi_map, "output/idx_serasi_adjacent.gpkg", overwrite = TRUE)
+  plot(idx_serasi_map["idx_serasi"])
+  print(idx_serasi_table)
+  
+  message("All class names matched. Compatibility values merged successfully.")
+} else {
+  stop("Class name mismatch detected. Please check your input data.")
+}
+```
+
+# Tahap 3. Analisis indeks PADU RTRW & RZWP3K
+
+```{r prepare-rtrw-rzwp3k-serasi-map-adjacent}
+# Define adjacent RTRW features only
+adjacent_map_rtrw <- idx_serasi_map %>% 
+  select(id, id_pu, RTRW, area_ha, length, area_buffer_ha, idx_serasi) %>% 
+  drop_na(RTRW)
+
+# Define adjacent RZWP3K features only
+adjacent_map_rzwp3k <- idx_serasi_map %>% 
+  select(id, id_pu, RZWP3K, area_ha, length, area_buffer_ha, idx_serasi) %>% 
+  drop_na(RZWP3K)
+```
+
+## Tahap 3.1. Analisis PADU-KE
+
+### Tahap 3.1.1. Memuat data tutupan/penggunaan lahan dan matriks PADU-KE
+
+```{r generate-load-input-padu-ke}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-KE input
+lulc_ref <- load_and_validate_table(lulc_ref_path)
+lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
+matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
+
+# Generate PADU-KE for KLHK data
+matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
+write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke_klhk.xlsx", overwrite = TRUE)
+```
+
+### Tahap 3.1.2. Perhitungan PADU-KE RTRW
+
+```{r calculate-padu-ke-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate adjacency for LULC vector input
+lulc_adjacencies_rtrw <- calculate_lulc_adjacency(
+  lulc_vect,
+  adjacent_map_rtrw,
+  id_col = "id_pu",
+  class_col = "ID"
+)
+
+# Calculate padu_ke
+padu_ke_rtrw <- calculate_padu_ke(
+  matriks_padu_ke   = matriks_padu_ke,
+  lulc_ref          = lulc_ref,
+  lulc_adjacencies  = lulc_adjacencies_rtrw,
+  idx_serasi_map    = adjacent_map_rtrw,
+  normalize         = TRUE
+)
+
+idx_padu_ke_rtrw <- padu_ke_rtrw$idx_padu_ke %>% select(-idx_padu_abs)
+idx_padu_ke_map_rtrw <- padu_ke_rtrw$idx_padu_ke_map
+
+plot(idx_padu_ke_map_rtrw["idx_padu_ke"], border = 1)
+```
+
+### Tahap 3.1.3. Perhitungan PADU-KE RZWP3K
+
+```{r calculate-padu-ke-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate adjacency for LULC vector input
+lulc_adjacencies_rzwp3k <- calculate_lulc_adjacency(
+  lulc_vect,
+  adjacent_map_rzwp3k,
+  id_col = "id_pu",
+  class_col = "ID"
+)
+
+# Calculate padu_ke
+padu_ke_rzwp3k <- calculate_padu_ke(
+  matriks_padu_ke   = matriks_padu_ke,
+  lulc_ref          = lulc_ref,
+  lulc_adjacencies  = lulc_adjacencies_rzwp3k,
+  idx_serasi_map    = adjacent_map_rzwp3k,
+  normalize         = TRUE
+)
+
+idx_padu_ke_rzwp3k     <- padu_ke_rzwp3k$idx_padu_ke %>% select(-idx_padu_abs)
+idx_padu_ke_map_rzwp3k <- padu_ke_rzwp3k$idx_padu_ke_map
+
+plot(idx_padu_ke_map_rzwp3k["idx_padu_ke"], border = 1)
+```
+
+## Tahap 3.2. Analisis indeks PADU-HS
+
+### Tahap 3.2.1. Memuat data estuari dan TSS
+
+```{r extract-data-padu-hs}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-HS input
+estuari_vect <- load_and_validate_shapefile(estuari_vect_path)
+# river_vect <- load_and_validate_shapefile(river_vect_path) # still unused
+tss_rast <- load_and_validate_raster(tss_rast_path)
+
+# Calculate euclidean distance
+# estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
+estuari_euc_dist <- rast("output/estuari_euc_dist.tif")
+```
+
+### Tahap 3.2.2. Perhitungan PADU-HS RTRW
+
+```{r calculate-padu-hs-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate padu-hs rtrw
+padu_hs_rtrw <- calculate_padu_hs(
+  idx_serasi_map    = adjacent_map_rtrw,
+  estuari_euc_dist  = estuari_euc_dist,
+  tss_rast          = tss_rast
+)
+
+idx_padu_hs_rtrw <- padu_hs_rtrw$idx_padu_hs
+idx_padu_hs_map_rtrw <- padu_hs_rtrw$idx_padu_hs_map  
+
+plot(idx_padu_hs_map_rtrw["idx_padu_hs"], border = 1)
+```
+
+### Tahap 3.2.3. Perhitungan PADU-HS RZWP3K
+
+```{r calculate-padu-hs-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate padu-hs rzwp3k
+padu_hs_rzwp3k <- calculate_padu_hs(
+  idx_serasi_map    = adjacent_map_rzwp3k,
+  estuari_euc_dist  = estuari_euc_dist,
+  tss_rast          = tss_rast
+)
+
+idx_padu_hs_rzwp3k <- padu_hs_rzwp3k$idx_padu_hs
+idx_padu_hs_map_rzwp3k <- padu_hs_rzwp3k$idx_padu_hs_map  
+
+plot(idx_padu_hs_map_rzwp3k["idx_padu_hs"], border = 1)
+```
+
+## Tahap 3.3. Analisis indeks PADU-KL
+
+### Tahap 3.3.1. Memuat data kawasan lindung/konservasi
+
+```{r load-protected-area}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-KL input
+protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path) %>% st_make_valid()
+```
+
+### Tahap 3.3.2. Perhitungan PADU-KL RTRW
+
+```{r calculate-padu-kl-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate padu kl rtrw
+idx_padu_kl_map_rtrw <- calculate_overlay_pct(
+  adjacent_map_rtrw, 
+  protected_area_vect, 
+  title = "protected"
+) %>%
+  mutate(
+    idx_padu_kl = protected_pct/100
+  )
+
+idx_padu_kl_rtrw <- as_tibble(idx_padu_kl_map_rtrw %>% st_drop_geometry())
+
+plot(idx_padu_kl_map_rtrw["idx_padu_kl"], border = 1)
+```
+
+### Tahap 3.3.3. Perhitungan PADU-KL RZWP3K
+
+```{r calculate-padu-kl-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate padu kl rzwp3k
+idx_padu_kl_map_rzwp3k <- calculate_overlay_pct(
+  adjacent_map_rzwp3k, 
+  protected_area_vect, 
+  title = "protected"
+) %>%
+  mutate(
+    idx_padu_kl = protected_pct/100
+  )
+
+idx_padu_kl_rzwp3k <- as_tibble(idx_padu_kl_map_rzwp3k %>% st_drop_geometry())
+
+plot(idx_padu_kl_map_rzwp3k["idx_padu_kl"], border = 1)
+```
+
+## Tahap 3.4. Analisis indeks PADU-KH
+
+### Tahap 3.4.1. Memuat data habitat
+
+```{r prepare-habitat-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Define source of habitat map
+habitat_from_lulc <- "Yes"
+id_column <- "ID" # column that identify class id
+
+# Define mangrove, seagrass, and coral class IDs
+habitat_id <- c(
+  5,  # primary mangrove
+  6,  # secondary mangrove
+  24, # coral
+  25  # seagrass
+)
+
+# Conditional calculation based on habitat map source
+if (habitat_from_lulc == "Yes") {
+  coastal_habitat <- lulc_vect[lulc_vect[[id_column]] %in% 
+                                 as.numeric(habitat_id),] %>% st_make_valid()
+  } else {
+  coral_vect <- load_and_validate_shapefile(coral_vect_path)
+  seagrass_vect <- load_and_validate_shapefile(seagrass_vect_path)
+  mangrove_vect <- load_and_validate_shapefile(mangrove_vect_path)
+  coastal_habitat <- list(
+    coral_vect,
+    seagrass_vect,
+    mangrove_vect
+  )
+}
+```
+
+### Tahap 3.4.2. Perhitungan PADU-KH RTRW
+
+```{r calculate-padu-kh-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate overlay
+coastal_habitat_map_rtrw <- calculate_overlay_pct(adjacent_map_rtrw, coastal_habitat, title = "coastal_habitat")
+# coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
+
+# Calculate idx padu kh
+idx_padu_kh_map_rtrw <- coastal_habitat_map_rtrw %>%
+  mutate(
+    idx_padu_kh = coastal_habitat_pct/100
+  )
+
+idx_padu_kh_rtrw <- as_tibble(idx_padu_kh_map_rtrw %>% st_drop_geometry())
+
+plot(idx_padu_kh_map_rtrw["idx_padu_kh"], border = 1)
+```
+
+### Tahap 3.4.3. Perhitungan PADU-KH RZWP3K
+
+```{r calculate-padu-kh-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate overlay
+coastal_habitat_map_rzwp3k <- calculate_overlay_pct(adjacent_map_rzwp3k, coastal_habitat, title = "coastal_habitat")
+# coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
+
+# Calculate idx padu kh
+idx_padu_kh_map_rzwp3k <- coastal_habitat_map_rzwp3k %>%
+  mutate(
+    idx_padu_kh = coastal_habitat_pct/100
+  )
+
+idx_padu_kh_rzwp3k <- as_tibble(idx_padu_kh_map_rzwp3k %>% st_drop_geometry())
+
+plot(idx_padu_kh_map_rzwp3k["idx_padu_kh"], border = 1)
+```
+
+## Tahap 3.5. Analisis indeks PADU-RTp
+
+### Tahap 3.5.1. Memuat data industri dan alur pelayaran
+
+```{r prepare-distance-map-padu-rtp}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+industry_vect <- load_and_validate_shapefile(industry_vect_path)
+pelayaran_vect <- load_and_validate_shapefile(pelayaran_vect_path)
+
+# Calculate euclidean distance
+# industry_euc_dist <- calculate_euclidean_dist(industry_vect, idx_serasi_map, resolution = 30)
+industry_euc_dist <- rast("data/raster/EuDist_Industri.tif")
+
+# pelayaran_euc_dist <- calculate_euclidean_dist(pelayaran_vect, idx_serasi_map, resolution = 30)
+pelayaran_euc_dist <- rast("data/raster/EUDist_AlurPl.tif")
+```
+
+### Tahap 3.5.2. Perhitungan PADU-RTp RTRW
+
+```{r calculate-padu-rtp-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+padu_rtp_rtrw <- calculate_padu_rtp(
+  idx_serasi_map      = adjacent_map_rtrw,
+  industry_euc_dist   = industry_euc_dist,
+  pelayaran_euc_dist  = pelayaran_euc_dist
+)
+
+idx_padu_rtp_map_rtrw <- padu_rtp_rtrw$idx_padu_rtp_map 
+idx_padu_rtp_rtrw <- padu_rtp_rtrw$idx_padu_rtp   
+
+plot(idx_padu_rtp_map_rtrw["idx_padu_rtp"], border = 1)
+```
+
+### Tahap 3.5.3. Perhitungan PADU-RTp RZWP3K
+
+```{r calculate-padu-rtp-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+padu_rtp_rzwp3k <- calculate_padu_rtp(
+  idx_serasi_map      = adjacent_map_rzwp3k,
+  industry_euc_dist   = industry_euc_dist,
+  pelayaran_euc_dist  = pelayaran_euc_dist
+)
+
+idx_padu_rtp_map_rzwp3k <- padu_rtp_rzwp3k$idx_padu_rtp_map 
+idx_padu_rtp_rzwp3k <- padu_rtp_rzwp3k$idx_padu_rtp   
+
+plot(idx_padu_rtp_map_rzwp3k["idx_padu_rtp"], border = 1)
+```
+
+## Tahap 3.6. Analisis indeks PADU-SE
+
+## Tahap 3.7. Analisis indeks PADU-KI
+
+### Tahap 3.7.1. Memuat data kerentanan bencana iklim
+
+```{r prepare-disaster-risk-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path) %>% st_make_valid()
+```
+
+### Tahap 3.7.2. Perhitungan PADU-KI RTRW
+
+```{r calculate-padu-ki-rtrw}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+padu_ki_rtrw <- calculate_padu_ki(
+  idx_serasi_map      = adjacent_map_rtrw,
+  disaster_risk_vect  = disaster_risk_vect,
+  value_col           = "Kerawanan"
+)
+
+idx_padu_ki_map_rtrw <- padu_ki_rtrw$idx_padu_ki_map
+idx_padu_ki_rtrw <- padu_ki_rtrw$idx_padu_ki       
+
+plot(idx_padu_ki_map_rtrw["idx_padu_ki"], border = 1)
+```
+
+### Tahap 3.7.3. Perhitungan PADU-KI RZWP3K
+
+```{r calculate-padu-ki-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+padu_ki_rzwp3k <- calculate_padu_ki(
+  idx_serasi_map      = adjacent_map_rzwp3k,
+  disaster_risk_vect  = disaster_risk_vect,
+  value_col           = "Kerawanan"
+)
+
+idx_padu_ki_map_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki_map
+idx_padu_ki_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki       
+
+plot(idx_padu_ki_map_rzwp3k["idx_padu_ki"], border = 1)
+```
+
+# Tahap 4. Perhitungan indeks PADU pasangan/gabungan
+
+```{r shortcut-to-padu-final}
+
+# rtrw padu
+idx_padu_ke_rtrw <- st_read("output/step2/idx_padu_ke_map_rtrw.gpkg") %>% st_drop_geometry()
+idx_padu_hs_rtrw <- st_read("output/step2/idx_padu_hs_map_rtrw.gpkg") %>% st_drop_geometry()
+idx_padu_kl_rtrw <- st_read("output/step2/idx_padu_kl_map_rtrw.gpkg") %>% st_drop_geometry()
+# idx_padu_kh_rtrw <- st_read("output/step2/idx_padu_kh_rtrw") %>% st_drop_geometry()
+idx_padu_rtp_rtrw <- st_read("output/step2/idx_padu_rtp_map_rtrw.gpkg") %>% st_drop_geometry()
+# idx_padu_se_rtrw <- st_read("output/step2/idx_padu_se_rtrw") %>% st_drop_geometry()
+idx_padu_ki_rtrw <- st_read("output/step2/idx_padu_ki_map_rtrw.gpkg") %>% st_drop_geometry()
+
+# rzwp3k padu
+idx_padu_ke_rzwp3k <- st_read("output/step2/idx_padu_ke_map_rzwp3k.gpkg") %>% st_drop_geometry()
+idx_padu_hs_rzwp3k <- st_read("output/step2/idx_padu_hs_map_rzwp3k.gpkg") %>% st_drop_geometry()
+idx_padu_kl_rzwp3k <- st_read("output/step2/idx_padu_kl_map_rzwp3k.gpkg") %>% st_drop_geometry()
+# idx_padu_kh_rzwp3k <- st_read("output/step2/idx_padu_kh_rzwp3k") %>% st_drop_geometry()
+idx_padu_rtp_rzwp3k <- st_read("output/step2/idx_padu_rtp_map_rzwp3k.gpkg") %>% st_drop_geometry()
+# idx_padu_se_rzwp3k <- st_read("output/step2/idx_padu_se_rzwp3k") %>% st_drop_geometry()
+idx_padu_ki_rzwp3k <- st_read("output/step2/idx_padu_ki_map_rzwp3k.gpkg") %>% st_drop_geometry()
+```
+
+## Tahap 4.1. Perhitungan indeks PADU untuk masing-masing RTRW dan RZWP3K
+
+```{r calculate-padu-final}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load weight reference lookup table
+padu_idx_weight <- load_and_validate_table(padu_idx_weight_path)
+weight_sum <- sum(padu_idx_weight[2])
+
+if (weight_sum == 1){
+  idx_padu_map_rtrw <- adjacent_map_rtrw
+  idx_padu_map_rzwp3k <- adjacent_map_rzwp3k
+  
+  # List all PADU analysis
+  padu_rtrw_list <- list(
+    idx_padu_ke_rtrw,
+    idx_padu_hs_rtrw,
+    idx_padu_kl_rtrw,
+    # idx_padu_kh_rtrw,
+    idx_padu_rtp_rtrw,
+    # idx_padu_se_rtrw,
+    idx_padu_ki_rtrw
+  )
+  
+  padu_rzwp3k_list <- list(
+    idx_padu_ke_rzwp3k,
+    idx_padu_hs_rzwp3k,
+    idx_padu_kl_rzwp3k,
+    # idx_padu_kh_rzwp3k,
+    idx_padu_rtp_rzwp3k,
+    # idx_padu_se_rzwp3k,
+    idx_padu_ki_rzwp3k
+  )
+  
+  # Calculate PADU index
+  idx_padu_map_rtrw <- calculate_padu_index(
+    padu_list = padu_rtrw_list,
+    idx_padu_map = idx_padu_map_rtrw,
+    padu_idx_weight = padu_idx_weight
+  )
+  
+  idx_padu_map_rzwp3k <- calculate_padu_index(
+    padu_list = padu_rzwp3k_list,
+    idx_padu_map = idx_padu_map_rzwp3k,
+    padu_idx_weight = padu_idx_weight
+  )
+  
+  # st_write(idx_padu_map_rtrw, "output/idx_padu_map_rtrw.gpkg", append=FALSE)
+  # st_write(idx_padu_map_rzwp3k, "output/idx_padu_map_rzwp3k.gpkp", append=FALSE)
+  # plot(idx_padu_map_rtrw["idx_padu_final"], border = 1)
+} else {
+  stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
+}
+```
+
+## Tahap 4.2. Perhitungan indeks PADU gabungan pasangan RTRW dan RZWP3K
+
+```{r calculate-padu-combine-pair}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate idx_padu_pair
+idx_pair <- idx_padu_map_rtrw %>%
+  st_drop_geometry() %>%
+  select(
+    id_pu,
+    idx_serasi,
+    idx_padu_rtrw = idx_padu_final
+  ) %>%
+  left_join(
+    idx_padu_map_rzwp3k %>%
+      st_drop_geometry() %>%
+      select(
+        id_pu,
+        idx_padu_rzwp3k = idx_padu_final
+      ),
+    by = "id_pu"
+  ) %>%
+  mutate(
+    idx_padu_final = if_else(
+      idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0,
+      0,
+      2 * idx_padu_rtrw * idx_padu_rzwp3k /
+        (idx_padu_rtrw + idx_padu_rzwp3k)
+    )
+  )
+
+# Merge adjacent map with idx_pair
+idx_padu_map <- adjacent_map %>%
+  left_join(
+    idx_pair,
+    by = "id_pu"
+  )
+```
+
+# Tahap 5. Perhitungan indeks PADAN
+
+```{r calculate-padan}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+alpha <- 0.5
+
+idx_padan_map <- idx_padu_map %>%
+  mutate(
+    idx_padan = (alpha * idx_serasi) + ((1 - alpha) * idx_padu_final)
+  )
+```
+
+# Tahap 6. Rekomendasi kelas alternatif RTRW dan RZWP3K
+
+```{r calculate-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+idx_padan_map_alt <- idx_padan_map %>%
+  rowwise() %>%
+  mutate(
+    alt_RTRW = get_alternative_zone(RZWP3K, RTRW, "RTRW", matriks_serasi),
+    alt_RZWP3K = get_alternative_zone(RTRW, RZWP3K, "RZWP3K", matriks_serasi)
+  ) %>%
+  ungroup()
+```
+
+# Tahap 7. Perhitungan ekonomi/NPV untuk area RTRW dan RZWP3K
+
+```{r}
+
+```
+
+# Tahap 8. Rekomendasi keputusan rekonsiliasi area berdampingan
+
+```{r}
+
+```
+
+# Tahap 9. Perhitungan penilaian integrasi area berdampingan
+
+```{r}
+
+```

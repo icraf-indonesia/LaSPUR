@@ -233,7 +233,7 @@ filter_overlaps <- function(sf_obj, threshold_ha = 156.25) {
 #'
 #' @description
 #' Compares class values in columns 3 and 4 of an sf object against allowed
-#' values from reference tibbles.
+#' values from reference tibbles. NA values are ignored in the validation.
 #'
 #' @param sf_obj An `sf` object with at least 4 non-geometry columns
 #' @param tibble1 Data frame with at least 2 columns; 2nd column contains allowed classes for column 3
@@ -257,18 +257,23 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
   col4_values <- sf_obj[[4]]
   allowed1 <- unique(tibble1[[2]])
   allowed2 <- unique(tibble2[[2]])
-  mismatches3 <- unique(col3_values[!col3_values %in% allowed1])
-  mismatches4 <- unique(col4_values[!col4_values %in% allowed2])
+  
+  # Ignore NA values when checking mismatches
+  col3_non_na <- col3_values[!is.na(col3_values)]
+  col4_non_na <- col4_values[!is.na(col4_values)]
+  
+  mismatches3 <- unique(col3_non_na[!col3_non_na %in% allowed1])
+  mismatches4 <- unique(col4_non_na[!col4_non_na %in% allowed2])
   
   cat("\n=== Zone Class Validation Report ===\n")
   if (length(mismatches3) == 0) {
-    cat("✓ Column 3 (", names(sf_obj)[3], ") : All classes match.\n", sep = "")
+    cat("✓ Column 3 (", names(sf_obj)[3], ") : All non-NA classes match.\n", sep = "")
   } else {
     cat("✗ Column 3 (", names(sf_obj)[3], ") : Mismatches:\n", sep = "")
     for (val in mismatches3) cat("    - '", val, "'\n", sep = "")
   }
   if (length(mismatches4) == 0) {
-    cat("✓ Column 4 (", names(sf_obj)[4], ") : All classes match.\n", sep = "")
+    cat("✓ Column 4 (", names(sf_obj)[4], ") : All non-NA classes match.\n", sep = "")
   } else {
     cat("✗ Column 4 (", names(sf_obj)[4], ") : Mismatches:\n", sep = "")
     for (val in mismatches4) cat("    - '", val, "'\n", sep = "")
@@ -278,6 +283,310 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
   invisible(list(mismatch_col3 = mismatches3, mismatch_col4 = mismatches4))
 }
 
+
+# Indentifikasi Area Bersentuhan ------------------------------------------
+
+#' Identify adjacent pairs between two spatial layers (RTRW and RZWP3K)
+#'
+#' This function finds all pairs of features that touch each other between two
+#' spatial layers (RTRW and RZWP3K), creates a new layer where each
+#' touching pair is represented as two separate rows (one for each source
+#' feature) linked by a common mapping unit ID (id_pu), and saves the result to a
+#' GeoPackage. The function also applies optional geometry simplification and
+#' area filtering.
+#'
+#' @param rtrw An `sf` object representing the first layer (e.g., RTRW).
+#'            Must be a valid `sf` object (no `st_make_valid()` is performed
+#'            inside the function – assume it is already valid).
+#' @param rzwp An `sf` object representing the second layer (e.g., RZWP3K).
+#'            Must be a valid `sf` object.
+#' @param out_gpkg Character string: file path to the output GeoPackage.
+#' @param min_area_ha Numeric: minimum area in hectares for features to be
+#'        considered. Features below this threshold are excluded. Default = 0.
+#' @param nama_field_rtrw Character: name of the column in `rtrw` that contains
+#'        the area name. Default = "RTRW".
+#' @param nama_field_rzwp Character: name of the column in `rzwp` that contains
+#'        the area name. Default = "RZWP3K".
+#' @param simplify_geometry Logical: if `TRUE`, simplifies geometries using
+#'        `st_simplify()` to reduce file size. Default = FALSE.
+#' @param simplify_tolerance Numeric: tolerance (in meters) for simplification
+#'        when `simplify_geometry = TRUE`. Default = 5.
+#' @param batch_progress_interval Integer: show progress message every
+#'        N processed pairs. Default = 250.
+#' @param show_detailed_progress Logical: if `TRUE`, shows progress per RTRW
+#'        feature. Default = TRUE.
+#'
+#' @return Invisibly returns the resulting `sf` object (the combined adjacent
+#'         pairs) after writing it to `out_gpkg`. The object contains columns:
+#'         `id`, `id_pu` (mapping unit ID), `RTRW`, `RZWP3K`, and
+#'         `geometry`.
+#'
+#' @details The function performs the following steps:
+#' \enumerate{
+#'   \item Aligns CRS if different (projects RZWP3K to RTRW's CRS).
+#'   \item Optionally simplifies geometries using `st_simplify()`.
+#'   \item Calculates area in hectares and filters features below `min_area_ha`.
+#'   \item Finds touching pairs using `st_touches()` with a progress bar.
+#'   \item Builds a data frame where each touching pair contributes two rows
+#'         (one for RTRW feature, one for RZWP3K feature) sharing the same `id_pu`.
+#'   \item Combines all rows, converts to `sf`, adds an `id`, and saves to
+#'         GeoPackage.
+#' }
+#'
+#' @note The function does NOT run `st_make_valid()` on the input objects.
+#'       Ensure the input `sf` objects are geometrically valid before calling
+#'       this function. All console messages are printed in Indonesian.
+#'
+#' @examples
+#' \dontrun{
+#' library(sf)
+#' rtrw <- st_read("path_to_rtrw.gpkg")
+#' rzwp <- st_read("path_to_rzwp.gpkg")
+#'
+#' result <- identify_adjacent(
+#'   rtrw = rtrw,
+#'   rzwp = rzwp,
+#'   out_gpkg = "adjacent_pairs.gpkg",
+#'   min_area_ha = 0.5,
+#'   nama_field_rtrw = "RTRW_NAME",
+#'   simplify_geometry = TRUE,
+#'   simplify_tolerance = 2
+#' )
+#' }
+#'
+#' @importFrom sf st_crs st_transform st_touches st_geometry st_as_sf st_write st_simplify
+#' @importFrom dplyr bind_rows mutate select
+#' @importFrom units set_units
+#' @importFrom utils object.size
+#' @export
+identify_adjacent <- function(rtrw,
+                              rzwp,
+                              min_area_ha = 0,
+                              nama_field_rtrw = "RTRW",
+                              nama_field_rzwp = "RZWP3K",
+                              batch_progress_interval = 250,
+                              show_detailed_progress = TRUE) {
+  
+  # Input validation
+  if (!inherits(rtrw, "sf")) stop("rtrw harus berupa objek sf")
+  if (!inherits(rzwp, "sf")) stop("rzwp harus berupa objek sf")
+
+  rtrw <- rtrw %>% sf::st_make_valid()
+  rzwp <- rzwp %>% sf::st_make_valid()
+  
+  if (sf::st_crs(rtrw) != sf::st_crs(rzwp)) {
+    rzwp <- sf::st_transform(rzwp, sf::st_crs(rtrw))
+  } 
+  
+  # Calculate and filter based on area size
+  rtrw_filter <- rtrw %>%
+    dplyr::mutate(
+      id_SRC = dplyr::row_number(),
+      area_ha = as.numeric(units::set_units(sf::st_area(geometry), "ha"))
+    ) %>%
+    dplyr::filter(area_ha >= min_area_ha)
+  
+  rzwp_filter <- rzwp %>%
+    dplyr::mutate(
+      id_SRC = dplyr::row_number(),
+      area_ha = as.numeric(units::set_units(sf::st_area(geometry), "ha"))
+    ) %>%
+    dplyr::filter(area_ha >= min_area_ha)
+  
+  if (nrow(rtrw_filter) == 0 | nrow(rzwp_filter) == 0) {
+    stop("Tidak ada pasangan yang mungkin karena salah satu layer kosong setelah filter area.")
+  }
+  
+  # Identify touches
+  message("Identifikasi area RTRW dan RZWP3K yang berdampingan.")
+  pairs_idx <- sf::st_touches(rtrw_filter, rzwp_filter)
+  total_pairs <- sum(lengths(pairs_idx))
+  message("Total pasangan ditemukan: ", total_pairs)
+
+  if (total_pairs == 0) {
+    stop("Tidak ditemukan pasangan yang saling berdampingan antara RTRW dan RZWP3K.")
+  }
+  
+  # Function to safely extract the class name
+  safe_name <- function(row_sf, field_name) {
+    if (field_name %in% names(row_sf)) {
+      val <- row_sf[[field_name]][1]
+      if (is.na(val) || length(val) == 0) return(NA_character_)
+      val <- gsub("[^A-Za-z0-9[:space:]\\-\\(\\)]", "", as.character(val))
+      val <- trimws(val)
+      if (nchar(val) > 100) val <- substr(val, 1, 100)
+      return(val)
+    } else {
+      return(NA_character_)
+    }
+  }
+  
+  # Construct pairing table
+  message("Menyusun dataframe pasangan area berdampingan")
+  
+  df_list <- list()
+  PU_counter <- 1
+  pairs_processed <- 0
+  features_with_pairs <- 0
+  
+  for (i in seq_len(nrow(rtrw_filter))) {
+    idxs <- pairs_idx[[i]]
+    if (length(idxs) > 0) {
+      features_with_pairs <- features_with_pairs + 1
+      if (show_detailed_progress && i %% 50 == 0) {
+        pct_rtrw <- round(i / nrow(rtrw_filter) * 100, 1)
+        message("      >> Memproses RTRW ke-", i, " dari ", nrow(rtrw_filter),
+                " (", pct_rtrw, "%) - ditemukan ", length(idxs), " pasangan")
+      }
+      
+      geom_rtrw <- sf::st_geometry(rtrw_filter[i, ])
+      area_rtrw <- rtrw_filter$area_ha[i]
+      
+      for (j in idxs) {
+        # Baris RTRW
+        df_list[[length(df_list) + 1]] <- data.frame(
+          id_pu = PU_counter,
+          RTRW = safe_name(rtrw_filter[i, ], nama_field_rtrw),
+          RZWP3K = NA_character_,
+          area_ha = area_rtrw, 
+          geometry = geom_rtrw,
+          stringsAsFactors = FALSE
+        )
+        
+        # Baris RZWP3K
+        df_list[[length(df_list) + 1]] <- data.frame(
+          id_pu = PU_counter,
+          RTRW = NA_character_,
+          RZWP3K = safe_name(rzwp_filter[j, ], nama_field_rzwp),
+          area_ha = rzwp_filter$area_ha[j],
+          geometry = sf::st_geometry(rzwp_filter[j, ]),
+          stringsAsFactors = FALSE
+        )
+        
+        PU_counter <- PU_counter + 1
+        pairs_processed <- pairs_processed + 1
+        
+        # Notification for pair process progress
+        if (pairs_processed %% batch_progress_interval == 0) {
+          pct_complete <- round(pairs_processed / total_pairs * 100, 1)
+          remaining_pairs <- total_pairs - pairs_processed
+          
+          message("      [PROGRESS] ", pct_complete, "% (", pairs_processed, "/",
+                  total_pairs, " pasangan)")
+          gc() # Free memory
+        }
+      }
+    }
+  }
+  
+  message("\n      - Total pasangan diproses: ", pairs_processed)
+  
+  # Convert dataframe to sf object
+  message("Menggabungkan data frames dan mengkonversi ke objek sf.")
+  combined_df <- dplyr::bind_rows(df_list)
+  pu_sf <- sf::st_as_sf(combined_df, crs = sf::st_crs(rtrw_filter))
+  
+  # Select the column order
+  pu_sf <- pu_sf %>%
+    dplyr::mutate(id = dplyr::row_number()) %>%
+    dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, geometry)
+  
+  return(invisible(pu_sf))
+}
+
+#' Process adjacent sf object
+#'
+#' This function processes adjacent polygons by calculating the shared boundary length
+#' between RTRW and RZWP3K pairs, then computes buffer areas based on the specified
+#' buffer distance.
+#'
+#' @param pu_sf The `sf` object returned by `identify_adjacent`. Must contain columns:
+#'   `id_pu`, `RTRW`, `RZWP3K`, `area_ha`, and geometry.
+#' @param buffer_m Numeric: The buffer distance in meters for the formula. This value
+#'   is multiplied by the shared boundary length to calculate the buffer area.
+#'
+#' @return An `sf` object with the original columns plus two additional columns:
+#'   \item{length}{The length of the shared boundary between RTRW and RZWP3K polygons (in meters)}
+#'   \item{area_buffer_ha}{The calculated buffer area in hectares, computed as 
+#'     (length * buffer_m) / 10000}
+#'
+#' @details The function performs the following steps:
+#'   \enumerate{
+#'     \item Transforms the input to a metric CRS (UTM) for accurate distance calculations
+#'     \item Validates that RTRW and RZWP3K pairs have matching structure
+#'     \item Extracts polygon boundaries
+#'     \item Calculates shared boundary lengths between adjacent pairs
+#'     \item Computes buffer areas based on the specified buffer distance
+#'   }
+#'
+#' @note This function uses sequential processing. For large datasets, consider
+#'   parallelizing manually using `future` and `furrr` packages if needed.
+#'
+#' @examples
+#' \dontrun{
+#'   result <- process_adjacent(adjacent_polygons, buffer_m = 50)
+#' }
+#'
+#' @importFrom sf st_crs st_transform st_geometry st_boundary st_intersection st_length
+#' @importFrom dplyr filter arrange left_join mutate select
+#' @export
+process_adjacent <- function(pu_sf, buffer_m) {
+  
+  # Automatically identify CRS
+  current_crs <- sf::st_crs(pu_sf)
+  if (current_crs$IsGeographic) {
+    bbox <- sf::st_bbox(pu_sf)
+    mean_lon <- (bbox[["xmin"]] + bbox[["xmax"]]) / 2
+    mean_lat <- (bbox[["ymin"]] + bbox[["ymax"]]) / 2
+    utm_zone <- floor((mean_lon + 180) / 6) + 1
+    epsg_metric <- if (mean_lat >= 0) 32600 + utm_zone else 32700 + utm_zone
+  } else {
+    epsg_metric <- current_crs
+  }
+  pu_sf_metric <- sf::st_transform(pu_sf, epsg_metric)
+  
+  # Check id_pu structure 
+  rtrw_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RTRW)) %>% dplyr::arrange(id_pu)
+  rzwp_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RZWP3K)) %>% dplyr::arrange(id_pu)
+  
+  if (nrow(rtrw_parts) != nrow(rzwp_parts)) {
+    stop("Ketidaksesuaian struktur pasangan data id_pu antara RTRW dan RZWP3K.")
+  }
+  
+  # Extract edge geometry (wireframe)
+  rtrw_boundaries <- sf::st_boundary(sf::st_geometry(rtrw_parts))
+  rzwp_boundaries <- sf::st_boundary(sf::st_geometry(rzwp_parts))
+  
+  # Calculate length sequentially
+  message("Menghitung irisan dan panjang garis setiap pasangan area berdampingan")
+  calculated_lengths <- vapply(
+    seq_along(rtrw_boundaries),
+    function(i) {
+      shared_line <- sf::st_intersection(rtrw_boundaries[i], rzwp_boundaries[i])
+      return(as.numeric(sf::st_length(shared_line)))
+    },
+    numeric(1)
+  )
+  
+  # Combine calculation result
+  lengths_lookup <- data.frame(
+    id_pu = rtrw_parts$id_pu,
+    length = calculated_lengths,
+    stringsAsFactors = FALSE
+  )
+  
+  # Calculate buffer area
+  message("Menghitung area buffer dalam hektar")
+  pu_sf <- pu_sf %>% 
+    dplyr::left_join(lengths_lookup, by = "id_pu") %>% 
+    dplyr::mutate(
+      area_buffer_ha = (length * buffer_m) / 10000
+    )
+  pu_sf <- pu_sf %>% 
+    dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, length, area_buffer_ha, geometry)
+  
+  return(pu_sf)
+}
 
 # Perhitungan Indeks PADU-KE ----------------------------------------------
 
@@ -326,6 +635,8 @@ generate_matrix_serasi <- function(sf_1, sf_2, fill_value = NA) {
 #'
 #' @description
 #' Joins compatibility values to sf object using columns 3 and 4 as keys.
+#' If an `id_pu` column exists and each group has exactly one non‑missing
+#' RTRW and one non‑missing RZWP3K, the function pairs them before lookup.
 #'
 #' @param sf_obj `sf` object with at least 4 non-geometry columns; columns 3 and 4 used as keys
 #' @param lookup_table Data frame with 3 columns: RTRW class, RZWP3K class, numeric value
@@ -348,17 +659,55 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
   if (!is.numeric(lookup_table[[3]])) stop("Third column of lookup_table must be numeric.")
   if (!is.numeric(default_compat)) stop("default_compat must be numeric.")
   
-  rtrw_lookup <- lookup_table[[1]]
-  rzpw_lookup <- lookup_table[[2]]
-  compat_lookup <- lookup_table[[3]]
   sf_col_names <- names(sf_obj)
   rtrw_col <- sf_col_names[3]
   rzpw_col <- sf_col_names[4]
   
+  if ("id_pu" %in% sf_col_names) {
+    sf_non_geo <- sf::st_drop_geometry(sf_obj)
+    id_vals <- unique(sf_non_geo$id_pu)
+    
+    # check if every id_pu group has exactly one non‑NA in RTRW and one in RZWP3K
+    is_paired <- TRUE
+    for (pid in id_vals) {
+      sub <- sf_non_geo[sf_non_geo$id_pu == pid, ]
+      n_rtrw <- sum(!is.na(sub[[rtrw_col]]))
+      n_rzpw <- sum(!is.na(sub[[rzpw_col]]))
+      if (n_rtrw != 1 || n_rzpw != 1) {
+        is_paired <- FALSE
+        break
+      }
+    }
+    
+    if (is_paired) {
+      # pre‑compute lookup keys and compatibility vector
+      lookup_keys <- paste(lookup_table[[1]], lookup_table[[2]], sep = "||")
+      compat_vec <- lookup_table[[3]]
+      names(compat_vec) <- lookup_keys
+      
+      # build compatibility value per id_pu
+      compat_by_id <- data.frame(id_pu = id_vals, compat = NA_real_)
+      for (i in seq_along(id_vals)) {
+        pid <- id_vals[i]
+        sub <- sf_non_geo[sf_non_geo$id_pu == pid, ]
+        rtrw_val <- sub[[rtrw_col]][!is.na(sub[[rtrw_col]])][1]
+        rzpw_val <- sub[[rzpw_col]][!is.na(sub[[rzpw_col]])][1]
+        key <- paste(rtrw_val, rzpw_val, sep = "||")
+        compat <- compat_vec[key]
+        if (is.na(compat)) compat <- default_compat
+        compat_by_id$compat[i] <- compat
+      }
+      
+      # assign the compatibility to all rows with matching id_pu
+      sf_obj$idx_serasi <- compat_by_id$compat[match(sf_obj$id_pu, compat_by_id$id_pu)]
+      return(sf_obj)
+    }
+  }
+
   sf_keys <- sf::st_drop_geometry(sf_obj)[, c(rtrw_col, rzpw_col)]
   sf_keys$key <- paste(sf_keys[[1]], sf_keys[[2]], sep = "||")
-  lookup_keys <- paste(rtrw_lookup, rzpw_lookup, sep = "||")
-  compat_vec <- compat_lookup
+  lookup_keys <- paste(lookup_table[[1]], lookup_table[[2]], sep = "||")
+  compat_vec <- lookup_table[[3]]
   names(compat_vec) <- lookup_keys
   matched_compat <- compat_vec[sf_keys$key]
   matched_compat[is.na(matched_compat)] <- default_compat
@@ -601,61 +950,96 @@ calculate_lulc_adjacency.sf <- function(lulc, admin_vector, id_col = "id_pu", cl
   return(output_df[, c("id_pu", "Class_A", "Class_B", "Edge_Count", "percentage")])
 }
 
-#' Calculate PADU-KE (Weighted LULC Adjacency Index)
+#' Calculate PADU-KE index and return both index table and map-ready data
 #'
 #' @description
-#' Computes PADU-KE index as weighted sum of adjacency strength between LULC
-#' class pairs within each administrative unit.
+#' Preprocesses LULC adjacency and index matrices, computes the PADU-KE index
+#' for each administrative unit, and merges it with a base map.
 #'
-#' @param adjacency_df Data frame with columns: `id_pu`, `Class_A`, `Class_B`,
-#'   `Edge_Count`, `percentage`
-#' @param index_matrix Data frame with columns: `class_id1`, `class_id2`, `adj_index`
-#' @param normalize Logical; if TRUE scales index to 0-1 range
+#' @param matriks_padu_ke Data frame with columns: `class1`, `class2`, `adj_index`.
+#'   Contains raw class names/IDs and the adjacency index for each pair.
+#' @param lulc_ref List or data frame with two elements: first element contains
+#'   numeric class IDs, second element contains corresponding class names.
+#'   Used to map class names to IDs.
+#' @param lulc_adjacencies Data frame with columns: `id_pu`, `Class_A`, `Class_B`,
+#'   `Edge_Count`, `percentage`. Edge counts and percentages per LULC pair.
+#' @param idx_serasi_map Data frame containing at least an `id_pu` column.
+#'   This is the base map (e.g., filtered overlap area) to which the index will be joined.
+#' @param normalize Logical; if `TRUE`, scales the index to a 0–1 range.
+#'   Default is `TRUE`.
 #'
-#' @return Data frame with `id_pu`, `idx_padu_ke_abs`, and optionally `idx_padu_ke`
+#' @return A list with two components:
+#'   \item{idx_padu_ke}{Data frame with columns `id_pu`, `idx_padu_ke_abs`
+#'     and (if `normalize = TRUE`) `idx_padu_ke`.}
+#'   \item{idx_padu_ke_map}{Data frame formed by left-joining `idx_serasi_map`
+#'     with `idx_padu_ke` on `id_pu`.}
 #'
 #' @examples
 #' \dontrun{
-#' result <- calculate_padu_ke(adjacency_df, index_matrix, normalize = TRUE)
+#' result <- calculate_padu_ke(matriks_padu_ke, lulc_ref, lulc_adjacencies, idx_serasi_map)
+#' padu_ke_table <- result$idx_padu_ke
+#' padu_ke_map    <- result$idx_padu_ke_map
 #' }
 #'
-#' @importFrom dplyr left_join filter mutate group_by summarise
-#'
+#' @importFrom dplyr left_join mutate filter group_by summarise
 #' @export
-calculate_padu_ke <- function(adjacency_df, index_matrix, normalize = TRUE) {
+calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
+                              idx_serasi_map, normalize = TRUE) {
+  
+  # Convert class names to IDs in matriks_padu_ke 
+  # lulc_ref is assumed to be a list where element 1 = IDs, element 2 = names
+  matriks_padu_ke_id <- matriks_padu_ke %>%
+    mutate(
+      class1 = lulc_ref[[1]][match(class1, lulc_ref[[2]])],
+      class2 = lulc_ref[[1]][match(class2, lulc_ref[[2]])]
+    )
+  names(matriks_padu_ke_id) <- c("class_id1", "class_id2", "adj_index")
+
+  lulc_adjacencies <- lulc_adjacencies %>%
+    mutate(
+      Class_A = as.integer(as.character(Class_A)),
+      Class_B = as.integer(as.character(Class_B))
+    )
+  
+  # Compute PADU-KE index 
   required_adj <- c("id_pu", "Class_A", "Class_B", "percentage")
   required_idx <- c("class_id1", "class_id2", "adj_index")
   
-  missing_adj <- setdiff(required_adj, names(adjacency_df))
-  missing_idx <- setdiff(required_idx, names(index_matrix))
+  missing_adj <- setdiff(required_adj, names(lulc_adjacencies))
+  missing_idx <- setdiff(required_idx, names(matriks_padu_ke_id))
   
   if (length(missing_adj) > 0) {
-    stop("adjacency_df missing: ", paste(missing_adj, collapse = ", "))
+    stop("lulc_adjacencies missing: ", paste(missing_adj, collapse = ", "))
   }
   if (length(missing_idx) > 0) {
-    stop("index_matrix missing: ", paste(missing_idx, collapse = ", "))
+    stop("matriks_padu_ke missing required columns: ", paste(missing_idx, collapse = ", "))
   }
   
-  df <- adjacency_df |>
-    dplyr::left_join(index_matrix,
-                     by = c("Class_A" = "class_id1", "Class_B" = "class_id2"))
+  df <- lulc_adjacencies %>%
+    left_join(matriks_padu_ke_id,
+              by = c("Class_A" = "class_id1", "Class_B" = "class_id2"))
   
   unmatched <- sum(is.na(df$adj_index))
   if (unmatched > 0) warning(unmatched, " class pair(s) missing adj_index.")
   
-  result <- df |>
-    dplyr::filter(!is.na(adj_index)) |>
-    dplyr::mutate(weighted = percentage * adj_index) |>
-    dplyr::group_by(id_pu) |>
-    dplyr::summarise(idx_padu_ke_abs = sum(weighted, na.rm = TRUE), .groups = "drop")
+  idx_padu_ke <- df %>%
+    filter(!is.na(adj_index)) %>%
+    mutate(weighted = percentage * adj_index) %>%
+    group_by(id_pu) %>%
+    summarise(idx_padu_ke_abs = sum(weighted, na.rm = TRUE), .groups = "drop")
   
   if (normalize) {
-    max_val <- max(index_matrix$adj_index, na.rm = TRUE)
-    result <- result |>
-      dplyr::mutate(idx_padu_ke = idx_padu_ke_abs / (max_val * 100))
+    max_val <- max(matriks_padu_ke_id$adj_index, na.rm = TRUE)
+    idx_padu_ke <- idx_padu_ke %>%
+      mutate(idx_padu_ke = idx_padu_ke_abs / (max_val * 100))
   }
   
-  return(result)
+  # Merge with base map to create idx_padu_ke_map
+  idx_padu_ke_map <- idx_serasi_map %>%
+    mutate(id_pu = as.character(id_pu)) %>%
+    left_join(idx_padu_ke, by = "id_pu")
+
+  list(idx_padu_ke = idx_padu_ke, idx_padu_ke_map = idx_padu_ke_map)
 }
 
 # Perhitungan Indeks PADU-HS ----------------------------------------------
@@ -844,6 +1228,99 @@ extract_raster_to_sf <- function(pu, rast, id_col, new_col = NULL, na.rm = TRUE,
   return(pu)
 }
 
+#' Calculate PADU-HS Index from Estuarine Distance and TSS
+#'
+#' @description
+#' Computes the PADU-HS index for each spatial unit by combining normalized
+#' estuarine Euclidean distance and TSS (Total Suspended Solids) values.
+#'
+#' @param idx_serasi_map `sf` data frame containing the spatial units
+#'   (e.g., administrative polygons) with an identifier column.
+#' @param estuari_euc_dist `SpatRaster` or `RasterLayer` of Euclidean distances
+#'   to estuarine areas.
+#' @param tss_rast `SpatRaster` or `RasterLayer` of TSS values.
+#' @param id_col Character. Name of the identifier column in `idx_serasi_map`.
+#'   Default is `"id_pu"`.
+#' @param max_dist Numeric. Maximum distance (in map units) used to normalise
+#'   estuarine distance. Distances beyond this value are clamped to 1.
+#'   Default is `5000`.
+#'
+#' @return A list with two components:
+#'   \item{idx_padu_hs_map}{An `sf` object containing the original geometry and
+#'     all extracted variables, plus the calculated `idx_padu_hs` column.}
+#'   \item{idx_padu_hs}{A tibble (data frame) with columns `id_pu` and `idx_padu_hs`,
+#'     without geometry.}
+#'
+#' @details
+#' The function uses `extract_raster_to_sf()` to extract mean raster values per
+#' polygon. It then combines the two extracted variables:
+#' \deqn{filter\_estuari = 1 - \min(estuari\_dist\_mean / max\_dist, 1)}
+#' \deqn{idx\_padu\_hs = (filter\_estuari + tss\_mean) / 2}
+#' Missing values in either component propagate as `NA` in the final index.
+#'
+#' @examples
+#' \dontrun{
+#' result <- calculate_padu_hs(idx_serasi_map, estuari_euc_dist, tss_rast)
+#' hs_map <- result$idx_padu_hs_map
+#' hs_tbl <- result$idx_padu_hs
+#' }
+#'
+#' @importFrom dplyr left_join select mutate
+#' @importFrom sf st_drop_geometry
+#' @importFrom tibble as_tibble
+#' @export
+calculate_padu_hs <- function(idx_serasi_map,
+                              estuari_euc_dist,
+                              tss_rast,
+                              id_col = "id_pu",
+                              max_dist = 5000) {
+  
+  # Extract estuarine distance
+  estuari_dist_extracted <- extract_raster_to_sf(
+    idx_serasi_map,
+    estuari_euc_dist,
+    id_col = id_col,
+    new_col = "estuari_dist_mean"
+  )
+  
+  # Extract TSS
+  tss_extracted <- extract_raster_to_sf(
+    idx_serasi_map,
+    tss_rast,
+    id_col = id_col,
+    new_col = "tss_mean"
+  )
+  
+  # Drop geometry from TSS for joining
+  tss_to_merge <- tss_extracted %>%
+    sf::st_drop_geometry() %>%
+    dplyr::select(dplyr::all_of(c(id_col, "tss_mean")))
+  
+  # Join and calculate PADU-HS
+  idx_padu_hs_map <- estuari_dist_extracted %>%
+    dplyr::left_join(tss_to_merge, by = id_col) %>%
+    dplyr::mutate(
+      filter_estuari = ifelse(
+        is.na(.data$estuari_dist_mean),
+        NA,
+        1 - pmin(.data$estuari_dist_mean / max_dist, 1)
+      ),
+      idx_padu_hs = (.data$filter_estuari + .data$tss_mean) / 2
+    ) %>%
+    dplyr::select(-dplyr::all_of("filter_estuari"))
+  
+  # Create geometry‑free tibble
+  idx_padu_hs <- tibble::as_tibble(
+    idx_padu_hs_map %>% sf::st_drop_geometry()
+  )
+  
+  # Return as a list
+  list(
+    idx_padu_hs_map = idx_padu_hs_map,
+    idx_padu_hs     = idx_padu_hs
+  )
+}
+
 # Perhitungan Indeks PADU-KL ----------------------------------------------
 
 #' Calculate area percentage within planning units
@@ -1005,6 +1482,113 @@ handle_geom_collection <- function(sf_obj) {
   return(sf_obj)
 }
 
+#' Calculate PADU-RTp Index from Industry and Shipping Lane Distances
+#'
+#' @description
+#' Computes the PADU-RTp index for each spatial unit by combining normalized
+#' distances to industrial areas and shipping lanes (pelayaran).
+#'
+#' @param idx_serasi_map `sf` data frame containing the spatial units
+#'   (e.g., overlap area polygons) with an identifier column.
+#' @param industry_euc_dist `SpatRaster` or `RasterLayer` of Euclidean distances
+#'   to industrial areas.
+#' @param pelayaran_euc_dist `SpatRaster` or `RasterLayer` of Euclidean distances
+#'   to shipping lanes (pelayaran).
+#' @param id_col Character. Name of the identifier column in `idx_serasi_map`.
+#'   Default is `"id_pu"`.
+#' @param industry_max_dist Numeric. Maximum distance (in map units) for normalising
+#'   industry distance. Distances beyond this value are clamped to 1.
+#'   Default is `8000`.
+#' @param pelayaran_max_dist Numeric. Maximum distance for normalising shipping lane
+#'   distance. Default is `5000`.
+#'
+#' @return A list with two components:
+#'   \item{idx_padu_rtp_map}{An `sf` object containing the original geometry and
+#'     all extracted variables, plus the calculated `idx_padu_rtp` column.}
+#'   \item{idx_padu_rtp}{A tibble (data frame) with columns `id_pu` and `idx_padu_rtp`,
+#'     without geometry.}
+#'
+#' @details
+#' The function extracts mean distances from each polygon using `extract_raster_to_sf()`.
+#' Missing values are replaced with 0 (assuming no influence). Then:
+#' \deqn{filter\_industry = 1 - \min(industry\_dist / industry\_max\_dist, 1)}
+#' \deqn{filter\_pelayaran = 1 - \min(pelayaran\_dist / pelayaran\_max\_dist, 1)}
+#' \deqn{idx\_padu\_rtp = \max(0, 1 - (filter\_industry + filter\_pelayaran) / 2)}
+#'
+#' The final index ranges from 0 (lowest pressure) to 1 (highest pressure)
+#' based on proximity to both features.
+#'
+#' @examples
+#' \dontrun{
+#' result <- calculate_padu_rtp(idx_serasi_map, industry_euc_dist, pelayaran_euc_dist)
+#' rtp_map <- result$idx_padu_rtp_map
+#' rtp_tbl <- result$idx_padu_rtp
+#' }
+#'
+#' @importFrom dplyr left_join select mutate if_else
+#' @importFrom sf st_drop_geometry
+#' @importFrom tibble as_tibble
+#' @export
+calculate_padu_rtp <- function(idx_serasi_map,
+                               industry_euc_dist,
+                               pelayaran_euc_dist,
+                               id_col = "id_pu",
+                               industry_max_dist = 8000,
+                               pelayaran_max_dist = 5000) {
+  
+  # Extract industry distance
+  industry_dist_extracted <- extract_raster_to_sf(
+    idx_serasi_map,
+    industry_euc_dist,
+    id_col = id_col,
+    new_col = "industry_dist_mean"
+  )
+  
+  # Extract shipping lane distance
+  pelayaran_dist_extracted <- extract_raster_to_sf(
+    idx_serasi_map,
+    pelayaran_euc_dist,
+    id_col = id_col,
+    new_col = "pelayaran_dist_mean"
+  )
+  
+  # Drop geometry from industry for joining
+  industry_to_merge <- industry_dist_extracted %>%
+    sf::st_drop_geometry() %>%
+    dplyr::select(dplyr::all_of(c(id_col, "industry_dist_mean")))
+  
+  # Join and calculate PADU-RTp
+  idx_padu_rtp_map <- pelayaran_dist_extracted %>%
+    dplyr::left_join(industry_to_merge, by = id_col) %>%
+    dplyr::mutate(
+      # Replace NAs with 0 (assuming no influence if no data)
+      industry_clean = dplyr::if_else(is.na(.data$industry_dist_mean), 0,
+                                      pmax(.data$industry_dist_mean, 0)),
+      pelayaran_clean = dplyr::if_else(is.na(.data$pelayaran_dist_mean), 0,
+                                       pmax(.data$pelayaran_dist_mean, 0)),
+      
+      # Normalise distances (clamp at 1)
+      filter_industry = 1 - pmin(.data$industry_clean / industry_max_dist, 1),
+      filter_pelayaran = 1 - pmin(.data$pelayaran_clean / pelayaran_max_dist, 1),
+      
+      # Final index, ensure non-negative
+      idx_padu_rtp = pmax(0, 1 - (.data$filter_industry + .data$filter_pelayaran) / 2)
+    ) %>%
+    dplyr::select(-dplyr::all_of(c("industry_clean", "pelayaran_clean",
+                                   "filter_industry", "filter_pelayaran")))
+  
+  # Create geometry‑free tibble
+  idx_padu_rtp <- tibble::as_tibble(
+    idx_padu_rtp_map %>% sf::st_drop_geometry()
+  )
+  
+  # Return as a list
+  list(
+    idx_padu_rtp_map = idx_padu_rtp_map,
+    idx_padu_rtp     = idx_padu_rtp
+  )
+}
+
 # Perhitungan Indeks PADU-KI ----------------------------------------------
 
 #' Extract area-weighted mean from a spatial layer to planning units
@@ -1113,6 +1697,88 @@ extract_sf_to_sf <- function(pu, value_sf, value_col, pu_id = NULL,
   if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
   
   return(pu)
+}
+
+#' Calculate PADU-KI Index from Disaster Risk Values
+#'
+#' @description
+#' Computes the PADU-KI index for each spatial unit by extracting mean disaster
+#' risk values from a vector layer and transforming them to a 0–1 scale where
+#' 1 represents lowest risk and 0 highest risk.
+#'
+#' @param idx_serasi_map `sf` data frame containing the spatial units
+#'   (e.g., overlap area polygons) with an identifier column.
+#' @param disaster_risk_vect `sf` object containing disaster risk polygons
+#'   with a risk value column.
+#' @param value_col Character. Name of the column in `disaster_risk_vect`
+#'   containing the risk values (e.g., "Kerawanan").
+#' @param pu_id Character. Name of the identifier column in `idx_serasi_map`.
+#'   Default is `"id_pu"`.
+#' @param new_col Character. Name of the column to store extracted mean risk
+#'   values. Default is `"disaster_risk_mean"`.
+#'
+#' @return A list with two components:
+#'   \item{idx_padu_ki_map}{An `sf` object containing the original geometry
+#'     and the calculated `idx_padu_ki` column.}
+#'   \item{idx_padu_ki}{A tibble (data frame) with columns `id_pu` and `idx_padu_ki`,
+#'     without geometry.}
+#'
+#' @details
+#' The function uses `extract_sf_to_sf()` to compute the mean of `value_col`
+#' from `disaster_risk_vect` overlapping each polygon in `idx_serasi_map`.
+#' The PADU-KI index is then defined as:
+#' \deqn{idx\_padu\_ki = 1 - disaster\_risk\_mean}
+#' with the assumption that disaster_risk_mean is on a 0–1 scale
+#' (0 = low risk, 1 = high risk). Missing values are propagated as `NA`.
+#'
+#' @examples
+#' \dontrun{
+#' result <- calculate_padu_ki(idx_serasi_map, disaster_risk_vect,
+#'                             value_col = "Kerawanan")
+#' ki_map <- result$idx_padu_ki_map
+#' ki_tbl <- result$idx_padu_ki
+#' }
+#'
+#' @importFrom dplyr mutate select if_else
+#' @importFrom sf st_drop_geometry
+#' @importFrom tibble as_tibble
+#' @export
+calculate_padu_ki <- function(idx_serasi_map,
+                              disaster_risk_vect,
+                              value_col,
+                              pu_id = "id_pu",
+                              new_col = "disaster_risk_mean") {
+  
+  # Extract disaster risk values to overlap unit
+  disaster_risk_extracted <- extract_sf_to_sf(
+    pu = idx_serasi_map,
+    value_sf = disaster_risk_vect,
+    value_col = value_col,
+    new_col = new_col,
+    pu_id = pu_id
+  )
+  
+  # Calculate PADU-KI index
+  idx_padu_ki_map <- disaster_risk_extracted %>%
+    dplyr::mutate(
+      idx_padu_ki = dplyr::if_else(
+        is.na(.data[[new_col]]),
+        NA_real_,
+        1 - .data[[new_col]]
+      )
+    ) %>%
+    dplyr::select(-dplyr::all_of(new_col))
+  
+  # Create geometry‑free tibble
+  idx_padu_ki <- tibble::as_tibble(
+    idx_padu_ki_map %>% sf::st_drop_geometry()
+  )
+  
+  # Return as a list
+  list(
+    idx_padu_ki_map = idx_padu_ki_map,
+    idx_padu_ki     = idx_padu_ki
+  )
 }
 
 # Perhitungan Indeks PADU Final -------------------------------------------

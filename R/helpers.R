@@ -19,7 +19,11 @@ pacman::p_load(
   here,
   rmarkdown,
   kableExtra,
-  DT
+  DT,
+  units,
+  utils,
+  furrr,
+  future
 )
 
 #' Load and Validate a Shapefile
@@ -53,22 +57,37 @@ pacman::p_load(
 #'
 #' @export
 load_and_validate_shapefile <- function(shp_path) {
-  # Check file completeness
-  required_ext <- c(".shp", ".shx", ".dbf", ".prj")
-  base_path <- tools::file_path_sans_ext(shp_path)
-  missing_files <- required_ext[!file.exists(paste0(base_path, required_ext))]
-  
-  if (length(missing_files) > 0) {
-    stop("Missing required files: ", paste(missing_files, collapse = ", "))
+  file_ext <- tolower(tools::file_ext(shp_path))
+
+  if (file_ext == "gpkg") {
+    # GeoPackage: single file, no sidecar check needed
+    if (!file.exists(shp_path)) {
+      stop("Missing required files: ", shp_path)
+    }
+    message(">> Reading GeoPackage: ", shp_path, " ...")
+    sf_object <- tryCatch(
+      sf::st_read(shp_path, quiet = TRUE),
+      error = function(e) stop("Failed to read GeoPackage: ", e$message)
+    )
+    message("   GeoPackage successfully read.")
+  } else {
+    # Shapefile: check sidecar components
+    required_ext <- c(".shp", ".shx", ".dbf", ".prj")
+    base_path <- tools::file_path_sans_ext(shp_path)
+    missing_files <- required_ext[!file.exists(paste0(base_path, required_ext))]
+
+    if (length(missing_files) > 0) {
+      stop("Missing required files: ", paste(missing_files, collapse = ", "))
+    }
+
+    # Read shapefile
+    message(">> Reading shapefile: ", shp_path, " ...")
+    sf_object <- tryCatch(
+      sf::st_read(shp_path, quiet = TRUE),
+      error = function(e) stop("Failed to read shapefile: ", e$message)
+    )
+    message("   Shapefile successfully read.")
   }
-  
-  # Read shapefile
-  message(">> Reading shapefile: ", shp_path, " ...")
-  sf_object <- tryCatch(
-    sf::st_read(shp_path, quiet = TRUE),
-    error = function(e) stop("Failed to read shapefile: ", e$message)
-  )
-  message("   Shapefile successfully read.")
   
   # Check geometry
   message(">> Checking geometry and properties ...")
@@ -408,20 +427,35 @@ load_and_validate_raster <- function(raster_path,
 #'
 #' @param output List. Output from LaSPUR module.
 #' @param dir Character string. Directory to save the report.
+#' @param output_format Character string. The format of the output report. 
+#' Options are "html" (default) or "pdf".
 #' 
 #' @importFrom rmarkdown render
 #'
 #' @export
-generate_report <- function(output, dir) {
+generate_report <- function(output, dir, output_format = c("html", "pdf")) {
+  # Match the input argument to ensure it's either "html" or "pdf"
+  output_format <- match.arg(output_format)
+  
   report_params <- list(
     inputs = output$inputs,
     result = output$result
   )
   
-  output_file <- paste0("LaSPUR_Report_", Sys.Date(), ".html")
+  # Determine file extension and rmarkdown output format type
+  if (output_format == "html") {
+    file_ext <- ".html"
+    fmt_target <- "html_document"
+  } else {
+    file_ext <- ".pdf"
+    fmt_target <- "pdf_document"
+  }
+  
+  output_file <- paste0("LaSPUR_Report_", Sys.Date(), file_ext)
   
   rmarkdown::render(
     input = "report/LaSPUR_type1_report_template.Rmd",
+    output_format = fmt_target,
     output_file = output_file,
     output_dir = dir,
     params = report_params,
