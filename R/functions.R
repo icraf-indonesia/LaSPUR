@@ -1900,10 +1900,307 @@ calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
   return(idx_padu_map)
 }
 
-# Perhitungan Indeks PADAN ------------------------------------------------
+# Perhitungan Ekonomi ------------------------------------------------
 
-# 9. calculate_padan()
-# 10. calculate_recommendation()
+#' Calculate land cover proportions within planning units
+#'
+#' This function either intersects land use/land cover (LULC) polygons with planning unit (PU) polygons
+#' (original method) or uses a predefined allocation matrix (new method) to compute, for each planning unit,
+#' the proportion of area covered by each LULC class.
+#'
+#' @param pu An `sf` object representing planning units. Must contain a unique identifier column
+#'   and, when using the matrix method, a column specifying the planning unit type.
+#' @param lulc Optional. An `sf` object representing land use/land cover classes.
+#'   Required only when `calculate_from_matrix = FALSE`. Ignored otherwise.
+#' @param id_pu Character string specifying the name of the column in `pu` that contains
+#'   unique identifiers. Default `"id_pu"`.
+#' @param lulc_class Character string specifying the name of the column in `lulc`
+#'   that contains land cover class labels. Default `"class"`. Not used in matrix mode.
+#' @param use_parallel Logical. If `TRUE` and the `furrr` package is available,
+#'   the intersection and area calculation are performed in parallel. Default `FALSE`.
+#'   (Only relevant in original LULC mode.)
+#' @param workers Integer. Number of parallel workers. Default `4`.
+#' @param calculate_from_matrix Logical. If `TRUE`, use the predefined allocation matrix
+#'   instead of the actual LULC map. Default `FALSE`.
+#' @param matrix_tbl Data frame. Required when `calculate_from_matrix = TRUE`.
+#'   A data frame in **long format** with exactly three columns, in this order:
+#'   \enumerate{
+#'     \item Planning unit type (character or factor) – must match values in `selected_zone` column of `pu`.
+#'     \item Land cover class (character or factor) – class names.
+#'     \item Proportion (numeric) – values between 0 and 1. For each type, proportions must sum to 1.
+#'   }
+#' @param selected_zone Character string. Required when `calculate_from_matrix = TRUE`.
+#'   Name of the column in `pu` that contains the planning unit type (matching the first column of `matrix_tbl`).
+#'
+#' @return A data frame with three columns:
+#'   * The planning unit identifier column (name given by `id_pu`)
+#'   * The land cover class column (name given by `lulc_class` – in matrix mode, taken from second column of `matrix_tbl`)
+#'   * `proportion`: the proportion of the planning unit's total area covered by that land cover class.
+#'
+#' @details
+#' When `calculate_from_matrix = FALSE`, the function behaves exactly as the original:
+#'   - Intersects LULC polygons with planning units,
+#'   - Computes areas in square meters,
+#'   - Returns proportions per PU and class.
+#'
+#' When `calculate_from_matrix = TRUE`:
+#'   - No spatial operations are performed.
+#'   - For each planning unit, the value in `selected_zone` is used to look up the corresponding rows in
+#'     `matrix_tbl` (first column = type, second = class, third = proportion).
+#'   - The output is in long format with proportions taken directly from the matrix.
+#'   - If a planning unit's `selected_zone` value does not exist in the first column of `matrix_tbl`, it is silently skipped.
+#'   - Proportions for each type are checked to sum to 1 (tolerance 1e-6).
+#'
+#' @examples
+#' \dontrun{
+#' # Original mode (using actual LULC map)
+#' result <- calculate_land_distribution(pu, lulc, id_pu = "id_pu")
+#'
+#' # Matrix mode
+#' mat <- read.csv("allocation_matrix.csv")  # must have 3 columns: type, class, proportion
+#' result <- calculate_land_distribution(pu,
+#'   calculate_from_matrix = TRUE,
+#'   matrix_tbl = mat,
+#'   selected_zone = "alt_RTRW"
+#' )
+#' }
+#'
+#' @export
+calculate_land_distribution <- function(pu, lulc = NULL,
+                                        id_pu = "id_pu",
+                                        lulc_class = "class",
+                                        use_parallel = FALSE,
+                                        workers = 4,
+                                        calculate_from_matrix = FALSE,
+                                        matrix_tbl = NULL,
+                                        selected_zone = NULL) {
+  
+  # Input validation
+  if (!inherits(pu, "sf")) stop("pu must be an sf object")
+  
+  if (calculate_from_matrix) {
+    # Matrix mode
+    if (is.null(matrix_tbl))
+      stop("calculate_from_matrix = TRUE but matrix_tbl is NULL")
+    if (!is.data.frame(matrix_tbl))
+      stop("matrix_tbl must be a data frame")
+    if (ncol(matrix_tbl) < 3)
+      stop("matrix_tbl must have at least three columns: type, class, proportion (in that order)")
+    if (is.null(selected_zone) || !is.character(selected_zone))
+      stop("selected_zone must be a character string specifying the column in pu that contains planning unit types")
+    if (!selected_zone %in% names(pu))
+      stop(paste("Column", selected_zone, "not found in pu"))
+    
+    # Use first three columns as (type, class, proportion)
+    long_mat <- matrix_tbl[, 1:3]
+    colnames(long_mat) <- c("type", "class", "proportion")
+    long_mat$proportion <- as.numeric(long_mat$proportion)
+    
+    # Check that proportions sum to 1 per type
+    type_sums <- tapply(long_mat$proportion, long_mat$type, sum, na.rm = TRUE)
+    if (any(abs(type_sums - 1) > 1e-6)) {
+      bad_types <- names(type_sums)[abs(type_sums - 1) > 1e-6]
+      stop(paste("For types", paste(bad_types, collapse = ", "),
+                 "proportions do not sum to 1 (tolerance 1e-6)"))
+    }
+    
+    result_list <- vector("list", length = nrow(pu))
+    for (i in seq_len(nrow(pu))) {
+      pu_type <- as.character(pu[[selected_zone]][i])
+      if (is.na(pu_type)) next
+      type_rows <- long_mat[long_mat$type == pu_type, ]
+      if (nrow(type_rows) == 0) next
+      pu_result <- data.frame(
+        pu_id      = rep(pu[[id_pu]][i], nrow(type_rows)),
+        class      = type_rows$class,
+        proportion = type_rows$proportion,
+        stringsAsFactors = FALSE
+      )
+      colnames(pu_result)[1] <- id_pu
+      colnames(pu_result)[2] <- lulc_class
+      result_list[[i]] <- pu_result
+    }
+    result <- do.call(rbind, Filter(Negate(is.null), result_list))
+    rownames(result) <- NULL
+    return(as.data.frame(result))
+  }
+  
+  # LULC intersection
+  if (is.null(lulc)) stop("When calculate_from_matrix = FALSE, lulc must be provided")
+  if (!inherits(lulc, "sf")) stop("lulc must be an sf object")
+  
+  current_crs <- sf::st_crs(pu)
+  if (current_crs$IsGeographic) {
+    bbox        <- sf::st_bbox(pu)
+    mean_lon    <- (bbox[["xmin"]] + bbox[["xmax"]]) / 2
+    mean_lat    <- (bbox[["ymin"]] + bbox[["ymax"]]) / 2
+    utm_zone    <- floor((mean_lon + 180) / 6) + 1
+    epsg_metric <- if (mean_lat >= 0) 32600 + utm_zone else 32700 + utm_zone
+    target_crs  <- sf::st_crs(epsg_metric)
+    message("Geographic CRS detected. Transforming to UTM zone ", utm_zone,
+            " (EPSG:", epsg_metric, ") for area calculation.")
+    pu   <- sf::st_transform(pu, target_crs)
+    lulc <- sf::st_transform(lulc, target_crs)
+  } else {
+    if (!sf::st_crs(lulc) == current_crs) {
+      message("CRS mismatch: transforming LULC to match planning unit CRS.")
+      lulc <- sf::st_transform(lulc, current_crs)
+    }
+  }
+  
+  if (use_parallel && requireNamespace("furrr", quietly = TRUE)) {
+    future::plan(future::multisession, workers = workers)
+    plan_list   <- split(pu, seq_len(nrow(pu)))
+    result_list <- furrr::future_map_dfr(plan_list, function(pu_sub) {
+      idx <- sf::st_intersects(pu_sub, lulc, sparse = FALSE)[1, ]
+      if (!any(idx)) return(NULL)
+      lulc_sub <- lulc[idx, ]
+      inter    <- sf::st_intersection(pu_sub[, id_pu, drop = FALSE],
+                                      lulc_sub[, lulc_class, drop = FALSE])
+      if (nrow(inter) == 0) return(NULL)
+      inter$area_m2 <- as.numeric(sf::st_area(inter))
+      inter %>%
+        as.data.frame() %>%
+        dplyr::group_by(!!sym(id_pu), !!sym(lulc_class)) %>%
+        dplyr::summarise(class_m2 = sum(area_m2, na.rm = TRUE), .groups = "drop")
+    }, .progress = TRUE)
+    all_areas <- dplyr::bind_rows(result_list)
+    
+    if (nrow(all_areas) == 0) stop("No intersections found")
+    total_area <- all_areas %>%
+      dplyr::group_by(!!sym(id_pu)) %>%
+      dplyr::summarise(total_m2 = sum(class_m2), .groups = "drop")
+    result <- all_areas %>%
+      dplyr::left_join(total_area, by = id_pu) %>%
+      dplyr::mutate(proportion = class_m2 / total_m2) %>%
+      dplyr::select(!!sym(id_pu), !!sym(lulc_class), proportion)
+    
+    # Reset parallel backend to sequential processing
+    future::plan(future::sequential)
+    
+    return(as.data.frame(result))
+    
+  } else {
+    # Sequential (non-parallel) mode
+    intersection <- sf::st_intersection(pu[, id_pu, drop = FALSE],
+                                        lulc[, lulc_class, drop = FALSE])
+    dt         <- data.table::as.data.table(intersection)
+    dt[, area_m2 := as.numeric(sf::st_area(intersection))]
+    class_area <- dt[, .(class_m2 = sum(area_m2)), by = c(id_pu, lulc_class)]
+    total_area <- dt[, .(total_m2 = sum(area_m2)), by = id_pu]
+    all_areas  <- merge(class_area, total_area, by = id_pu)
+    all_areas[, proportion := class_m2 / total_m2]
+    result     <- all_areas[, .(proportion), by = c(id_pu, lulc_class)]
+    return(as.data.frame(result))
+  }
+}
+
+#' Calculate Net Present Value per hectare per unit
+#'
+#' This function computes the area-weighted Net Present Value (NPV) per hectare
+#' for each spatial unit (e.g., raster cell or polygon) based on land use/land
+#' cover (LULC) proportions and corresponding NPV values. It validates inputs,
+#' identifies the proportion columns from a land distribution table, and
+#' replaces them with a single `npv_ha` column.
+#'
+#' @param land_distribution A data frame containing land use/land cover
+#'   proportion columns. It must include a column named `alt_RZWP3K` which marks
+#'   the start of the proportion columns. All columns after that position are
+#'   assumed to represent LULC class proportions (typically summing to 1).
+#' @param npv_lulc A data frame with at least three columns:
+#'   \itemize{
+#'     \item Column 1: (optional ID, not used directly)
+#'     \item Column 2: LULC class names (character or factor)
+#'     \item Column 3: NPV per hectare values (numeric)
+#'   }
+#'   This table provides the lookup of NPV for each LULC class.
+#'
+#' @return A data frame derived from `land_distribution` with the following
+#'   changes:
+#'   \itemize{
+#'     \item A new numeric column `npv_ha` is added, calculated as the sum over
+#'       proportion columns multiplied by the corresponding NPV from `npv_lulc`.
+#'       Missing proportions (`NA`) are treated as zero.
+#'     \item All proportion columns (those after `alt_RZWP3K`) are removed.
+#'   }
+#'   The remaining columns (including `alt_RZWP3K`) are kept unchanged.
+#'
+#' @details The function performs the following steps:
+#'   1. Checks that `npv_lulc` has at least three columns and creates a named
+#'      lookup vector from the second (class) and third (NPV) columns.
+#'   2. Locates the column `alt_RZWP3K` in `land_distribution`; fails if
+#'      missing.
+#'   3. Treats all columns after `alt_RZWP3K` as proportion columns.
+#'   4. Verifies that every proportion column name exists as a class name in the
+#'      NPV lookup; stops with an error if any class is missing.
+#'   5. For each row, computes the weighted sum of NPV using the proportions
+#'      (with `NA` replaced by 0) and the lookup values.
+#'   6. Returns the input data frame with the proportion columns removed and the
+#'      new `npv_ha` column added.
+#'
+#' @examples
+#' \dontrun{
+#' # Example land distribution data
+#' land_data <- data.frame(
+#'   cell_id = 1:3,
+#'   alt_RZWP3K = c(0.2, 0.5, 0.3),
+#'   forest = c(0.1, 0.4, NA),
+#'   agriculture = c(0.9, 0.6, 1.0),
+#'   urban = c(0.0, 0.0, 0.0)
+#' )
+#'
+#' # Example NPV lookup table
+#' npv_table <- data.frame(
+#'   id = 1:3,
+#'   lulc_class = c("forest", "agriculture", "urban"),
+#'   npv_ha = c(1000, 500, 2000)
+#' )
+#'
+#' # Calculate NPV per hectare
+#' result <- calculate_npv_ha_per_unit(land_data, npv_table)
+#' print(result)
+#' # Should contain cell_id, alt_RZWP3K, and npv_ha only
+#' }
+#'
+#' @importFrom dplyr mutate select all_of
+#' @importFrom purrr pmap_dbl
+#' @export
+calculate_npv_ha_per_unit <- function(land_distribution, npv_lulc) {
+  # Validate npv_lulc
+  if (ncol(npv_lulc) < 3) {
+    stop("npv_lulc must have at least 3 columns (ID, LC, npv_ha)")
+  }
+  lc_vector <- npv_lulc[[2]]
+  npv_vector <- npv_lulc[[3]]
+  npv_lookup <- setNames(npv_vector, lc_vector)
+  
+  # Identify proportion columns
+  npv_idx <- grep("^npv_ha_actual", names(land_distribution))
+  
+  if (length(npv_idx) > 0) {
+    start_idx <- max(npv_idx)
+  } else {
+    start_idx <- match("alt_RZWP3K", names(land_distribution))
+  }
+  
+  prop_cols <- names(land_distribution)[(start_idx + 1):ncol(land_distribution)]
+  
+  # Compute npv_ha and drop the LULC proportion columns
+  result <- land_distribution %>%
+    mutate(
+      npv_ha = pmap_dbl(
+        select(., all_of(prop_cols)),
+        function(...) {
+          props <- c(...)
+          props[is.na(props)] <- 0
+          sum(props * npv_lookup[prop_cols])
+        }
+      )
+    ) %>%
+    select(-all_of(prop_cols))
+  
+  return(result)
+}
 
 # Perhitungan Rekomendasi -------------------------------------------------
 
