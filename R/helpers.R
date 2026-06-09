@@ -23,7 +23,8 @@ pacman::p_load(
   units,
   utils,
   furrr,
-  future
+  future,
+  data.table
 )
 
 #' Load and Validate a Shapefile
