@@ -46,7 +46,7 @@ matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_klhk.xlsx"
 
 # PADU-HS input data
 estuari_vect_path <- "data/vector/padu_hs/ST_Estuari_PT_Palu-Parigi.shp"
-tss_rast_path <- "data/raster/TSS_Sulteng.tif"
+tss_rast_path <- "data/raster/padu_hs/TSS_Palu-Parigi.tif"
 
 # PADU-KL input data
 protected_area_vect_path <- "data/vector/padu_kl/ST_Kawasan_Lindung_Palu-Parigi.shp"
