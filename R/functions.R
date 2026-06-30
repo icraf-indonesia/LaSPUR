@@ -12,6 +12,8 @@
 #' @return An `sf` object with columns:
 #'   - `id_pu`: Sequential ID
 #'   - `stat_pu`: Type ("intersection")
+#'   - `id_rtrw`: Row number from original `x`
+#'   - `id_rzwp3k`: Row number from original `y`
 #'   - All attributes from both inputs
 #'
 #' @examples
@@ -24,7 +26,7 @@
 #'
 #' @importFrom sf st_geometry_type st_as_sf st_sfc st_crs st_is_empty
 #' @importFrom terra vect makeValid same.crs project intersect nrow crs
-#' @importFrom dplyr mutate select
+#' @importFrom dplyr mutate select rename row_number everything
 #'
 #' @export
 identify_overlaps <- function(x, y) {
@@ -37,8 +39,11 @@ identify_overlaps <- function(x, y) {
   if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
     stop("y must contain polygons or multipolygons")
   
-  x_v <- terra::vect(x) |> terra::makeValid()
-  y_v <- terra::vect(y) |> terra::makeValid()
+  x_tmp <- x |> dplyr::mutate(.temp_row_id_x = dplyr::row_number())
+  y_tmp <- y |> dplyr::mutate(.temp_row_id_y = dplyr::row_number())
+  
+  x_v <- terra::vect(x_tmp) |> terra::makeValid()
+  y_v <- terra::vect(y_tmp) |> terra::makeValid()
   
   if (!terra::same.crs(x_v, y_v)) {
     warning("CRS differ. Reprojecting y to the CRS of x.")
@@ -49,27 +54,48 @@ identify_overlaps <- function(x, y) {
   intersect_v <- terra::intersect(x_v, y_v)
   
   if (terra::nrow(intersect_v) == 0) {
-    result <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-  } else {
-    result <- sf::st_as_sf(intersect_v)
-    result$stat_pu <- "intersection"
-  }
-
-  all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
-  for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
-  
-  # Remove empty geometries
-  result <- result[!sf::st_is_empty(result), ]
-  
-  # Add sequential ID and reorder columns if there are results
-  if (nrow(result) > 0) {
-    result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
-    result <- result |> 
-      dplyr::mutate(id_pu = dplyr::row_number()) |>
-      dplyr::select(id_pu, stat_pu, dplyr::everything())
-  } else {
+    result <- sf::st_sf(
+      geometry = sf::st_sfc(),
+      crs = sf::st_crs(terra::crs(x_v))
+    )
     result$id_pu <- integer(0)
+    result$stat_pu <- character(0)
+    result$id_rtrw <- integer(0)
+    result$id_rzwp3k <- integer(0)
+    all_attr <- unique(c(names(x), names(y)))
+    for (col in all_attr) {
+      if (!col %in% names(result)) {
+        result[[col]] <- logical(0) 
+      }
+    }
+    cols <- c("id_pu", "stat_pu", "id_rtrw", "id_rzwp3k",
+              setdiff(names(result), c("id_pu", "stat_pu", "id_rtrw", "id_rzwp3k", "geometry")))
+    result <- result[, cols]
+    return(result)
   }
+  
+  result <- sf::st_as_sf(intersect_v)
+  
+  # Rename temporary row IDs to the required names
+  result <- result |>
+    dplyr::rename(id_rtrw = .temp_row_id_x,
+                  id_rzwp3k = .temp_row_id_y)
+  
+  result$stat_pu <- "intersection"
+  
+  all_attr <- unique(c(names(x), names(y)))
+  for (col in all_attr) {
+    if (!col %in% names(result)) result[[col]] <- NA
+  }
+  
+  result <- result[!sf::st_is_empty(result), ]
+  result <- result |>
+    dplyr::mutate(id_pu = dplyr::row_number())
+  
+  cols <- c("id_pu", "stat_pu", "id_rtrw", "id_rzwp3k",
+            setdiff(names(result), c("id_pu", "stat_pu", "id_rtrw", "id_rzwp3k", "geometry")),
+            "geometry")
+  result <- result[, cols]
   
   return(result)
 }
@@ -93,7 +119,7 @@ identify_overlaps <- function(x, y) {
 #' library(sf)
 #' poly1 <- st_read("layer1.shp")
 #' poly2 <- st_read("layer2.shp")
-#' result <- identify_overlaps(poly1, poly2)
+#' result <- identify_overlaps_union(poly1, poly2)
 #' overlaps <- result[result$stat_pu == "intersection", ]
 #' }
 #'
@@ -102,68 +128,68 @@ identify_overlaps <- function(x, y) {
 #' @importFrom dplyr bind_rows mutate select
 #'
 #' @export
-# identify_overlaps <- function(x, y) {
-#   if (!inherits(x, "sf")) stop("x must be an sf object")
-#   if (!inherits(y, "sf")) stop("y must be an sf object")
-#   
-#   geom_type <- c("POLYGON", "MULTIPOLYGON")
-#   if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
-#     stop("x must contain polygons or multipolygons")
-#   if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
-#     stop("y must contain polygons or multipolygons")
-#   
-#   x_v <- terra::vect(x) |> terra::makeValid()
-#   y_v <- terra::vect(y) |> terra::makeValid()
-#   
-#   if (!terra::same.crs(x_v, y_v)) {
-#     warning("CRS differ. Reprojecting y to the CRS of x.")
-#     y_v <- terra::project(y_v, terra::crs(x_v))
-#   }
-#   
-#   # Intersection
-#   intersect_v <- terra::intersect(x_v, y_v)
-#   if (terra::nrow(intersect_v) == 0) {
-#     intersect_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-#   } else {
-#     intersect_sf <- sf::st_as_sf(intersect_v)
-#     intersect_sf$stat_pu <- "intersection"
-#   }
-#   
-#   # X only
-#   x_only_v <- terra::erase(x_v, y_v)
-#   if (terra::nrow(x_only_v) == 0) {
-#     x_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-#   } else {
-#     x_only_sf <- sf::st_as_sf(x_only_v)
-#     x_only_sf$stat_pu <- as.character(names(x)[1])
-#     y_attr <- setdiff(names(y_v), names(x_only_sf))
-#     for (col in y_attr) x_only_sf[[col]] <- NA
-#   }
-#   
-#   # Y only
-#   y_only_v <- terra::erase(y_v, x_v)
-#   if (terra::nrow(y_only_v) == 0) {
-#     y_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
-#   } else {
-#     y_only_sf <- sf::st_as_sf(y_only_v)
-#     y_only_sf$stat_pu <- as.character(names(y)[1])
-#     x_attr <- setdiff(names(x_v), names(y_only_sf))
-#     for (col in x_attr) y_only_sf[[col]] <- NA
-#   }
-#   
-#   # Combine
-#   result <- dplyr::bind_rows(x_only_sf, y_only_sf, intersect_sf)
-#   all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
-#   for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
-#   
-#   result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
-#   result <- result[!sf::st_is_empty(result), ]
-#   result <- result |> 
-#     dplyr::mutate(id_pu = dplyr::row_number()) |>
-#     dplyr::select(id_pu, stat_pu, dplyr::everything())
-#   
-#   return(result)
-# }
+identify_overlaps_union <- function(x, y) {
+  if (!inherits(x, "sf")) stop("x must be an sf object")
+  if (!inherits(y, "sf")) stop("y must be an sf object")
+
+  geom_type <- c("POLYGON", "MULTIPOLYGON")
+  if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
+    stop("x must contain polygons or multipolygons")
+  if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
+    stop("y must contain polygons or multipolygons")
+
+  x_v <- terra::vect(x) |> terra::makeValid()
+  y_v <- terra::vect(y) |> terra::makeValid()
+
+  if (!terra::same.crs(x_v, y_v)) {
+    warning("CRS differ. Reprojecting y to the CRS of x.")
+    y_v <- terra::project(y_v, terra::crs(x_v))
+  }
+
+  # Intersection
+  intersect_v <- terra::intersect(x_v, y_v)
+  if (terra::nrow(intersect_v) == 0) {
+    intersect_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+  } else {
+    intersect_sf <- sf::st_as_sf(intersect_v)
+    intersect_sf$stat_pu <- "intersection"
+  }
+
+  # X only
+  x_only_v <- terra::erase(x_v, y_v)
+  if (terra::nrow(x_only_v) == 0) {
+    x_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+  } else {
+    x_only_sf <- sf::st_as_sf(x_only_v)
+    x_only_sf$stat_pu <- as.character(names(x)[1])
+    y_attr <- setdiff(names(y_v), names(x_only_sf))
+    for (col in y_attr) x_only_sf[[col]] <- NA
+  }
+
+  # Y only
+  y_only_v <- terra::erase(y_v, x_v)
+  if (terra::nrow(y_only_v) == 0) {
+    y_only_sf <- sf::st_sf(geometry = sf::st_sfc(), crs = sf::st_crs(terra::crs(x_v)))
+  } else {
+    y_only_sf <- sf::st_as_sf(y_only_v)
+    y_only_sf$stat_pu <- as.character(names(y)[1])
+    x_attr <- setdiff(names(x_v), names(y_only_sf))
+    for (col in x_attr) y_only_sf[[col]] <- NA
+  }
+
+  # Combine
+  result <- dplyr::bind_rows(x_only_sf, y_only_sf, intersect_sf)
+  all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
+  for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
+
+  result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
+  result <- result[!sf::st_is_empty(result), ]
+  result <- result |>
+    dplyr::mutate(id_pu = dplyr::row_number()) |>
+    dplyr::select(id_pu, stat_pu, dplyr::everything())
+
+  return(result)
+}
 
 #' Process overlap results: add IDs, area, and size flag
 #'
@@ -253,8 +279,8 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
   n_data_cols <- ncol(sf_obj) - 1
   if (n_data_cols < 4) stop("sf_obj must have at least 4 non-geometry columns.")
   
-  col3_values <- sf_obj[[3]]
-  col4_values <- sf_obj[[4]]
+  col3_values <- sf_obj[["RTRW"]]
+  col4_values <- sf_obj[["RZWP3K"]]
   allowed1 <- unique(tibble1[[2]])
   allowed2 <- unique(tibble2[[2]])
   
@@ -267,15 +293,15 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
   
   cat("\n=== Zone Class Validation Report ===\n")
   if (length(mismatches3) == 0) {
-    cat("✓ Column 3 (", names(sf_obj)[3], ") : All non-NA classes match.\n", sep = "")
+    cat("✓", names(sf_obj)[3], " : All non-NA classes match.\n", sep = "")
   } else {
-    cat("✗ Column 3 (", names(sf_obj)[3], ") : Mismatches:\n", sep = "")
+    cat("✗", names(sf_obj)[3], " : Mismatches:\n", sep = "")
     for (val in mismatches3) cat("    - '", val, "'\n", sep = "")
   }
   if (length(mismatches4) == 0) {
-    cat("✓ Column 4 (", names(sf_obj)[4], ") : All non-NA classes match.\n", sep = "")
+    cat("✓", names(sf_obj)[4], " : All non-NA classes match.\n", sep = "")
   } else {
-    cat("✗ Column 4 (", names(sf_obj)[4], ") : Mismatches:\n", sep = "")
+    cat("✗", names(sf_obj)[4], " : Mismatches:\n", sep = "")
     for (val in mismatches4) cat("    - '", val, "'\n", sep = "")
   }
   cat("===================================\n")
@@ -370,7 +396,7 @@ identify_adjacent <- function(rtrw,
   # Input validation
   if (!inherits(rtrw, "sf")) stop("rtrw harus berupa objek sf")
   if (!inherits(rzwp, "sf")) stop("rzwp harus berupa objek sf")
-
+  
   rtrw <- rtrw %>% sf::st_make_valid()
   rzwp <- rzwp %>% sf::st_make_valid()
   
@@ -402,7 +428,7 @@ identify_adjacent <- function(rtrw,
   pairs_idx <- sf::st_touches(rtrw_filter, rzwp_filter)
   total_pairs <- sum(lengths(pairs_idx))
   message("Total pasangan ditemukan: ", total_pairs)
-
+  
   if (total_pairs == 0) {
     stop("Tidak ditemukan pasangan yang saling berdampingan antara RTRW dan RZWP3K.")
   }
@@ -443,8 +469,9 @@ identify_adjacent <- function(rtrw,
       area_rtrw <- rtrw_filter$area_ha[i]
       
       for (j in idxs) {
-        # Baris RTRW
+        # Baris RTRW – id diambil dari id_SRC sumber
         df_list[[length(df_list) + 1]] <- data.frame(
+          id = rtrw_filter$id_SRC[i],
           id_pu = PU_counter,
           RTRW = safe_name(rtrw_filter[i, ], nama_field_rtrw),
           RZWP3K = NA_character_,
@@ -453,8 +480,9 @@ identify_adjacent <- function(rtrw,
           stringsAsFactors = FALSE
         )
         
-        # Baris RZWP3K
+        # Baris RZWP3K – id diambil dari id_SRC sumber
         df_list[[length(df_list) + 1]] <- data.frame(
+          id = rzwp_filter$id_SRC[j],
           id_pu = PU_counter,
           RTRW = NA_character_,
           RZWP3K = safe_name(rzwp_filter[j, ], nama_field_rzwp),
@@ -481,14 +509,13 @@ identify_adjacent <- function(rtrw,
   
   message("\n      - Total pasangan diproses: ", pairs_processed)
   
-  # Convert dataframe to sf object
+  # Convert dataframe to sf object – id kolom sudah berisi id_SRC
   message("Menggabungkan data frames dan mengkonversi ke objek sf.")
   combined_df <- dplyr::bind_rows(df_list)
   pu_sf <- sf::st_as_sf(combined_df, crs = sf::st_crs(rtrw_filter))
   
-  # Select the column order
+  # Urutkan kolom, tanpa menambah id baru
   pu_sf <- pu_sf %>%
-    dplyr::mutate(id = dplyr::row_number()) %>%
     dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, geometry)
   
   return(invisible(pu_sf))
@@ -658,10 +685,9 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
   if (ncol(lookup_table) < 3) stop("lookup_table needs at least 3 columns.")
   if (!is.numeric(lookup_table[[3]])) stop("Third column of lookup_table must be numeric.")
   if (!is.numeric(default_compat)) stop("default_compat must be numeric.")
-  
   sf_col_names <- names(sf_obj)
-  rtrw_col <- sf_col_names[3]
-  rzpw_col <- sf_col_names[4]
+  rtrw_col <- sf_col_names[sf_col_names == "RTRW"]
+  rzpw_col <- sf_col_names[sf_col_names == "RZWP3K"]
   
   if ("id_pu" %in% sf_col_names) {
     sf_non_geo <- sf::st_drop_geometry(sf_obj)
@@ -762,16 +788,40 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA) {
   return(result)
 }
 
+safe_extract_polygons <- function(x) {
+  geom_types <- sf::st_geometry_type(x)
+  poly_idx <- which(geom_types %in% c("POLYGON", "MULTIPOLYGON"))
+  if (length(poly_idx) == 0) return(NULL)
+  x <- x[poly_idx, ]
+  if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
+    x <- sf::st_collection_extract(x, "POLYGON")
+    if (is.null(x) || nrow(x) == 0) return(NULL)
+  }
+  return(x)
+}
+
 #' Calculate LULC adjacency matrix by administrative unit
 #'
 #' @description
 #' For raster LULC: pairwise edge counts between cells (4-directional rook's case).
 #' For vector LULC: pairwise counts of touching polygons (queen's case).
 #'
+#' @details
+#' **Parallel processing**  
+#' Set `parallel = TRUE` to run the administrative‑unit loop in parallel.
+#' The function temporarily sets a `future::multisession` plan (by default) with the
+#' number of workers given by `workers` (default = all available cores). The previous
+#' plan is restored on exit. If `parallel = FALSE`, the function uses whatever plan
+#' is currently active (sequential if none was set).
+#'
 #' @param lulc Categorical `SpatRaster` or `sf` polygon object
 #' @param admin_vector `sf` object with administrative boundaries
 #' @param id_col Column name in `admin_vector` with unique identifiers
 #' @param class_col For vector LULC only: column name with LULC class codes
+#' @param parallel Logical. If `TRUE`, enable parallel processing.
+#' @param workers Number of parallel workers (default = `future::availableCores()`).
+#' @param plan_strategy The `future` plan to use: `"multisession"` (all platforms) or `"multicore"` (Unix only, lighter).
+#' @param progress Logical. Show a progress bar? Default `TRUE`.
 #'
 #' @return `data.frame` with columns: `id_pu`, `Class_A`, `Class_B`, `Edge_Count`, `percentage`
 #'
@@ -780,20 +830,45 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA) {
 #' # Raster LULC
 #' lulc_rast <- rast("landcover.tif")
 #' admin <- st_read("units.shp")
+#' 
+#' # Sequential (default)
 #' res1 <- calculate_lulc_adjacency(lulc_rast, admin, id_col = "id")
+#' 
+#' # Parallel with 4 workers
+#' res1 <- calculate_lulc_adjacency(lulc_rast, admin, id_col = "id",
+#'                                  parallel = TRUE, workers = 4)
 #'
 #' # Vector LULC
 #' lulc_sf <- st_read("lulc_polygons.gpkg")
-#' res2 <- calculate_lulc_adjacency(lulc_sf, admin, id_col = "id", class_col = "PL2024_ID")
+#' res2 <- calculate_lulc_adjacency(lulc_sf, admin, id_col = "id",
+#'                                  class_col = "PL2024_ID", parallel = TRUE)
 #' }
 #'
+#' @importFrom furrr future_map_dfr furrr_options
+#' @importFrom future plan availableCores multisession multicore
 #' @export
-calculate_lulc_adjacency <- function(lulc, admin_vector, id_col = "id_pu", class_col = NULL) {
+calculate_lulc_adjacency <- function(lulc,
+                                     admin_vector,
+                                     id_col = "id_pu",
+                                     class_col = NULL,
+                                     parallel = FALSE,
+                                     workers = NULL,
+                                     plan_strategy = c("multisession", "multicore"),
+                                     progress = TRUE) {
   UseMethod("calculate_lulc_adjacency")
 }
 
 #' @export
-calculate_lulc_adjacency.SpatRaster <- function(lulc, admin_vector, id_col = "id_pu", class_col = NULL) {
+calculate_lulc_adjacency.SpatRaster <- function(lulc,
+                                                admin_vector,
+                                                id_col = "id_pu",
+                                                class_col = NULL,
+                                                parallel = FALSE,
+                                                workers = NULL,
+                                                plan_strategy = c("multisession", "multicore"),
+                                                progress = TRUE) {
+  plan_strategy <- match.arg(plan_strategy)
+  
   if (inherits(admin_vector, "SpatVector")) {
     admin_sf <- sf::st_as_sf(admin_vector)
   } else if (inherits(admin_vector, "sf")) {
@@ -811,25 +886,43 @@ calculate_lulc_adjacency.SpatRaster <- function(lulc, admin_vector, id_col = "id
   admin_vect <- terra::vect(admin_sf)
   admin_list <- split(admin_vect, f = id_col)
   
-  output_df <- purrr::map_df(admin_list, function(poly) {
-    cropped <- terra::crop(lulc, poly, mask = TRUE, touches = FALSE)
-    adj <- landscapemetrics::get_adjacencies(cropped, neighbourhood = 4, what = "triangle")
-    adj_matrix <- adj[[1]]
-    if (is.null(adj_matrix) || length(adj_matrix) == 0) return(NULL)
-    
-    adj_df <- as.data.frame(as.table(adj_matrix)) |>
-      dplyr::rename(Class_A = Var1, Class_B = Var2, Edge_Count = Freq) |>
-      dplyr::filter(!is.na(Edge_Count), Edge_Count > 0)
-    
-    if (nrow(adj_df) == 0) return(NULL)
-    
-    total_adj <- sum(adj_df$Edge_Count, na.rm = TRUE)
-    adj_df |>
-      dplyr::mutate(
-        id_pu = as.character(terra::values(poly)[[id_col]][1]),
-        percentage = (Edge_Count / total_adj) * 100
-      )
-  })
+  if (parallel) {
+    old_plan <- future::plan("list")
+    on.exit(future::plan(old_plan), add = TRUE)
+    if (is.null(workers)) workers <- future::availableCores()
+    if (plan_strategy == "multisession") {
+      future::plan(future::multisession, workers = workers)
+    } else {
+      future::plan(future::multicore, workers = workers)
+    }
+  }
+  
+  output_df <- furrr::future_map_dfr(
+    admin_list,
+    function(poly) {
+      cropped <- terra::crop(lulc, poly, mask = TRUE, touches = FALSE)
+      adj <- landscapemetrics::get_adjacencies(cropped, neighbourhood = 4, what = "triangle")
+      adj_matrix <- adj[[1]]
+      if (is.null(adj_matrix) || length(adj_matrix) == 0) return(NULL)
+      
+      adj_df <- as.data.frame(as.table(adj_matrix)) |>
+        dplyr::rename(Class_A = Var1, Class_B = Var2, Edge_Count = Freq) |>
+        dplyr::filter(!is.na(Edge_Count), Edge_Count > 0)
+      
+      if (nrow(adj_df) == 0) return(NULL)
+      
+      total_adj <- sum(adj_df$Edge_Count, na.rm = TRUE)
+      adj_df |>
+        dplyr::mutate(
+          id_pu = as.character(terra::values(poly)[[id_col]][1]),
+          percentage = (Edge_Count / total_adj) * 100
+        )
+    },
+    .progress = progress,
+    .options = furrr::furrr_options(
+      packages = c("terra", "sf", "landscapemetrics", "dplyr")
+    )
+  )
   
   if (is.null(output_df) || nrow(output_df) == 0) {
     warning("No adjacency data found.")
@@ -840,7 +933,16 @@ calculate_lulc_adjacency.SpatRaster <- function(lulc, admin_vector, id_col = "id
 }
 
 #' @export
-calculate_lulc_adjacency.sf <- function(lulc, admin_vector, id_col = "id_pu", class_col = NULL) {
+calculate_lulc_adjacency.sf <- function(lulc,
+                                        admin_vector,
+                                        id_col = "id_pu",
+                                        class_col = NULL,
+                                        parallel = FALSE,
+                                        workers = NULL,
+                                        plan_strategy = c("multisession", "multicore"),
+                                        progress = TRUE) {
+  plan_strategy <- match.arg(plan_strategy)
+  
   if (is.null(class_col)) stop("For vector LULC, provide 'class_col' argument.")
   if (!inherits(lulc, "sf")) stop("lulc must be an sf object.")
   if (!class_col %in% names(lulc)) stop("Column '", class_col, "' not found in lulc.")
@@ -870,77 +972,83 @@ calculate_lulc_adjacency.sf <- function(lulc, admin_vector, id_col = "id_pu", cl
     admin_sf <- sf::st_transform(admin_sf, sf::st_crs(lulc))
   }
   
-  safe_extract_polygons <- function(x) {
-    geom_types <- sf::st_geometry_type(x)
-    poly_idx <- which(geom_types %in% c("POLYGON", "MULTIPOLYGON"))
-    if (length(poly_idx) == 0) return(NULL)
-    x <- x[poly_idx, ]
-    if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
-      x <- sf::st_collection_extract(x, "POLYGON")
-      if (is.null(x) || nrow(x) == 0) return(NULL)
-    }
-    return(x)
-  }
-  
   admin_ids <- unique(admin_sf[[id_col]])
   
-  output_df <- purrr::map_df(admin_ids, function(uid) {
-    poly <- admin_sf[admin_sf[[id_col]] == uid, ]
-    
-    lulc_clip <- tryCatch(sf::st_intersection(lulc, poly), error = function(e) {
-      warning("Admin unit ", uid, " error: ", e$message)
-      return(NULL)
-    })
-    if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
-    
-    if (!all(sf::st_is_valid(lulc_clip))) {
-      lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
+  if (parallel) {
+    old_plan <- future::plan("list")
+    on.exit(future::plan(old_plan), add = TRUE)
+    if (is.null(workers)) workers <- future::availableCores()
+    if (plan_strategy == "multisession") {
+      future::plan(future::multisession, workers = workers)
+    } else {
+      future::plan(future::multicore, workers = workers)
     }
-    
-    lulc_clip <- safe_extract_polygons(lulc_clip)
-    if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
-    
-    lulc_clip$class_code <- as.character(lulc_clip[[class_col]])
-    
-    s2_was_on <- sf::sf_use_s2()
-    if (s2_was_on) sf::sf_use_s2(FALSE)
-    
-    touches_list <- tryCatch(sf::st_touches(lulc_clip, lulc_clip), error = function(e) {
-      warning("Admin unit ", uid, " touches error: ", e$message)
-      return(NULL)
-    })
-    
-    if (s2_was_on) sf::sf_use_s2(TRUE)
-    if (is.null(touches_list)) return(NULL)
-    
-    pair_counts <- data.frame()
-    n <- nrow(lulc_clip)
-    for (i in seq_len(n)) {
-      if (length(touches_list[[i]]) == 0) next
-      class_i <- lulc_clip$class_code[i]
-      for (j in touches_list[[i]]) {
-        if (i >= j) next
-        class_j <- lulc_clip$class_code[j]
-        pair <- sort(c(class_i, class_j))
-        pair_counts <- rbind(pair_counts, data.frame(
-          Class_A = pair[1], Class_B = pair[2], stringsAsFactors = FALSE
-        ))
+  }
+  
+  output_df <- furrr::future_map_dfr(
+    admin_ids,
+    function(uid) {
+      poly <- admin_sf[admin_sf[[id_col]] == uid, ]
+      
+      lulc_clip <- tryCatch(sf::st_intersection(lulc, poly), error = function(e) {
+        warning("Admin unit ", uid, " error: ", e$message)
+        return(NULL)
+      })
+      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
+      
+      if (!all(sf::st_is_valid(lulc_clip))) {
+        lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
       }
-    }
-    
-    if (nrow(pair_counts) == 0) return(NULL)
-    
-    adj_df <- pair_counts |>
-      dplyr::group_by(Class_A, Class_B) |>
-      dplyr::summarise(Edge_Count = dplyr::n(), .groups = "drop")
-    
-    total_adj <- sum(adj_df$Edge_Count)
-    adj_df |>
-      dplyr::mutate(
-        id_pu = as.character(uid),
-        percentage = (Edge_Count / total_adj) * 100
-      )
-  })
+      
+      lulc_clip <- safe_extract_polygons(lulc_clip)
+      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
+      
+      lulc_clip$class_code <- as.character(lulc_clip[[class_col]])
+      
+      s2_was_on <- sf::sf_use_s2()
+      if (s2_was_on) sf::sf_use_s2(FALSE)
+      
+      touches_list <- tryCatch(sf::st_touches(lulc_clip, lulc_clip), error = function(e) {
+        warning("Admin unit ", uid, " touches error: ", e$message)
+        return(NULL)
+      })
+      
+      if (s2_was_on) sf::sf_use_s2(TRUE)
+      if (is.null(touches_list)) return(NULL)
+      
+      pair_counts <- data.frame()
+      n <- nrow(lulc_clip)
+      for (i in seq_len(n)) {
+        if (length(touches_list[[i]]) == 0) next
+        class_i <- lulc_clip$class_code[i]
+        for (j in touches_list[[i]]) {
+          if (i >= j) next
+          class_j <- lulc_clip$class_code[j]
+          pair <- sort(c(class_i, class_j))
+          pair_counts <- rbind(pair_counts, data.frame(
+            Class_A = pair[1], Class_B = pair[2], stringsAsFactors = FALSE
+          ))
+        }
+      }
+      
+      if (nrow(pair_counts) == 0) return(NULL)
+      
+      adj_df <- pair_counts |>
+        dplyr::group_by(Class_A, Class_B) |>
+        dplyr::summarise(Edge_Count = dplyr::n(), .groups = "drop")
+      
+      total_adj <- sum(adj_df$Edge_Count)
+      adj_df |>
+        dplyr::mutate(
+          id_pu = as.character(uid),
+          percentage = (Edge_Count / total_adj) * 100
+        )
+    },
+    .progress = progress,
+    .options = furrr::furrr_options(
+      packages = c("sf", "dplyr")
+    )
+  )
   
   if (is.null(output_df) || nrow(output_df) == 0) {
     warning("No adjacency data found.")
@@ -989,11 +1097,12 @@ calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
   # Convert class names to IDs in matriks_padu_ke 
   # lulc_ref is assumed to be a list where element 1 = IDs, element 2 = names
   matriks_padu_ke_id <- matriks_padu_ke %>%
-    mutate(
-      class1 = lulc_ref[[1]][match(class1, lulc_ref[[2]])],
-      class2 = lulc_ref[[1]][match(class2, lulc_ref[[2]])]
+    transmute(
+      class_id1 = lulc_ref[[1]][match(.data$class1, lulc_ref[[2]])],
+      class_id2 = lulc_ref[[1]][match(.data$class2, lulc_ref[[2]])],
+      adj_index = .data$idx_padu_ke
     )
-  names(matriks_padu_ke_id) <- c("class_id1", "class_id2", "adj_index")
+  # names(matriks_padu_ke_id) <- c("class_id1", "class_id2", "adj_index")
 
   lulc_adjacencies <- lulc_adjacencies %>%
     mutate(
@@ -1337,6 +1446,13 @@ calculate_padu_hs <- function(idx_serasi_map,
 #' @param title character string. Prefix for the output column names. 
 #'   For example, if title = "protected_area", columns will be named 
 #'   "protected_area_ha" and "protected_area_pct". Default is "overlay_area".
+#' @param parallel Logical. If `TRUE`, the overlapping calculations for intersecting
+#'   planning units are run in parallel. Default `FALSE`.
+#' @param workers Number of parallel workers (default = `future::availableCores()`).
+#' @param plan_strategy The `future` plan to use: `"multisession"` (all platforms)
+#'   or `"multicore"` (Unix only).
+#' @param progress Logical. Show a progress bar? Default `TRUE` (only used when
+#'   `parallel = TRUE`; the sequential loop prints its own progress message).
 #'
 #' @return The input `pu` sf object with two additional columns:
 #'   \item{<title>_ha}{Area of overlay area within each planning unit (hectares)}
@@ -1351,7 +1467,14 @@ calculate_padu_hs <- function(idx_serasi_map,
 #' efficiency for large datasets.
 #'
 #' Area calculations are performed in square meters and converted to hectares
-#' (1 hectare = 10,000 m²). Results are rounded to two decimal places.
+#' (1 hectare = 10,000 m²). Results are rounded to two decimal places (but only
+#' in the output columns; raw values may be unrounded).
+#'
+#' **Parallel processing**  
+#' When `parallel = TRUE`, the loop over intersecting planning units is executed
+#' in parallel. The `overlay_area` object is sent to each worker – be mindful
+#' of memory usage if it is very large. The original sequential message
+#' (`cat(...)`) is still printed once before the parallel loop begins.
 #'
 #' @note
 #' The `pu` object must contain an `area_ha` numeric column with pre-calculated
@@ -1365,6 +1488,11 @@ calculate_padu_hs <- function(idx_serasi_map,
 #' # Single overlay area
 #' protected <- st_read("protected_areas.shp")
 #' pu_with_protected <- calculate_overlay_pct(pu, protected, title = "protected_area")
+#'
+#' # Parallel computation
+#' pu_with_protected <- calculate_overlay_pct(pu, protected,
+#'                                            title = "protected_area",
+#'                                            parallel = TRUE, workers = 4)
 #'
 #' # Multiple overlay areas as a list
 #' forest <- st_read("forest.shp")
@@ -1380,9 +1508,17 @@ calculate_padu_hs <- function(idx_serasi_map,
 #' }
 #'
 #' @importFrom sf st_crs st_transform st_intersects st_intersection st_area
-#'
+#' @importFrom furrr future_map_dbl furrr_options
+#' @importFrom future plan availableCores multisession multicore
 #' @export
-calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
+calculate_overlay_pct <- function(pu,
+                                  overlay_area,
+                                  title = "overlay_area",
+                                  parallel = FALSE,
+                                  workers = NULL,
+                                  plan_strategy = c("multisession", "multicore"),
+                                  progress = TRUE) {
+  plan_strategy <- match.arg(plan_strategy)
   
   # Check if overlay_area is a list and combine if necessary
   if (is.list(overlay_area) && !inherits(overlay_area, "sf")) {
@@ -1409,16 +1545,52 @@ calculate_overlay_pct <- function(pu, overlay_area, title = "overlay_area"){
   
   cat("Processing", length(intersecting_pu), "planning units that intersect with", title, "areas\n")
   
-  # Calculate overlap only for intersecting PU
-  for (i in intersecting_pu) {
-    intersection <- st_intersection(pu[i, ], overlay_area)
-    
-    if (nrow(intersection) > 0) {
-      overlap_area_ha <- sum(as.numeric(st_area(intersection))) / 10000 # Convert m2 to ha
-      pu[[ha_col]][i] <- overlap_area_ha
-      pu[[pct_col]][i] <- (overlap_area_ha / pu$area_ha[i]) * 100
-    }
+  if (length(intersecting_pu) == 0) {
+    return(pu)
   }
+  
+  # Sequential
+  if (!parallel) {
+    for (i in intersecting_pu) {
+      intersection <- st_intersection(pu[i, ], overlay_area)
+      if (nrow(intersection) > 0) {
+        overlap_area_ha <- sum(as.numeric(st_area(intersection))) / 10000
+        pu[[ha_col]][i] <- overlap_area_ha
+        pu[[pct_col]][i] <- (overlap_area_ha / pu$area_ha[i]) * 100
+      }
+    }
+    return(pu)
+  }
+  
+  # Parallel execution
+  old_plan <- future::plan("list")
+  on.exit(future::plan(old_plan), add = TRUE)
+  if (is.null(workers)) workers <- future::availableCores()
+  if (plan_strategy == "multisession") {
+    future::plan(future::multisession, workers = workers)
+  } else {
+    future::plan(future::multicore, workers = workers)
+  }
+  
+  # Compute overlap area for each intersecting PU in parallel
+  overlap_areas <- furrr::future_map_dbl(
+    .x = intersecting_pu,
+    .f = function(i) {
+      intersection <- sf::st_intersection(pu[i, ], overlay_area)
+      if (nrow(intersection) > 0) {
+        sum(as.numeric(sf::st_area(intersection))) / 10000
+      } else {
+        0
+      }
+    },
+    .progress = progress,
+    .options = furrr::furrr_options(packages = "sf")
+  )
+  
+  # Assign results back to pu
+  pu[[ha_col]][intersecting_pu] <- overlap_areas
+  pu[[pct_col]][intersecting_pu] <- (overlap_areas / pu$area_ha[intersecting_pu]) * 100
+  
   return(pu)
 }
 
@@ -1611,6 +1783,13 @@ calculate_padu_rtp <- function(idx_serasi_map,
 #'                    containing the weighted mean. Default is `"weighted_mean"`.
 #' @param fill_na     Numeric value. Used to fill planning units that have no
 #'                    overlap with `value_sf` (default = 0).
+#' @param parallel    Logical. If `TRUE`, the computation is split into parallel
+#'                    chunks. Default `FALSE`.
+#' @param workers     Number of parallel workers (default = `future::availableCores()`).
+#' @param plan_strategy The `future` plan to use: `"multisession"` (all platforms)
+#'                    or `"multicore"` (Unix only).
+#' @param progress    Logical. Show a progress bar? Default `TRUE` (only in
+#'                    parallel mode; the sequential path has its own output).
 #'
 #' @return The input `pu` object with an additional column named `new_col`
 #'         containing the area-weighted mean of `value_col` for each planning unit.
@@ -1626,6 +1805,14 @@ calculate_padu_rtp <- function(idx_serasi_map,
 #' overlap areas; therefore, the CRS should be a projected (Cartesian) coordinate
 #' system to obtain meaningful areas. If no overlap exists between a planning unit
 #' and the source layer, the `fill_na` value is assigned.
+#'
+#' **Parallel processing**  
+#' When `parallel = TRUE`, the planning units are split into chunks and processed
+#' in parallel. The full `value_sf` is sent to each worker – if `value_sf` is very
+#' large, you may need to increase the future globals size limit via
+#' `options(future.globals.maxSize = +Inf)`. Alternatively, the function could
+#' be extended to pre-filter `value_sf` to only features that intersect the
+#' planning units, but that is not implemented yet.
 #'
 #' @examples
 #' \dontrun{
@@ -1648,16 +1835,31 @@ calculate_padu_rtp <- function(idx_serasi_map,
 #'                                       c(1.7,1.7), c(0.7,1.7), c(0.7,0.7))))
 #'               ))
 #'
-#' # Extract area-weighted mean
+#' # Sequential extraction
 #' pu_result <- extract_sf_to_sf(pu, vals, value_col = "value",
 #'                               pu_id = "id", new_col = "wmean")
-#' plot(pu_result["wmean"])
+#'
+#' # Parallel extraction
+#' pu_result <- extract_sf_to_sf(pu, vals, value_col = "value",
+#'                               pu_id = "id", new_col = "wmean",
+#'                               parallel = TRUE, workers = 2)
 #' }
 #'
 #' @importFrom sf st_crs st_transform st_intersection st_area
+#' @importFrom furrr future_map_dfr furrr_options
+#' @importFrom future plan availableCores multisession multicore
 #' @export
-extract_sf_to_sf <- function(pu, value_sf, value_col, pu_id = NULL, 
-                             new_col = "weighted_mean", fill_na = 0) {
+extract_sf_to_sf <- function(pu,
+                             value_sf,
+                             value_col,
+                             pu_id = NULL,
+                             new_col = "weighted_mean",
+                             fill_na = 0,
+                             parallel = FALSE,
+                             workers = NULL,
+                             plan_strategy = c("multisession", "multicore"),
+                             progress = TRUE) {
+  plan_strategy <- match.arg(plan_strategy)
   
   # Handle projection
   if (!sf::st_crs(pu) == sf::st_crs(value_sf)) {
@@ -1665,37 +1867,105 @@ extract_sf_to_sf <- function(pu, value_sf, value_col, pu_id = NULL,
     value_sf <- sf::st_transform(value_sf, sf::st_crs(pu))
   }
   
-  # Add a temporary ID to pu if none provided
+  added_tmp_id <- FALSE
   if (is.null(pu_id)) {
     pu$.tmp_id <- seq_len(nrow(pu))
     pu_id <- ".tmp_id"
+    added_tmp_id <- TRUE
   }
   
-  # Intersection
-  inter <- sf::st_intersection(pu[, pu_id, drop = FALSE], value_sf[, value_col, drop = FALSE])
-  if (nrow(inter) == 0) {
-    warning("No overlap between pu and value_sf. Returning fill_na for all units.")
-    pu[[new_col]] <- fill_na
-    if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+  # Sequential path
+  if (!parallel) {
+    inter <- sf::st_intersection(pu[, pu_id, drop = FALSE],
+                                 value_sf[, value_col, drop = FALSE])
+    if (nrow(inter) == 0) {
+      warning("No overlap between pu and value_sf. Returning fill_na for all units.")
+      pu[[new_col]] <- fill_na
+      if (added_tmp_id) pu$.tmp_id <- NULL
+      return(pu)
+    }
+    inter$area_overlap <- as.numeric(sf::st_area(inter))
+    inter$weighted <- inter[[value_col]] * inter$area_overlap
+    
+    agg <- aggregate(cbind(weighted, area_overlap) ~ inter[[pu_id]],
+                     data = inter, FUN = sum)
+    names(agg)[1] <- pu_id
+    agg$mean <- agg$weighted / agg$area_overlap
+    
+    pu <- merge(pu, agg[, c(pu_id, "mean")], by = pu_id, all.x = TRUE)
+    pu[[new_col]] <- pu$mean
+    pu$mean <- NULL
+    pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+    if (added_tmp_id) pu$.tmp_id <- NULL
     return(pu)
   }
   
-  # Compute area and weighted mean of each intersected piece
-  inter$area_overlap <- as.numeric(sf::st_area(inter))
-  inter$weighted <- inter[[value_col]] * inter$area_overlap
+  # Parallel execution 
+  old_plan <- future::plan("list")
+  on.exit(future::plan(old_plan), add = TRUE)
+  if (is.null(workers)) workers <- future::availableCores()
+  if (plan_strategy == "multisession") {
+    future::plan(future::multisession, workers = workers)
+  } else {
+    future::plan(future::multicore, workers = workers)
+  }
   
-  # Aggregate by the pu ID column
-  agg <- aggregate(cbind(weighted, area_overlap) ~ inter[[pu_id]], data = inter, FUN = sum)
-  names(agg)[1] <- pu_id
-  agg$mean <- agg$weighted / agg$area_overlap
+  # Split pu into chunks (list of sf objects)
+  n <- nrow(pu)
+  idx_chunks <- split(seq_len(n), cut(seq_len(n), breaks = workers, labels = FALSE))
+  pu_chunks <- lapply(idx_chunks, function(idx) pu[idx, ])
+  
+  # Worker function: process one chunk
+  process_chunk <- function(chunk, value_sf, value_col, pu_id) {
+    inter <- sf::st_intersection(
+      chunk[, pu_id, drop = FALSE],
+      value_sf[, value_col, drop = FALSE]
+    )
+    if (nrow(inter) == 0) {
+      return(data.frame(
+        tmp = character(0),
+        weighted = numeric(0),
+        area_overlap = numeric(0),
+        mean = numeric(0),
+        stringsAsFactors = FALSE
+      ))
+    }
+    inter$area_overlap <- as.numeric(sf::st_area(inter))
+    inter$weighted <- inter[[value_col]] * inter$area_overlap
+    
+    agg <- aggregate(cbind(weighted, area_overlap) ~ inter[[pu_id]],
+                     data = inter, FUN = sum)
+    names(agg)[1] <- pu_id
+    agg$mean <- agg$weighted / agg$area_overlap
+    # Return only the essential columns for merging
+    agg[, c(pu_id, "mean"), drop = FALSE]
+  }
+  
+  # Run in parallel
+  agg_list <- furrr::future_map(
+    .x = pu_chunks,
+    .f = process_chunk,
+    value_sf = value_sf,
+    value_col = value_col,
+    pu_id = pu_id,
+    .progress = progress,
+    .options = furrr::furrr_options(packages = "sf")
+  )
+  
+  all_agg <- do.call(rbind, agg_list)
   
   # Merge back to pu
-  pu <- merge(pu, agg[, c(pu_id, "mean")], by = pu_id, all.x = TRUE)
-  pu[[new_col]] <- pu$mean
-  pu$mean <- NULL  
-  pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
-  if (exists(".tmp_id", pu)) pu$.tmp_id <- NULL
+  if (nrow(all_agg) == 0) {
+    warning("No overlap between pu and value_sf. Returning fill_na for all units.")
+    pu[[new_col]] <- fill_na
+  } else {
+    pu <- merge(pu, all_agg, by = pu_id, all.x = TRUE)
+    pu[[new_col]] <- pu$mean
+    pu$mean <- NULL
+    pu[[new_col]][is.na(pu[[new_col]])] <- fill_na
+  }
   
+  if (added_tmp_id) pu$.tmp_id <- NULL
   return(pu)
 }
 
@@ -1747,7 +2017,9 @@ calculate_padu_ki <- function(idx_serasi_map,
                               disaster_risk_vect,
                               value_col,
                               pu_id = "id_pu",
-                              new_col = "disaster_risk_mean") {
+                              new_col = "disaster_risk_mean",
+                              parallel = FALSE,
+                              workers = NA) {
   
   # Extract disaster risk values to overlap unit
   disaster_risk_extracted <- extract_sf_to_sf(
@@ -1755,7 +2027,9 @@ calculate_padu_ki <- function(idx_serasi_map,
     value_sf = disaster_risk_vect,
     value_col = value_col,
     new_col = new_col,
-    pu_id = pu_id
+    pu_id = pu_id,
+    parallel = parallel,
+    workers = workers
   )
   
   # Calculate PADU-KI index
@@ -1795,6 +2069,9 @@ calculate_padu_ki <- function(idx_serasi_map,
 #' }
 #' Weights are matched to index suffixes (e.g., `idx_padu_ke` → `"ke"`) using a lookup table.
 #'
+#' **Important:** If a column named `idx_padu_ke_abs` is present, it is silently ignored
+#' (not used in the composite calculation and no weight is required for it).
+#'
 #' @param padu_list A list of `sf` objects containing individual PADU indices.
 #'   Each object must include `id_pu` and one column matching pattern `idx_padu_*`.
 #' @param idx_padu_map An `sf` object serving as the base spatial layer (e.g., planning units),
@@ -1803,7 +2080,8 @@ calculate_padu_ki <- function(idx_serasi_map,
 #'   the first column representing index codes (e.g., "KE", "HS") and the second column
 #'   representing corresponding weights.
 #'
-#' @return An `sf` object with all joined `idx_padu_*` columns and an additional column:
+#' @return An `sf` object with all joined `idx_padu_*` columns (except `idx_padu_ke_abs`)
+#'   and an additional column:
 #' \describe{
 #'   \item{idx_padu_final}{Composite PADU index calculated per feature}
 #' }
@@ -1865,14 +2143,17 @@ calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
     )
   
   idx_cols <- names(idx_padu_map)[grepl("^idx_padu_", names(idx_padu_map))]
+  if ("idx_padu_ke_abs" %in% idx_cols) {
+    message("Removing 'idx_padu_ke_abs' from composite calculation (ignored).")
+    idx_cols <- setdiff(idx_cols, "idx_padu_ke_abs")
+  }
+  
   idx_code <- stringr::str_remove(idx_cols, "idx_padu_")
   
-  # Validate weights
-  if (!all(idx_code %in% weights$code)) {
-    stop(paste(
-      "Missing weights for:",
-      paste(setdiff(idx_code, weights$code), collapse = ", ")
-    ))
+  # Validate weights for the remaining indices
+  missing_weights <- idx_code[!idx_code %in% weights$code]
+  if (length(missing_weights) > 0) {
+    stop(paste("Missing weights for indices:", paste(missing_weights, collapse = ", ")))
   }
   
   n_idx <- length(idx_cols)
@@ -2342,4 +2623,334 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
   if (nrow(match_row) == 1) return(match_row$idx_serasi)
 
   return(NA_real_)
+}
+
+#' Generate an Excel file for reconciliation with dropdown validation
+#'
+#' This function creates an Excel workbook containing spatial reconciliation data
+#' and provides dropdown lists for manual decision entries. It takes an `sf`
+#' object, extracts its attribute table, adds decision columns, and sets up
+#' data validation using predefined priority options. 
+#'
+#' @param recon_map An `sf` object (spatial data frame) containing the
+#'   reconciliation map. Its geometry column is dropped before writing to Excel.
+#' @param rtrw_prioritas A data frame with a column named `"RTRW"` containing
+#'   the valid priority options for the RTRW decision dropdown. Non-`NA` values
+#'   are used as the list of choices.
+#' @param rzwp3k_prioritas A data frame with a column named `"RZWP3K"` containing
+#'   the valid priority options for the RZWP3K decision dropdown. Non-`NA` values
+#'   are used as the list of choices.
+#' @param step Integer, must be `1` or `2`. If `2`, the workbook contains two
+#'   decision columns (`decision_rtrw` and `decision_rzwp3k`) with separate
+#'   dropdown lists. If `1`, only one column (`user_decision`) is added, with a
+#'   dropdown combining both lists (simple concatenation, no deduplication).
+#' @param output_dir Character string specifying the directory where the Excel
+#'   file will be saved. The directory is created recursively if it does not exist.
+#' @param file_name Character string giving the name of the output Excel file.
+#'   Defaults to `"recon_map.xlsx"`.
+#'
+#' @return The function is called for its side effect of creating an Excel file.
+#'   It returns `NULL` invisibly.
+#'
+#' @details The Excel workbook contains two sheets:
+#' \itemize{
+#'   \item **Data**: Contains all columns from `recon_map` (with geometry
+#'     removed) plus decision column(s) at the end. Data validation is applied
+#'     to those columns.
+#'   \item **Lists**: Holds the valid option lists. For both steps, column A
+#'     holds RTRW options and column B holds RZWP3K options. When `step = 1`,
+#'     column C holds the combined list used for the `user_decision` dropdown.
+#' }
+#'
+#' The function requires the `openxlsx` and `sf` packages to be installed. It
+#' checks for their presence and stops with an error if they are missing.
+#'
+#' @examples
+#' \dontrun{
+#' # Step 2 (two separate decisions)
+#' generate_reconciliation_excel(recon_sf, rtrw_prior, rzp3k_prior, 
+#'                               step = 2, output_dir = "out")
+#'
+#' # Step 1 (single combined decision)
+#' generate_reconciliation_excel(recon_sf, rtrw_prior, rzp3k_prior,
+#'                               step = 1, output_dir = "out")
+#' }
+#'
+#' @importFrom openxlsx createWorkbook addWorksheet writeData dataValidation saveWorkbook
+#' @importFrom sf st_drop_geometry
+#' @export
+generate_reconciliation_excel <- function(recon_map, 
+                                          rtrw_prioritas, 
+                                          rzwp3k_prioritas, 
+                                          output_dir, 
+                                          step, 
+                                          file_name = "recon_map.xlsx") {
+  
+  # Validate step argument
+  if (missing(step) || !(step %in% c(1, 2))) {
+    stop("'step' must be explicitly provided and must be either 1 or 2.")
+  }
+  
+  if (!requireNamespace("openxlsx", quietly = TRUE)) stop("package 'openxlsx' is required.")
+  if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
+  
+  df_flat <- sf::st_drop_geometry(recon_map)
+  
+  if (step == 2) {
+    # Two separate decision columns
+    df_flat$decision_rtrw   <- NA_character_
+    df_flat$decision_rzwp3k <- NA_character_
+  } else { # step == 1
+    # Single combined decision column
+    df_flat$user_decision <- NA_character_
+  }
+  
+  # Extract option lists (remove NAs)
+  rtrw_opts   <- as.character(rtrw_prioritas$RTRW)
+  rzwp3k_opts <- as.character(rzwp3k_prioritas$RZWP3K)
+  rtrw_opts   <- rtrw_opts[!is.na(rtrw_opts)]
+  rzwp3k_opts <- rzwp3k_opts[!is.na(rzwp3k_opts)]
+  
+  # Create Workbook and Sheets
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Data")
+  openxlsx::addWorksheet(wb, "Lists")
+  
+  # Write main data
+  openxlsx::writeData(wb, "Data", df_flat)
+  
+  # Write option lists to the Lists sheet
+  # Column A: RTRW options
+  openxlsx::writeData(wb, "Lists", x = "RTRW Options", startCol = 1, startRow = 1)
+  if (length(rtrw_opts) > 0) {
+    openxlsx::writeData(wb, "Lists", x = rtrw_opts, startCol = 1, startRow = 2, colNames = FALSE)
+  }
+  
+  # Column B: RZWP3K options
+  openxlsx::writeData(wb, "Lists", x = "RZWP3K Options", startCol = 2, startRow = 1)
+  if (length(rzwp3k_opts) > 0) {
+    openxlsx::writeData(wb, "Lists", x = rzwp3k_opts, startCol = 2, startRow = 2, colNames = FALSE)
+  }
+  
+  # If step == 1, write combined list to column C and set validation for user_decision
+  if (step == 1) {
+    combined_opts <- c(rtrw_opts, rzwp3k_opts)
+    openxlsx::writeData(wb, "Lists", x = "Combined Options", startCol = 3, startRow = 1)
+    if (length(combined_opts) > 0) {
+      openxlsx::writeData(wb, "Lists", x = combined_opts, startCol = 3, startRow = 2, colNames = FALSE)
+    }
+    
+    # Find the column index of 'user_decision'
+    col_decision <- which(names(df_flat) == "user_decision")
+    if (length(col_decision) == 0) stop("Column 'user_decision' not found in data frame.")
+    rows <- 2:(nrow(df_flat) + 1)
+    last_row_combined <- length(combined_opts) + 1  # +1 for header
+    formula_combined <- paste0("=Lists!$C$2:$C$", last_row_combined)
+    
+    openxlsx::dataValidation(wb, "Data",
+                             col = col_decision,
+                             rows = rows,
+                             type = "list",
+                             value = formula_combined)
+  } else {
+    # step == 2: apply validations for both decision columns
+    col_rtrw   <- which(names(df_flat) == "decision_rtrw")
+    col_rzwp3k <- which(names(df_flat) == "decision_rzwp3k")
+    if (length(col_rtrw) == 0 || length(col_rzwp3k) == 0) {
+      stop("Required decision columns not found in data frame.")
+    }
+    rows <- 2:(nrow(df_flat) + 1)
+    
+    last_row_rtrw   <- length(rtrw_opts) + 1
+    last_row_rzwp3k <- length(rzwp3k_opts) + 1
+    formula_rtrw   <- paste0("=Lists!$A$2:$A$", last_row_rtrw)
+    formula_rzwp3k <- paste0("=Lists!$B$2:$B$", last_row_rzwp3k)
+    
+    openxlsx::dataValidation(wb, "Data",
+                             col = col_rtrw,
+                             rows = rows,
+                             type = "list",
+                             value = formula_rtrw)
+    
+    openxlsx::dataValidation(wb, "Data",
+                             col = col_rzwp3k,
+                             rows = rows,
+                             type = "list",
+                             value = formula_rzwp3k)
+  }
+  
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  # Save workbook
+  full_path <- file.path(output_dir, file_name)
+  openxlsx::saveWorkbook(wb, full_path, overwrite = TRUE)
+  
+  message(paste("Workbook successfully saved to:", full_path))
+  invisible(NULL)
+}
+
+#' Reconcile a land-use class column with decisions from an Excel reconciliation table
+#'
+#' Overwrites the specified class column (`RTRW` or `RZWP3K`) in an `sf` object
+#' using the corresponding `decision_*` column from the Excel file. Only rows with
+#' an `id` that appears in the Excel table and a non‑empty decision are updated.
+#' Rows without a matching `id` or with an empty decision remain unchanged.
+#'
+#' @param sf_obj An `sf` object that must contain an integer column `id` and
+#'   either a `RTRW` or `RZWP3K` column (as determined by `class_type`).
+#' @param xlsx_path Path to the Excel file. The file must have a sheet named
+#'   `"Data"` containing columns `id`, `decision_rtrw`, and `decision_rzwp3k`.
+#' @param class_type Either `"RTRW"` or `"RZWP3K"`; determines which column is
+#'   updated and which decision column is used.
+#'
+#' @return The input `sf` object with the specified class column overwritten by
+#'   the reconciled values. All other columns and the geometry are unchanged.
+#'
+#' @importFrom readxl read_excel
+#' @importFrom dplyr filter
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#' rtrw <- reconcile_map(rtrw, "reconciliation.xlsx", "RTRW")
+#' rz <- reconcile_map(rz, "reconciliation.xlsx", "RZWP3K")
+#' }
+reconcile_map <- function(sf_obj, xlsx_path, class_type = c("RTRW", "RZWP3K")) {
+  class_type <- match.arg(class_type)
+  
+  decision_col <- paste0("decision_", tolower(class_type))
+  orig_col <- class_type
+  
+  xlsx_data <- read_excel(xlsx_path, sheet = "Data")
+  
+  update_data <- xlsx_data %>%
+    filter(!is.na(.data[[decision_col]]) & .data[[decision_col]] != "")
+  
+  if (!orig_col %in% names(sf_obj)) {
+    stop("Column '", orig_col, "' not found in the input sf object.")
+  }
+  
+  new_vals <- sf_obj[[orig_col]]
+  
+  for (i in seq_len(nrow(update_data))) {
+    id_val <- update_data$id[i]
+    new_val <- update_data[[decision_col]][i]
+    match_idx <- which(sf_obj$id == id_val)
+    if (length(match_idx) > 0) {
+      new_vals[match_idx] <- new_val
+    }
+  }
+  
+  sf_obj[[orig_col]] <- new_vals
+  return(sf_obj)
+}
+
+#' Reconcile overlapping polygons using user decisions and priority lists
+#'
+#' @param union An `sf` object with columns: id_pu, stat_pu, RTRW, RZWP3K,
+#'   id_rtrw, id_rzwp3k, geometry.
+#' @param recon_table A data frame with columns: id_rtrw, id_rzwp3k, user_decision.
+#' @param rtrw_prioritas A data frame with a column `"RTRW"` containing valid
+#'   class names for RTRW (non‑NA values used).
+#' @param rzwp3k_prioritas A data frame with a column `"RZWP3K"` containing valid
+#'   class names for RZWP3K (non‑NA values used).
+#'
+#' @return An `sf` object with additional columns `final_class` and
+#'   `stat_pu_final` (never `"intersection"`).
+#'
+#' @importFrom sf st_as_sf
+#' @importFrom dplyr left_join mutate case_when filter
+#' @export
+reconcile_map_overlap <- function(union, recon_table,
+                                  rtrw_prioritas, rzwp3k_prioritas) {
+  # Check packages
+  if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
+  if (!requireNamespace("dplyr", quietly = TRUE)) stop("package 'dplyr' is required.")
+  
+  # Check required columns
+  required_union <- c("id_pu", "stat_pu", "RTRW", "RZWP3K", "id_rtrw", "id_rzwp3k")
+  if (!all(required_union %in% colnames(union))) {
+    stop("'union' must contain columns: ", paste(required_union, collapse = ", "))
+  }
+  required_recon <- c("id_rtrw", "id_rzwp3k", "user_decision")
+  if (!all(required_recon %in% colnames(recon_table))) {
+    stop("'recon_table' must contain columns: ", paste(required_recon, collapse = ", "))
+  }
+  
+  # Extract priority lists (remove NAs)
+  rtrw_classes <- as.character(rtrw_prioritas$RTRW)
+  rtrw_classes <- rtrw_classes[!is.na(rtrw_classes)]
+  rzwp3k_classes <- as.character(rzwp3k_prioritas$RZWP3K)
+  rzwp3k_classes <- rzwp3k_classes[!is.na(rzwp3k_classes)]
+  
+  all_classes <- unique(c(rtrw_classes, rzwp3k_classes))
+  source_map <- setNames(
+    sapply(all_classes, function(cls) {
+      in_rtrw <- cls %in% rtrw_classes
+      in_rzwp3k <- cls %in% rzwp3k_classes
+      if (in_rtrw && in_rzwp3k) "BOTH"
+      else if (in_rtrw) "RTRW"
+      else if (in_rzwp3k) "RZWP3K"
+      else NA_character_
+    }),
+    all_classes
+  )
+  
+  # Convert join keys to character
+  union <- dplyr::mutate(union,
+                         id_rtrw = as.character(id_rtrw),
+                         id_rzwp3k = as.character(id_rzwp3k))
+  recon_table <- dplyr::mutate(recon_table,
+                               id_rtrw = as.character(id_rtrw),
+                               id_rzwp3k = as.character(id_rzwp3k))
+  
+  # Join user_decision
+  union_with_decision <- dplyr::left_join(
+    union,
+    recon_table[, c("id_rtrw", "id_rzwp3k", "user_decision")],
+    by = c("id_rtrw", "id_rzwp3k")
+  )
+  
+  # Warn about missing decisions for intersection polygons
+  missing_dec <- dplyr::filter(union_with_decision,
+                               stat_pu == "intersection" & is.na(user_decision))
+  if (nrow(missing_dec) > 0) {
+    warning("Intersection polygons with missing user_decision (id_pu = ",
+            paste(missing_dec$id_pu, collapse = ", "), ") will have NA in final_class and stat_pu_final.")
+  }
+  
+  final_sf <- union_with_decision %>%
+    dplyr::mutate(
+      final_class = dplyr::case_when(
+        stat_pu == "intersection" ~ user_decision,
+        stat_pu == "RTRW" ~ RTRW,
+        stat_pu == "RZWP3K" ~ RZWP3K,
+        TRUE ~ NA_character_
+      ),
+      stat_pu_final = dplyr::case_when(
+        stat_pu == "RTRW" ~ "RTRW",
+        stat_pu == "RZWP3K" ~ "RZWP3K",
+        stat_pu == "intersection" & is.na(user_decision) ~ NA_character_,
+        stat_pu == "intersection" & !is.na(user_decision) ~ source_map[user_decision],
+        TRUE ~ NA_character_
+      )
+    )
+  
+  both_cases <- dplyr::filter(final_sf,
+                              stat_pu == "intersection" & stat_pu_final == "BOTH")
+  if (nrow(both_cases) > 0) {
+    warning("Some intersection polygons have decisions that appear in BOTH priority lists (id_pu = ",
+            paste(both_cases$id_pu, collapse = ", "), "). Set to 'BOTH'.")
+  }
+  neither_cases <- dplyr::filter(final_sf,
+                                 stat_pu == "intersection" & is.na(stat_pu_final) & !is.na(user_decision))
+  if (nrow(neither_cases) > 0) {
+    warning("Some intersection polygons have decisions that appear in NEITHER priority list (id_pu = ",
+            paste(neither_cases$id_pu, collapse = ", "), "). Set to NA.")
+  }
+  
+  # Return as sf
+  sf::st_as_sf(final_sf)
 }
