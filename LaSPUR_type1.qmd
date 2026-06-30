@@ -33,8 +33,8 @@ Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam forma
 #| include: true
 
 # Main input data for SERASI index calculation
-rtrw_path <- "data/vector/serasi/step1/Step1_RTRW_Palu-Parigi.shp"
-rzwp3k_path <- "data/vector/serasi/step1/Step1_RZWP3K_Palu-Parigi.shp"
+rtrw_path <- "data/vector/serasi/step1/Step1_RTRW_Palu-Parigi_Explode.shp"
+rzwp3k_path <- "data/vector/serasi/step1/Step1_RZWP3K_Palu-Parigi_Explode.shp"
 rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
 matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
@@ -122,7 +122,7 @@ Matriks yang dimuat akan dikonversi ke dalam bentuk *long format matrix*.
 
 # Generate matrix serasi template to be filled
 matrix_serasi_template <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
-write.xlsx(matrix_serasi_template, "output/matriks_serasi.xlsx", overwrite = TRUE)
+openxlsx::write.xlsx(matrix_serasi_template, "output/step1/matriks_serasi_template.xlsx", overwrite = TRUE)
 
 # Load a filled matrix serasi & RTRW-RZWP3K priority reference table
 matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
@@ -215,7 +215,9 @@ lulc_adjacencies <- calculate_lulc_adjacency(
   lulc_vect,
   idx_serasi_map,
   id_col = "id_pu",
-  class_col = "ID"
+  class_col = "ID", 
+  parallel = TRUE, 
+  workers = 4
 )
 
 # Calculate padu_ke
@@ -293,7 +295,9 @@ protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path) %>%
 idx_padu_kl_map <- calculate_overlay_pct(
   idx_serasi_map, 
   protected_area_vect, 
-  title = "protected"
+  title = "protected",
+  parallel = TRUE,
+  workers = 4
 ) %>%
   mutate(
     idx_padu_kl = protected_pct/100
@@ -355,7 +359,13 @@ if (habitat_from_lulc == "Yes") {
 #| include: true
 
 # Calculate overlay
-coastal_habitat_map <- calculate_overlay_pct(idx_serasi_map, coastal_habitat, title = "coastal_habitat")
+coastal_habitat_map <- calculate_overlay_pct(
+  idx_serasi_map, 
+  coastal_habitat, 
+  title = "coastal_habitat",
+  parallel = TRUE,
+  workers = 4
+  )
 
 # Calculate idx padu kh
 idx_padu_kh_map <- coastal_habitat_map %>%
@@ -430,7 +440,9 @@ disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path)
 padu_ki <- calculate_padu_ki(
   idx_serasi_map      = idx_serasi_map,
   disaster_risk_vect  = disaster_risk_vect,
-  value_col           = "Kerawanan"
+  value_col           = "Kerawanan",
+  parallel            = TRUE,
+  workers             = 4
 )
 
 idx_padu_ki_map <- padu_ki$idx_padu_ki_map
@@ -575,10 +587,10 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
 
 Rekomendasi dihasilkan dari perbandingan nilai indeks SERASI dan PADU terhadap ambang batas (threshold) yang telah ditentukan untuk kedua indeks tersebut. Terdapat sejumlah aturan untuk menentukan rekomendasi penyelesaian konflik tumpang tindih, yaitu:
 
-1.  **Jika unit tumpang tindih terdiri dari kelas RTRW prioritas**\
+1.  **Jika unit tumpang tindih terdiri dari kelas RTRW & RZWP3K prioritas**\
     → Tidak diberikan rekomendasi, karena kelas prioritas harus dipertahankan (tidak dapat diubah).
 
-2.  **Jika unit tumpang tindih tidak terdiri dari kelas RTRW prioritas, namun terdiri dari kelas RZWP3K prioritas**\
+2.  **Jika unit tumpang tindih tidak terdiri dari kelas non-RTRW prioritas, namun terdiri dari kelas RZWP3K prioritas**\
     → Rekomendasi: **Ubah RTRW**.
 
 3.  **Jika unit tumpang tindih tidak terdiri dari kedua kelas prioritas (RTRW dan RZWP3K), namun nilai indeks SERASI ≥ ambang batas SERASI**\
@@ -726,4 +738,55 @@ out <- list(
 
 generate_report(output = out, dir = output_dir)
 
+```
+
+# Tahap 8. Rekonsiliasi area tumpang tindih
+
+```{r generate-reconcilliation-table}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Generate reconciliation excel table
+generate_reconciliation_excel(
+  recon_map          = idx_padan_map_alt,
+  rtrw_prioritas     = rtrw_prioritas,
+  rzwp3k_prioritas   = rzwp3k_prioritas,
+  output_dir         = output_dir,
+  step               = 1,
+  file_name          = "overlaps_reconcilliation_table.xlsx"
+)
+```
+
+```{r reconcile-unresolved-features}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Read the reconciliation table path
+recon_table_path <- "output/overlaps_reconcilliation_table_dummy.xlsx"
+
+# Prepare RTRW and RZWP3K map
+rtrw <- rtrw_vect %>% dplyr::mutate(
+  id_rtrw = dplyr::row_number())
+rzwp3k <- rzwp3k_vect %>% dplyr::mutate(
+  id_rzwp3k = dplyr::row_number())
+
+# Union overlaps
+union <- identify_overlaps_union(rtrw, rzwp3k)
+final_map <- reconcile_map_overlap(
+  union = union,
+  recon_table = recon_table,
+  rtrw_prioritas = rtrw_prioritas,
+  rzwp3k_prioritas = rzwp3k_prioritas
+)
+
+rtrw_final <- final_map[final_map$stat_pu_final == "RTRW", ]
+rzwp3k_final <- final_map[final_map$stat_pu_final == "RZWP3K", ]
+
+# Write the resolved map
+write_sf(rtrw_final, paste0(output_dir, "step1/ST_Union_Resolved_Overlaps.gpkg"))
+write_sf(rzwp3k_final, paste0(output_dir, "step1/ST_RZWP3K_Resolved_Overlaps.gpkg"))
 ```
