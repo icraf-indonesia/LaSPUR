@@ -90,7 +90,7 @@ Pada tahap ini modul akan melakukan analisis spasial untuk mengidentifikasi area
 ```{r identify-adjacent}
 #| error: true
 #| warning: false
-#| message: false
+#| message: true
 #| include: true
 
 # Load the input data for adjacent identification
@@ -228,7 +228,7 @@ Indeks PADU-KE dihitung sebagai rerata bobot perhitungan *adjacency* antar pasan
 ```{r calculate-padu-ke-rtrw}
 #| error: true
 #| warning: false
-#| message: false
+#| message: true
 #| include: true
 
 # Calculate adjacency for LULC vector input
@@ -236,7 +236,9 @@ lulc_adjacencies_rtrw <- calculate_lulc_adjacency(
   lulc_vect,
   adjacent_map_rtrw,
   id_col = "id_pu",
-  class_col = "ID"
+  class_col = "ID", 
+  parallel = TRUE, 
+  workers = 4
 )
 
 # Calculate padu_ke
@@ -267,7 +269,9 @@ lulc_adjacencies_rzwp3k <- calculate_lulc_adjacency(
   lulc_vect,
   adjacent_map_rzwp3k,
   id_col = "id_pu",
-  class_col = "ID"
+  class_col = "ID",
+  parallel = TRUE, 
+  workers = 4
 )
 
 # Calculate padu_ke
@@ -377,7 +381,9 @@ protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path) %>%
 idx_padu_kl_map_rtrw <- calculate_overlay_pct(
   adjacent_map_rtrw, 
   protected_area_vect, 
-  title = "protected"
+  title = "protected",
+  parallel = TRUE,
+  workers = 4
 ) %>%
   mutate(
     idx_padu_kl = protected_pct/100
@@ -400,7 +406,9 @@ plot(idx_padu_kl_map_rtrw["idx_padu_kl"], border = 1)
 idx_padu_kl_map_rzwp3k <- calculate_overlay_pct(
   adjacent_map_rzwp3k, 
   protected_area_vect, 
-  title = "protected"
+  title = "protected",
+  parallel = TRUE,
+  workers = 4
 ) %>%
   mutate(
     idx_padu_kl = protected_pct/100
@@ -462,7 +470,13 @@ if (habitat_from_lulc == "Yes") {
 #| include: true
 
 # Calculate overlay
-coastal_habitat_map_rtrw <- calculate_overlay_pct(adjacent_map_rtrw, coastal_habitat, title = "coastal_habitat")
+coastal_habitat_map_rtrw <- calculate_overlay_pct(
+  adjacent_map_rtrw, 
+  coastal_habitat, 
+  title = "coastal_habitat",
+  parallel = TRUE,
+  workers = 4
+  )
 # coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
 
 # Calculate idx padu kh
@@ -592,7 +606,9 @@ disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path) %>% s
 padu_ki_rtrw <- calculate_padu_ki(
   idx_serasi_map      = adjacent_map_rtrw,
   disaster_risk_vect  = disaster_risk_vect,
-  value_col           = "Kerawanan"
+  value_col           = "Kerawanan",
+  parallel            = TRUE,
+  workers             = 4
 )
 
 idx_padu_ki_map_rtrw <- padu_ki_rtrw$idx_padu_ki_map
@@ -612,7 +628,9 @@ plot(idx_padu_ki_map_rtrw["idx_padu_ki"], border = 1)
 padu_ki_rzwp3k <- calculate_padu_ki(
   idx_serasi_map      = adjacent_map_rzwp3k,
   disaster_risk_vect  = disaster_risk_vect,
-  value_col           = "Kerawanan"
+  value_col           = "Kerawanan",
+  parallel            = TRUE,
+  workers             = 4
 )
 
 idx_padu_ki_map_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki_map
@@ -978,16 +996,16 @@ npv_lulc_rzwp3k_ha_recom <- calculate_npv_ha_per_unit(land_distribution_rzwp3k_r
 # Calculate npv for rtrw
 npv_lulc_rtrw <- npv_lulc_rtrw_ha_recom %>% 
   mutate(
-    econ_rtrw_actual = area_buffer_ha * npv_ha_actual_rtrw,
-    econ_rtrw_recom = area_buffer_ha * npv_ha_recom_rtrw,
+    econ_rtrw_actual = area_ha * npv_ha_actual_rtrw,
+    econ_rtrw_recom = area_ha * npv_ha_recom_rtrw,
     econ_rtrw_delta = econ_rtrw_recom - econ_rtrw_actual
   )
 
 # Calculate npv for rzwp3k
 npv_lulc_rzwp3k <- npv_lulc_rzwp3k_ha_recom %>% 
   mutate(
-    econ_rzwp3k_actual = area_buffer_ha * npv_ha_actual_rzwp3k,
-    econ_rzwp3k_recom = area_buffer_ha * npv_ha_recom_rzwp3k,
+    econ_rzwp3k_actual = area_ha * npv_ha_actual_rzwp3k,
+    econ_rzwp3k_recom = area_ha * npv_ha_recom_rzwp3k,
     econ_rzwp3k_delta = econ_rzwp3k_recom - econ_rzwp3k_actual
   )
 
@@ -1152,4 +1170,52 @@ adjacent_analysis_map <- adjacent_integration_map %>%
     delta_idx_padan = idx_padan_new - idx_padan
   )
 
+```
+
+# Tahap 10. Rekonsiliasi kasus area berdampingan
+
+```{r generate-reconcilliation-table}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Prepare adjacent reconciliation map
+length_filter <- 1500
+
+adjacent_recon_map <- adjacent_analysis_map[as.numeric(adjacent_analysis_map$length) > length_filter, ]
+
+# Generate reconciliation excel table
+generate_reconciliation_excel(
+  adjacent_recon_map = adjacent_recon_map,
+  rtrw_prioritas     = rtrw_prioritas,
+  rzwp3k_prioritas   = rzwp3k_prioritas,
+  output_dir         = output_dir,
+  file_name          = "adjacent_reconcilliation_table.xlsx"
+)
+
+```
+
+```{r reconcile-unresolved-features}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Read the reconciliation table path
+recon_table_path <- "output/adjacent_reconcilliation_table.xlsx"
+
+# Prepare RTRW and RZWP3K map
+rtrw <- rtrw_vect %>% dplyr::mutate(
+  id = dplyr::row_number())
+rzwp3k <- rzwp3k_vect %>% dplyr::mutate(
+  id = dplyr::row_number())
+
+# Reconcile map
+rtrw_resolved <- reconcile_map(rtrw, recon_table_path, "RTRW")
+rzwp3k_resolved <- reconcile_map(rzwp3k, recon_table_path, "RZWP3K")
+
+# Write the resolved map
+write_sf(rtrw_resolved, paste0(output_dir, "step2/ST_RTRW_Resolved_Adjacent.gpkg"))
+write_sf(rzwp3k_resolved, paste0(output_dir, "step2/ST_RZWP3K_Resolved_Adjacent.gpkg"))
 ```
