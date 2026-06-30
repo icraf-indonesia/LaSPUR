@@ -33,7 +33,7 @@ safe_source <- function(file, ui_fn_name, srv_fn_name) {
         )
       )
     }, envir = .GlobalEnv)
-
+    
     assign(srv_fn_name, function(id, output_dir) {
       moduleServer(id, function(input, output, session) {})
     }, envir = .GlobalEnv)
@@ -54,6 +54,7 @@ safe_source("modules/mod_padu_ki.R",         "padu_ki_ui",         "padu_ki_serv
 safe_source("modules/mod_padu_combine.R",    "padu_combine_ui",    "padu_combine_server")
 safe_source("modules/mod_padan.R",           "padan_ui",           "padan_server")
 safe_source("modules/mod_recommendation.R",  "recommendation_ui",  "recommendation_server")
+safe_source("modules/mod_rekonsiliasi.R",    "rekonsiliasi_ui",    "rekonsiliasi_server")  
 
 # ── Sidebar nav helper ───────────────────────────────────────
 nav_item <- function(input_id, number, label) {
@@ -85,9 +86,9 @@ nav_item <- function(input_id, number, label) {
 
 # ── Tab config ───────────────────────────────────────────────
 tab_config <- list(
-  overlap         = list(label = "1.1 Tumpang Tindih",      ui_fn = overlap_ui,         srv_fn = overlap_server),
-  adjacent        = list(label = "1.2 Bersebelahan",        ui_fn = adjacent_ui,        srv_fn = adjacent_server),
-  interconnection = list(label = "1.3 Saling Terhubung",    ui_fn = interconnection_ui, srv_fn = interconnection_server),
+  overlap         = list(label = "1.1 Area Tumpang Tindih",      ui_fn = overlap_ui,         srv_fn = overlap_server),
+  adjacent        = list(label = "1.2 Area Bertetangga",        ui_fn = adjacent_ui,        srv_fn = adjacent_server),
+  interconnection = list(label = "1.3 Area Saling Terhubung",    ui_fn = interconnection_ui, srv_fn = interconnection_server),
   padu_ke         = list(label = "2.1 PADU-KE",             ui_fn = padu_ke_ui,         srv_fn = padu_ke_server),
   padu_hs         = list(label = "2.2 PADU-HS",             ui_fn = padu_hs_ui,         srv_fn = padu_hs_server),
   padu_kl         = list(label = "2.3 PADU-KL",             ui_fn = padu_kl_ui,         srv_fn = padu_kl_server),
@@ -95,19 +96,20 @@ tab_config <- list(
   padu_rtp        = list(label = "2.5 PADU-RTp",            ui_fn = padu_rtp_ui,        srv_fn = padu_rtp_server),
   padu_se         = list(label = "2.6 PADU-SE",             ui_fn = padu_se_ui,         srv_fn = padu_se_server),
   padu_ki         = list(label = "2.7 PADU-KI",             ui_fn = padu_ki_ui,         srv_fn = padu_ki_server),
-  padu_combine    = list(label = "2.8 PADU-Combine",        ui_fn = padu_combine_ui,    srv_fn = padu_combine_server),
+  padu_combine    = list(label = "2.8 PADU-Kombinasi",        ui_fn = padu_combine_ui,    srv_fn = padu_combine_server),
   padan           = list(label = "3. PADAN",                ui_fn = padan_ui,           srv_fn = padan_server),
-  recommendation  = list(label = "4. Rekomendasi",          ui_fn = recommendation_ui,  srv_fn = recommendation_server)
+  recommendation  = list(label = "4. Rekomendasi",          ui_fn = recommendation_ui,  srv_fn = recommendation_server),
+  rekonsiliasi    = list(label = "5. Rekonsiliasi",            ui_fn = rekonsiliasi_ui,    srv_fn = rekonsiliasi_server) 
 )
 
 # ── UI ───────────────────────────────────────────────────────
 ui <- page_sidebar(
   title = "Land & Sea Planning Unit Reconcilliation (LaSPUR)",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
-
+  
   sidebar = sidebar(
     title = "Jelajahi Modul",
-
+    
     # ── Output Directory ─────────────────────────────────────
     div(
       style = "margin-bottom: 16px;",
@@ -124,18 +126,19 @@ ui <- page_sidebar(
       div(style = "margin-top: 6px;",
           uiOutput("output_dir_status"))
     ),
-
+    
     hr(),
-
+    
     accordion(
       open = FALSE,
-
+      # ── Panel 1: Identifikasi Konflik Spasial ─────────────
       accordion_panel(
         "1. Identifikasi Konflik Spasial",
-        nav_item("nav_overlap",         "1.1", "Tumpang Tindih"),
-        nav_item("nav_adjacent",        "1.2", "Bersebelahan"),
-        nav_item("nav_interconnection", "1.3", "Saling Terhubung")
+        nav_item("nav_overlap",         "1.1", "Area Tumpang Tindih"),
+        nav_item("nav_adjacent",        "1.2", "Area Bertetangga"),
+        nav_item("nav_interconnection", "1.3", "Area Saling Terhubung")
       ),
+      # ── Panel 2: Analisis PADU ────────────────────────────
       accordion_panel(
         "2. Analisis PADU",
         nav_item("nav_padu_ke",      "2.1", "PADU-KE"),
@@ -145,19 +148,26 @@ ui <- page_sidebar(
         nav_item("nav_padu_rtp",     "2.5", "PADU-RTp"),
         nav_item("nav_padu_se",      "2.6", "PADU-SE"),
         nav_item("nav_padu_ki",      "2.7", "PADU-KI"),
-        nav_item("nav_padu_combine", "2.8", "PADU-Combine")
+        nav_item("nav_padu_combine", "2.8", "PADU-Kombinasi")
       ),
+      # ── Panel 3: Analisis PADAN ───────────────────────────
       accordion_panel(
         "3. Analisis PADAN",
         nav_item("nav_padan", "3", "Analisis PADAN")
       ),
+      # ── Panel 4: Rekomendasi ──────────────────────────────
       accordion_panel(
         "4. Rekomendasi",
         nav_item("nav_recommendation", "4", "Rekomendasi")
+      ),
+      # ── Panel 5: Rekonsiliasi ─────────────────────────────
+      accordion_panel(
+        "5. Rekonsiliasi",
+        nav_item("nav_rekonsiliasi", "5", "Rekonsiliasi")
       )
     )
   ),
-
+  
   # ── Confirmation modal ───────────────────────────────────────
   tags$div(
     id = "close_confirm_modal", class = "modal fade",
@@ -189,27 +199,27 @@ ui <- page_sidebar(
              )
     )
   ),
-
+  
   navset_card_pill(id = "tabs")
 )
 
 # ── Server ───────────────────────────────────────────────────
 server <- function(input, output, session) {
-
+  
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
-
+  
   # ── Output directory ─────────────────────────────────────────
   roots <- c(
     Home    = path.expand("~"),
     Project = normalizePath(".."),
     C       = "C:/"
   )
-
+  
   shinyDirChoose(input, "btn_browse_output",
                  roots   = roots,
                  session = session)
-
+  
   output_dir <- reactive({
     req(input$btn_browse_output)
     if (is.integer(input$btn_browse_output)) return("output")
@@ -217,7 +227,7 @@ server <- function(input, output, session) {
     if (length(path) == 0 || path == "") return("output")
     as.character(path)
   })
-
+  
   observeEvent(output_dir(), {
     path <- output_dir()
     if (!dir.exists(path)) {
@@ -231,7 +241,7 @@ server <- function(input, output, session) {
       })
     }
   }, ignoreInit = FALSE)
-
+  
   output$output_dir_status <- renderUI({
     path <- output_dir()
     if (dir.exists(path)) {
@@ -248,18 +258,18 @@ server <- function(input, output, session) {
       )
     }
   })
-
+  
   session$userData$output_dir <- output_dir
-
+  
   # ── Add tab ───────────────────────────────────────────────────
   add_tab <- function(tab_id) {
     cfg <- tab_config[[tab_id]]
-
+    
     if (tab_id %in% open_tabs()) {
       updateTabsetPanel(session, "tabs", selected = tab_id)
       return()
     }
-
+    
     appendTab(
       inputId = "tabs",
       tabPanel(
@@ -278,17 +288,17 @@ server <- function(input, output, session) {
       ),
       select = TRUE
     )
-
+    
     open_tabs(c(open_tabs(), tab_id))
     cfg$srv_fn(tab_id, session$userData$output_dir)
-
+    
     observeEvent(input[[paste0("close_", tab_id)]], {
       pending_close(tab_id)
       session$sendCustomMessage("update_modal_label", list(label = cfg$label))
       session$sendCustomMessage("show_close_modal", list())
     }, once = FALSE, ignoreInit = TRUE)
   }
-
+  
   # ── Confirm close ─────────────────────────────────────────────
   observeEvent(input$confirm_close_yes, {
     tab_id <- pending_close()
@@ -298,7 +308,7 @@ server <- function(input, output, session) {
     open_tabs(open_tabs()[open_tabs() != tab_id])
     pending_close(NULL)
   })
-
+  
   # ── Sidebar observers ─────────────────────────────────────────
   observeEvent(input$nav_overlap,         { add_tab("overlap") })
   observeEvent(input$nav_adjacent,        { add_tab("adjacent") })
@@ -313,6 +323,7 @@ server <- function(input, output, session) {
   observeEvent(input$nav_padu_combine,    { add_tab("padu_combine") })
   observeEvent(input$nav_padan,           { add_tab("padan") })
   observeEvent(input$nav_recommendation,  { add_tab("recommendation") })
+  observeEvent(input$nav_rekonsiliasi,    { add_tab("rekonsiliasi") })
 }
 
 # ── JS handlers ──────────────────────────────────────────────

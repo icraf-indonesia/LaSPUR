@@ -1,21 +1,21 @@
-# ui/modules/mod_overlap.R
+# ui/modules/mod_adjacent.R
 # ============================================================
-#  MODULE: Overlap (1.1 Type 1: Overlap)
+#  MODULE: Adjacent (1.2 Type 2: Adjacent)
 # ============================================================
 
 source("../R/functions.R")
 source("../R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
-overlap_ui <- function(id) {
+adjacent_ui <- function(id) {
   ns <- NS(id)
   tagList(
     
     div(
       style = "margin-bottom: 20px;",
-      h4("1.1 Identifikasi Area Tumpang Tindih", style = "margin: 0; font-weight: 700;"),
+      h4("2.1 Identifikasi Area Bertetangga", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Mengidentifikasi kasus area tumpang tindih secara spasial antara kawasan/zona peta RTRW dan RZWP3K serta menghitung indeks SERASI.",
+        "Mengidentifikasi area bertetangga secara spasial antara kawasan/zona RTRW dan RZWP3K serta menghitung indeks SERASI.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -132,7 +132,7 @@ overlap_ui <- function(id) {
 }
 
 # ── Server ───────────────────────────────────────────────────
-overlap_server <- function(id, output_dir) {
+adjacent_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     
     analysis_result <- reactiveVal(NULL)
@@ -199,10 +199,9 @@ overlap_server <- function(id, output_dir) {
       }
       
       # Bungkus seluruh proses dengan progress bar
-      withProgress(message = "Menjalankan Analisis Overlap", value = 0, {
+      withProgress(message = "Menjalankan Analisis Bertetangga", value = 0, {
         
         tryCatch({
-          
           # Step 1: Load matrices (progress 10%)
           incProgress(0.1, detail = "Memuat matriks dan prioritas...")
           append_log(">> Memuat matriks SERASI...")
@@ -215,24 +214,29 @@ overlap_server <- function(id, output_dir) {
           rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_prioritas_file$datapath)
           append_log("   Semua tabel berhasil dimuat.")
           
-          # Step 2: Identify overlaps (progress 30%)
-          incProgress(0.2, detail = "Mengidentifikasi tumpang tindih...")
-          append_log(">> Mengidentifikasi tumpang tindih antara RTRW dan RZWP3K...")
-          union_sf          <- identify_overlaps(rtrw_vect(), rzwp3k_vect())
-          append_log("   Tumpang tindih berhasil diidentifikasi.")
+          # Step 2: Identify adjacent (progress 30%)
+          incProgress(0.2, detail = "Mengidentifikasi area bertetangga...")
+          append_log(">> Mengidentifikasi area bertetangga antara RTRW dan RZWP3K...")
+          adjacent_map_raw <- identify_adjacent(
+            rtrw = rtrw_vect(),
+            rzwp = rzwp3k_vect(),
+            min_area_ha = 0
+          )
+          append_log("   Area bertetangga berhasil diidentifikasi.")
           
-          # Step 3: Filter by threshold (progress 50%)
-          incProgress(0.2, detail = "Menyaring berdasarkan luas minimum...")
-          append_log(paste0(">> Menyaring poligon dengan luas >= ", input$threshold_ha, " ha..."))
-          filtered_union_sf <- filter_overlaps(union_sf, input$threshold_ha)
-          append_log(paste0("   ", nrow(filtered_union_sf), " poligon tersisa setelah penyaringan."))
+          # Step 3: Process adjacent (progress 50%)
+          incProgress(0.2, detail = "Memproses area bertetangga...")
+          append_log(">> Memproses area bertetangga dengan buffer 100 m...")
+          adjacent_map <- process_adjacent(
+            pu_sf = adjacent_map_raw,
+            buffer_m = 100
+          )
+          append_log("   Pemrosesan selesai.")
           
           # Step 4: Validate zone class (progress 70%)
           incProgress(0.2, detail = "Memvalidasi kesesuaian kelas zona...")
           append_log(">> Memvalidasi kesesuaian nama kelas antara peta dan prioritas...")
-          valid_class <- validate_zone_class(
-            filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas
-          )
+          valid_class <- validate_zone_class(adjacent_map, rtrw_prioritas, rzwp3k_prioritas)
           
           # Step 5: Merge and save (progress 90%)
           incProgress(0.2, detail = "Menggabungkan dan menyimpan hasil...")
@@ -240,21 +244,20 @@ overlap_server <- function(id, output_dir) {
               length(valid_class$mismatch_col4) == 0) {
             
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
-            idx_serasi_map   <- merge_attributes_to_map(filtered_union_sf, matriks_serasi)
+            idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) 
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            out_path <- file.path(output_dir(), "idx_serasi.gpkg")
+            out_path <- file.path(output_dir(), "idx_serasi_adjacent.gpkg")
             sf::st_write(idx_serasi_map, out_path, delete_dsn = TRUE, quiet = TRUE)
             append_log(paste0("   Hasil disimpan di: ", out_path))
             
             analysis_result(list(map = idx_serasi_map, table = idx_serasi_table))
-            append_log("Analisis overlap berhasil diselesaikan.")
+            append_log("Analisis bertetangga berhasil diselesaikan.")
             showNotification(paste("Analisis selesai. Hasil disimpan ke", out_path),
                              type = "message", duration = 5)
             
           } else {
             
-            # Jika ada ketidakcocokan, catat di log
             log_msg <- paste(
               "Ketidakcocokan nama kelas terdeteksi:",
               if (length(valid_class$mismatch_col3) > 0)
@@ -275,7 +278,7 @@ overlap_server <- function(id, output_dir) {
         }, error = function(e) {
           msg <- conditionMessage(e)
           if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
-          append_log(paste0("ERROR: ", msg))
+          append_log(paste0("❌ ERROR: ", msg))
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         

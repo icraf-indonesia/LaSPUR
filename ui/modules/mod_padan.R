@@ -12,7 +12,7 @@ padan_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("3. PADAN Analysis", style = "margin: 0; font-weight: 700;"),
+      h4("3. Analisis PADAN", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Menghitung nilai akhir integrasi (Indeks PADAN) berdasarkan penggabungan Indeks SERASI dan Indeks PADU.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
@@ -27,7 +27,7 @@ padan_ui <- function(id) {
         card_header("Input & Parameters"),
         
         # File input untuk hasil PADU Combine (idx_padu.gpkg)
-        fileInput(ns("idx_padu_file"), "Pilih Hasil Analisis PADU (.gpkg)",
+        fileInput(ns("idx_padu_file"), "Pilih Peta Hasil Analisis PADU (.gpkg)",
                   accept = ".gpkg"),
         tags$div(
           class = "form-text text-muted",

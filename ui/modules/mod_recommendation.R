@@ -12,9 +12,9 @@ recommendation_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("4. Recommendation Analysis", style = "margin: 0; font-weight: 700;"),
+      h4("4. Analisis Rekomendasi", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menentukan opsi penyelesaian konflik tumpang tindih dan rekomendasi perubahan zona.",
+        "Menentukan opsi penyelesaian konflik dalam integrasi tata ruang darat-laut.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -26,22 +26,22 @@ recommendation_ui <- function(id) {
       card(
         card_header("Input & Parameters"),
 
-        fileInput(ns("idx_padan_file"), "Pilih Hasil Analisis PADAN (.gpkg)", accept = ".gpkg"),
+        fileInput(ns("idx_padan_file"), "Pilih Peta Hasil Analisis PADAN (.gpkg)", accept = ".gpkg"),
 
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         
         layout_column_wrap(
           width = 1/2,
-          fileInput(ns("rtrw_priority_file"), "Prioritas RTRW (.xlsx)", accept = ".xlsx"),
-          fileInput(ns("rzwp3k_priority_file"), "Prioritas RZWP3K (.xlsx)", accept = ".xlsx")
+          fileInput(ns("rtrw_priority_file"), "Tabel Prioritas RTRW (.xlsx)", accept = ".xlsx"),
+          fileInput(ns("rzwp3k_priority_file"), "Tabel Prioritas RZWP3K (.xlsx)", accept = ".xlsx")
         ),
         
         hr(),
 
         layout_column_wrap(
           width = 1/2,
-          numericInput(ns("threshold_serasi"), "Threshold SERASI", value = 0.6, min = 0, max = 1, step = 0.05),
-          numericInput(ns("threshold_padu"), "Threshold PADU", value = 0.65, min = 0, max = 1, step = 0.05)
+          numericInput(ns("threshold_serasi"), "Nilai Ambang SERASI", value = 0.6, min = 0, max = 1, step = 0.05),
+          numericInput(ns("threshold_padu"), "Nilai Ambang PADU", value = 0.65, min = 0, max = 1, step = 0.05)
         ),
         
         sliderInput(ns("alpha_val"), "Proporsi Alpha (\u03B1)", min = 0, max = 1, value = 0.5, step = 0.1),
@@ -58,7 +58,7 @@ recommendation_ui <- function(id) {
       
       # ── Card B: Output & Results ─────────────────────────
       card(
-        card_header("Output & Recommendation Results"),
+        card_header("Output & Hasil Rekomendasi"),
         
         uiOutput(ns("status_box")),
         

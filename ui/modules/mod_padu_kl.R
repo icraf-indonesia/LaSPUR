@@ -10,23 +10,23 @@ source("../R/helpers.R")
 padu_kl_ui <- function(id) {
   ns <- NS(id)
   tagList(
-
+    
     div(
       style = "margin-bottom: 20px;",
-      h4("2.3 PADU-KL: Analisis Kawasan Konservasi", style = "margin: 0; font-weight: 700;"),
+      h4("2.3 PADU-KL (Kawasan Lindung)", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menghitung persentase unit perencanaan yang tumpang tindih dengan Kawasan Lindung.",
+        "Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung pada bentang darat dan laut untuk menghasilkan nilai indeks PADU-KL.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
-
+    
     layout_column_wrap(
       width = 1/2,
-
+      
       # ── Card A: Input & Parameter ────────────────────────
       card(
         card_header("Input & Parameter"),
-
+        
         tags$p(tags$i(class = "bi bi-info-circle me-1"),
                "Peta Indeks SERASI (.gpkg atau .shp)",
                style = "font-weight: 600; margin-bottom: 4px;"),
@@ -38,9 +38,9 @@ padu_kl_ui <- function(id) {
                   label    = NULL,
                   accept   = c(".gpkg", ".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
-
+        
         hr(),
-
+        
         tags$p(tags$i(class = "bi bi-shield-check me-1"),
                "Shapefile Kawasan Lindung",
                style = "font-weight: 600; margin-bottom: 4px;"),
@@ -52,9 +52,32 @@ padu_kl_ui <- function(id) {
                   label    = NULL,
                   accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
-
+        
         hr(),
-
+        
+        # ── Pengaturan lanjutan (collapsible, default tertutup) ──
+        accordion(
+          accordion_panel(
+            title = "Pengaturan lanjutan",
+            icon = icon("gear"),
+            open = FALSE,   # default collapsed
+            checkboxInput(
+              ns("parallel"),
+              "Aktifkan pemrosesan paralel",
+              value = FALSE
+            ),
+            numericInput(
+              ns("workers"),
+              "Jumlah pekerja (cores)",
+              value = 2,
+              min = 1,
+              step = 1
+            )
+          )
+        ),
+        
+        hr(),
+        
         div(
           style = "display: flex; gap: 8px;",
           actionButton(ns("btn_run"),
@@ -63,15 +86,15 @@ padu_kl_ui <- function(id) {
                        class = "btn-success btn-sm")
         )
       ),
-
+      
       # ── Card B: Output & Hasil ───────────────────────────
       card(
         card_header("Output & Hasil"),
-
+        
         uiOutput(ns("status_box")),
-
+        
         hr(),
-
+        
         navset_tab(
           nav_panel(
             "Peta",
@@ -86,7 +109,10 @@ padu_kl_ui <- function(id) {
           ),
           nav_panel(
             "Log Validasi",
-            verbatimTextOutput(ns("validation_log"))
+            div(
+              style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
+              verbatimTextOutput(ns("validation_log"))
+            )
           )
         )
       )
@@ -97,11 +123,11 @@ padu_kl_ui <- function(id) {
 # ── Server ───────────────────────────────────────────────────
 padu_kl_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
-
+    
     analysis_result <- reactiveVal(NULL)
-    analysis_log    <- reactiveVal("Belum ada analisis yang dijalankan.")
+    log_messages    <- reactiveVal("")   # log real-time
     is_running      <- reactiveVal(FALSE)
-
+    
     # ── Rename sidecar files and return .shp path ───
     extract_shp_path <- function(file_input) {
       shp_row <- file_input[grepl("\\.shp$", file_input$name, ignore.case = TRUE), ]
@@ -116,59 +142,97 @@ padu_kl_server <- function(id, output_dir) {
       }
       paste0(stem, ".shp")
     }
-
+    
     # ── Extract .gpkg or .shp path from upload ──────
     extract_vector_path <- function(file_input) {
       gpkg_row <- file_input[grepl("\\.gpkg$", file_input$name, ignore.case = TRUE), ]
       if (nrow(gpkg_row) == 1) return(gpkg_row$datapath)
       extract_shp_path(file_input)
     }
-
+    
+    # ── Log helper ───────────────────────────────────────────
+    append_log <- function(msg) {
+      current <- log_messages()
+      log_messages(paste0(current, format(Sys.time(), "[%H:%M:%S] "), msg, "\n"))
+    }
+    
     # ── Reactives ────────────────────────────────────────────
     idx_serasi_map <- reactive({
       req(input$idx_serasi_file)
       path <- extract_vector_path(input$idx_serasi_file)
       load_and_validate_shapefile(path)
     })
-
+    
     protected_area_vect <- reactive({
       req(input$protected_area_file)
       load_and_validate_shapefile(extract_shp_path(input$protected_area_file))
     })
-
-    # ── Run analysis ─────────────────────────────────────────
+    
+    # ── Run analysis with progress bar ──────────────────────
     observeEvent(input$btn_run, {
       req(!is_running(), input$idx_serasi_file, input$protected_area_file)
-
+      
       is_running(TRUE)
       analysis_result(NULL)
-
-      tryCatch({
-        idx_padu_kl_map <- calculate_overlay_pct(
-          pu           = idx_serasi_map(),
-          overlay_area = protected_area_vect(),
-          title        = "protected"
-        ) %>%
-          mutate(idx_padu_kl = protected_pct / 100)
-
-        out_path <- file.path(output_dir(), "idx_padu_kl.gpkg")
-        sf::write_sf(idx_padu_kl_map, out_path, delete_dsn = TRUE)
-
-        analysis_result(list(
-          map   = idx_padu_kl_map,
-          table = as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
-        ))
-        analysis_log(paste0("Analisis PADU-KL selesai. File disimpan ke: ", out_path))
-        showNotification("Analisis selesai!", type = "message", duration = 5)
-
-      }, error = function(e) {
-        analysis_log(paste("Error:", e$message))
-        showNotification(paste("Analisis gagal:", e$message), type = "error", duration = 8)
-      })
-
+      log_messages("")   # reset log
+      
+      # Bungkus seluruh proses dengan progress bar
+      withProgress(message = "Menjalankan Analisis PADU-KL", value = 0, {
+        
+        tryCatch({
+          # Step 1: Load data (progress 10%)
+          incProgress(0.1, detail = "Memuat data...")
+          append_log("Memulai analisis PADU-KL...")
+          
+          pu <- idx_serasi_map()
+          overlay <- protected_area_vect()
+          append_log("Data berhasil dimuat.")
+          
+          # Step 2: Calculate overlay percentage (progress 20% → 80%)
+          incProgress(0.1, detail = "Menghitung tumpang tindih kawasan lindung...")
+          append_log("Menghitung persentase tumpang tindih dengan Kawasan Lindung...")
+          
+          idx_padu_kl_map <- calculate_overlay_pct(
+            pu           = pu,
+            overlay_area = overlay,
+            title        = "protected",
+            parallel     = input$parallel,
+            workers      = input$workers
+          ) %>%
+            mutate(idx_padu_kl = protected_pct / 100)
+          
+          incProgress(0.6, detail = "Pemrosesan selesai...")
+          append_log("Perhitungan persentase selesai.")
+          
+          # Step 3: Save results (progress 90%)
+          incProgress(0.1, detail = "Menyimpan hasil...")
+          append_log("Menyimpan hasil ke disk...")
+          out_path <- file.path(output_dir(), "idx_padu_kl.gpkg")
+          sf::st_write(idx_padu_kl_map, out_path, delete_dsn = TRUE, quiet = TRUE)
+          append_log(paste("Peta disimpan →", out_path))
+          
+          analysis_result(list(
+            map   = idx_padu_kl_map,
+            table = as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
+          ))
+          append_log("Analisis PADU-KL berhasil diselesaikan.")
+          
+          incProgress(0.1, detail = "Selesai!")
+          showNotification(paste("Analisis selesai. Hasil disimpan ke", out_path),
+                           type = "message", duration = 5)
+          
+        }, error = function(e) {
+          msg <- conditionMessage(e)
+          if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
+          append_log(paste("ERROR:", msg))
+          showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
+        })
+        
+      }) # end withProgress
+      
       is_running(FALSE)
     })
-
+    
     # ── Status box ───────────────────────────────────────────
     output$status_box <- renderUI({
       if (is_running()) {
@@ -185,7 +249,7 @@ padu_kl_server <- function(id, output_dir) {
             "Siap. Unggah file dan klik Jalankan Analisis.")
       }
     })
-
+    
     # ── Map output ───────────────────────────────────────────
     output$result_map <- renderPlot({
       req(analysis_result())
@@ -193,17 +257,18 @@ padu_kl_server <- function(id, output_dir) {
            main = "Peta Indeks PADU-KL (Tumpang Tindih Kawasan Konservasi)",
            border = "grey60")
     })
-
+    
     # ── Table output ─────────────────────────────────────────
     output$result_table <- renderTable({
       req(analysis_result())
       head(analysis_result()$table, 100)
     })
-
-    # ── Validation log ───────────────────────────────────────
-    output$validation_log <- renderText({
-      analysis_log()
+    
+    # ── Validation log (real-time) ──────────────────────────
+    output$validation_log <- renderPrint({
+      invalidateLater(100, session)   # perbarui setiap 100ms
+      cat(log_messages())
     })
-
+    
   })
 }
