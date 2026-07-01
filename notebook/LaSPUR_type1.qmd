@@ -20,8 +20,8 @@ Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahap
 #| message: false
 #| include: true
 
-source("R/functions.R")
-source("R/helpers.R")
+source("./R/functions.R")
+source("./R/helpers.R")
 ```
 
 Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel. Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file dilakukan pada setiap tahap yang berkaitan dengan data tersebut.

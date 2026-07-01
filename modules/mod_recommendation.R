@@ -3,8 +3,8 @@
 #  MODULE: Recommendation (4. Recommendation)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 recommendation_ui <- function(id) {

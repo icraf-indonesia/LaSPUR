@@ -3,8 +3,8 @@
 #  MODULE: PADAN Analysis (3. PADAN)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 padan_ui <- function(id) {

@@ -3,8 +3,8 @@
 #  MODULE: Adjacent (1.2 Type 2: Adjacent)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 adjacent_ui <- function(id) {

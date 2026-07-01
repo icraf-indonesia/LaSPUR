@@ -3,8 +3,8 @@
 #  MODULE: PADU Combine (2.8 PADU-Combine)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 padu_combine_ui <- function(id) {

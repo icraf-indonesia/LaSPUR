@@ -1,21 +1,21 @@
-# ui/modules/mod_padu_ki.R
+# ui/modules/mod_padu_kh.R
 # ============================================================
-#  MODULE: PADU-KI (2.7 PADU-KI: Disaster Risk Analysis)
+#  MODULE: PADU-KH (2.4 PADU-KH: Habitat Presence/Quality)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
-padu_ki_ui <- function(id) {
+padu_kh_ui <- function(id) {
   ns <- NS(id)
   tagList(
     
     div(
       style = "margin-bottom: 20px;",
-      h4("2.7 PADU-KI (Ketahanan Iklim)", style = "margin: 0; font-weight: 700;"),
+      h4("2.4 PADU-KH (Komposisi Habitat)", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menilai kepaduan lingkungan berdasarkan ketahanan iklim untuk menghasilkan nilai indeks PADU-KI.",
+        "Menilai kepaduan lingkungan berdasarkan komposisi habitat pada bentang lahan darat dan laut untuk menghasilkan nilai indeks PADU-KH.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -41,21 +41,31 @@ padu_ki_ui <- function(id) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-exclamation-triangle me-1"),
-               "Peta Risiko Bencana (.shp)",
+        tags$p(tags$i(class = "bi bi-tree me-1"),
+               "Sumber Peta Habitat",
                style = "font-weight: 600; margin-bottom: 4px;"),
-        tags$small(
-          style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Unggah vektor Risiko Bencana."
+        radioButtons(ns("habitat_source"), label = NULL,
+                     choices = c("Ekstrak dari Tutupan Lahan (LULC)" = "lulc",
+                                 "Unggah File Habitat Terpisah"       = "manual"),
+                     inline = TRUE),
+        
+        # Conditional UI untuk LULC
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'lulc'", ns("habitat_source")),
+          fileInput(ns("lulc_file"), "Peta Tutupan/Penggunaan Lahan (.shp)",
+                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                    multiple = TRUE),
+          textInput(ns("habitat_ids"), "ID Kelas yang menunjukkan habitat (pisahkan dengan koma)", value = "5, 6, 24, 25"),
+          tags$small(class = "text-muted", "Default: 5,6 (Mangrove), 24 (Terumbu Karang), 25 (Lamun)")
         ),
-        fileInput(ns("disaster_risk_file"),
-                  label    = NULL,
-                  accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                  multiple = TRUE),
         
-        hr(),
-        
-        textInput(ns("risk_col_name"), "Nama Kolom Atribut Risiko", value = "Kerawanan"),
+        # Conditional UI untuk file terpisah
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'manual'", ns("habitat_source")),
+          fileInput(ns("coral_file"),    "Peta Terumbu Karang (.shp)", multiple = TRUE),
+          fileInput(ns("seagrass_file"), "Peta Lamun (.shp)",          multiple = TRUE),
+          fileInput(ns("mangrove_file"), "Peta Mangrove (.shp)",       multiple = TRUE)
+        ),
         
         hr(),
         
@@ -83,10 +93,9 @@ padu_ki_ui <- function(id) {
         hr(),
         
         div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap;",
+          style = "display: flex; gap: 8px;",
           actionButton(ns("btn_run"),
-                       tagList(tags$i(class = "bi bi-play-fill me-1"),
-                               "Jalankan Analisis"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis"),
                        class = "btn-success btn-sm")
         )
       ),
@@ -125,7 +134,7 @@ padu_ki_ui <- function(id) {
 }
 
 # ── Server ───────────────────────────────────────────────────
-padu_ki_server <- function(id, output_dir) {
+padu_kh_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     
     analysis_result <- reactiveVal(NULL)
@@ -167,63 +176,80 @@ padu_ki_server <- function(id, output_dir) {
       load_and_validate_shapefile(path)
     })
     
-    disaster_risk_vect <- reactive({
-      req(input$disaster_risk_file)
-      load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
-    })
-    
     # ── Run analysis with progress bar ──────────────────────
     observeEvent(input$btn_run, {
-      req(!is_running(), input$idx_serasi_file, input$disaster_risk_file)
+      req(!is_running())
+      req(input$idx_serasi_file)
       
       is_running(TRUE)
       analysis_result(NULL)
       log_messages("")   # reset log
       
-      withProgress(message = "Menjalankan Analisis PADU-KI", value = 0, {
+      # Bungkus seluruh proses dengan progress bar
+      withProgress(message = "Menjalankan Analisis PADU-KH", value = 0, {
         
         tryCatch({
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          append_log("Memulai analisis PADU-KI...")
+          append_log("Memulai analisis PADU-KH...")
           
-          idx_map <- idx_serasi_map()
-          dr_vect <- disaster_risk_vect()
-          risk_col <- input$risk_col_name
-          append_log("Data berhasil dimuat.")
-          append_log(paste("Kolom risiko yang digunakan:", risk_col))
+          pu <- idx_serasi_map()
+          append_log("Peta SERASI berhasil dimuat.")
           
-          # Step 2: Calculate PADU-KI (progress 20% → 80%)
-          incProgress(0.1, detail = "Mempersiapkan perhitungan...")
-          append_log("Menghitung indeks PADU-KI...")
+          # Step 2: Prepare habitat data (progress 20% → 50%)
+          incProgress(0.1, detail = "Mempersiapkan data habitat...")
+          coastal_habitat <- NULL
           
-          padu_ki <- calculate_padu_ki(
-            idx_serasi_map      = idx_map,
-            disaster_risk_vect  = dr_vect,
-            value_col           = risk_col,
-            parallel            = input$parallel,
-            workers             = input$workers
+          if (input$habitat_source == "lulc") {
+            req(input$lulc_file)
+            append_log("Menggunakan tutupan lahan sebagai sumber habitat...")
+            lulc_vect <- sf::st_read(extract_shp_path(input$lulc_file), quiet = TRUE)
+            ids    <- as.numeric(unlist(strsplit(input$habitat_ids, ",")))
+            id_col <- intersect(c("ID", "id"), names(lulc_vect))[1]
+            coastal_habitat <- lulc_vect[lulc_vect[[id_col]] %in% ids, ]
+            append_log(paste("  Filter kelas habitat ID:", paste(ids, collapse = ", ")))
+          } else {
+            req(input$coral_file, input$seagrass_file, input$mangrove_file)
+            append_log("Menggunakan file habitat terpisah...")
+            coastal_habitat <- list(
+              sf::st_read(extract_shp_path(input$coral_file),    quiet = TRUE),
+              sf::st_read(extract_shp_path(input$seagrass_file), quiet = TRUE),
+              sf::st_read(extract_shp_path(input$mangrove_file), quiet = TRUE)
+            )
+            append_log("  File habitat berhasil dimuat.")
+          }
+          incProgress(0.3, detail = "Habitat siap...")
+          
+          # Step 3: Calculate overlay percentage (progress 50% → 80%)
+          incProgress(0.1, detail = "Menghitung tumpang tindih habitat...")
+          append_log("Menghitung persentase tumpang tindih habitat dalam unit perencanaan...")
+          res_map <- calculate_overlay_pct(
+            pu           = pu,
+            overlay_area = coastal_habitat,
+            title        = "coastal_habitat",
+            parallel     = input$parallel,
+            workers      = input$workers
           )
+          incProgress(0.2, detail = "Perhitungan selesai...")
           
-          incProgress(0.6, detail = "Perhitungan selesai...")
+          # Step 4: Calculate final index (progress 80% → 90%)
+          incProgress(0.1, detail = "Menghitung indeks PADU-KH...")
+          append_log("Menghitung indeks akhir PADU-KH...")
+          res_map <- res_map %>%
+            mutate(idx_padu_kh = coastal_habitat_pct / 100)
           append_log("Perhitungan indeks selesai.")
           
-          idx_padu_ki_map <- padu_ki$idx_padu_ki_map
-          
-          # Step 3: Save results (progress 90%)
+          # Step 5: Save results (progress 90% → 100%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          append_log("Menyimpan hasil ke disk...")
-          out_path <- file.path(output_dir(), "idx_padu_ki.gpkg")
-          sf::st_write(idx_padu_ki_map, out_path, delete_dsn = TRUE, quiet = TRUE)
+          out_path <- file.path(output_dir(), "idx_padu_kh.gpkg")
+          sf::st_write(res_map, out_path, delete_dsn = TRUE, quiet = TRUE)
           append_log(paste("Peta disimpan →", out_path))
           
-          idx_padu_ki_table <- as_tibble(sf::st_drop_geometry(idx_padu_ki_map))
-          analysis_result(list(map = idx_padu_ki_map, table = idx_padu_ki_table))
-          append_log("Analisis PADU-KI berhasil diselesaikan.")
+          analysis_result(list(map = res_map, table = sf::st_drop_geometry(res_map)))
+          append_log("Analisis PADU-KH berhasil diselesaikan.")
           
           incProgress(0.1, detail = "Selesai!")
-          showNotification("Berhasil: Perhitungan PADU-KI selesai.",
-                           type = "message", duration = 5)
+          showNotification("Analisis selesai!", type = "message", duration = 5)
           
         }, error = function(e) {
           msg <- conditionMessage(e)
@@ -257,7 +283,7 @@ padu_ki_server <- function(id, output_dir) {
     # ── Map output ───────────────────────────────────────────
     output$result_map <- renderPlot({
       req(analysis_result())
-      plot(analysis_result()$map["idx_padu_ki"], main = "Peta Indeks PADU-KI (Ketahanan Bencana)")
+      plot(analysis_result()$map["idx_padu_kh"], main = "Peta Indeks PADU-KH")
     })
     
     # ── Table output ─────────────────────────────────────────

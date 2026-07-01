@@ -3,8 +3,8 @@
 #  MODULE: Overlap (1.1 Type 1: Overlap)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 overlap_ui <- function(id) {

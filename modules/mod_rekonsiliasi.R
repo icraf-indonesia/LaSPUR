@@ -3,8 +3,8 @@
 #  MODULE: Rekonsiliasi (Tahap 8)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 rekonsiliasi_ui <- function(id) {

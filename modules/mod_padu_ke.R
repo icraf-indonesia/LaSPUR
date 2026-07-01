@@ -1,21 +1,21 @@
-# ui/modules/mod_padu_hs.R
+# ui/modules/mod_padu_ke.R
 # ============================================================
-#  MODULE: PADU-HS (2.2)
+#  MODULE: PADU-KE (2.1 PADU-KE)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
-padu_hs_ui <- function(id) {
+padu_ke_ui <- function(id) {
   ns <- NS(id)
   tagList(
     
     div(
       style = "margin-bottom: 20px;",
-      h4("2.2 PADU-HS (Hidrologi dan Sedimentasi)", style = "margin: 0; font-weight: 700;"),
+      h4("2.1 PADU-KE (Konektivitas Ekologis)", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menilai kepaduan lingkungan berdasarkan kondisi hidrologis dan sedimentasi untuk menghasilkan nilai indeks PADU-HS.",
+        "Menilai kepaduan lingkungan berdasarkan konektivitas ekologis untuk menghasilkan nilai indeks PADU-KE.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -41,78 +41,65 @@ padu_hs_ui <- function(id) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-layers me-1"),
-               "Peta Total Suspended Solid (TSS) (.tif)",
+        tags$p(tags$i(class = "bi bi-map me-1"),
+               "Peta Tutupan/Penggunaan Lahan (.shp)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         tags$small(
           style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "File raster nilai TSS."
+          "Layer poligon dengan kelas tutupan lahan."
         ),
-        fileInput(ns("tss_file"),
-                  label  = NULL,
-                  accept = c(".tif", ".tiff")),
+        fileInput(ns("lulc_file"),
+                  label    = NULL,
+                  accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                  multiple = TRUE),
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-geo-alt me-1"),
-               "Input Peta Jarak Estuari",
+        tags$p(tags$i(class = "bi bi-table me-1"),
+               "Tabel Matriks PADU-KE (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         tags$small(
           style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Unggah raster jarak yang sudah dihitung, atau unggah shapefile estuari untuk dihitung otomatis."
+          "Kolom yang diperlukan: class1, class2, adj_index."
         ),
+        fileInput(ns("matriks_padu_ke_file"),
+                  label  = NULL,
+                  accept = ".xlsx"),
         
-        radioButtons(
-          ns("estuari_input_mode"),
-          label   = NULL,
-          choices = c(
-            "Unggah raster jarak yang sudah ada (.tif)" = "upload_raster",
-            "Unggah shapefile estuari dan hitung otomatis" = "calculate"
-          ),
-          selected = "upload_raster"
-        ),
+        hr(),
         
-        # Mode A: unggah raster langsung
-        conditionalPanel(
-          condition = sprintf("input['%s'] == 'upload_raster'", ns("estuari_input_mode")),
-          fileInput(ns("euc_dist_file"),
-                    label  = "Raster Jarak Estuari (.tif)",
-                    accept = c(".tif", ".tiff"))
-        ),
-        
-        # Mode B: unggah shapefile → hitung
-        conditionalPanel(
-          condition = sprintf("input['%s'] == 'calculate'", ns("estuari_input_mode")),
-          fileInput(ns("estuari_file"),
-                    label    = "Shapefile Estuari",
-                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                    multiple = TRUE),
-          numericInput(ns("euc_resolution"),
-                       "Resolusi Perhitungan (meter)",
-                       value = 30, min = 1),
-          div(
-            class = "alert alert-warning py-2 px-3",
-            style = "font-size: 0.85rem;",
-            tags$i(class = "bi bi-exclamation-triangle me-1"),
-            "Jarak Euclidean akan dihitung dari shapefile di atas. Proses ini dapat memakan beberapa menit untuk dataset besar. Hasilnya akan otomatis disimpan ke direktori output."
+        # ── Pengaturan lanjutan (collapsible, default tertutup) ──
+        accordion(
+          accordion_panel(
+            title = "Pengaturan lanjutan",
+            icon = icon("gear"),
+            open = FALSE,   # default collapsed
+            checkboxInput(
+              ns("parallel"),
+              "Aktifkan pemrosesan paralel",
+              value = FALSE
+            ),
+            numericInput(
+              ns("workers"),
+              "Jumlah pekerja (cores)",
+              value = 2,
+              min = 1,
+              step = 1
+            )
           )
         ),
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-sliders me-1"),
-               "Parameter",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        numericInput(ns("estuari_dist_max"),
-                     "Jarak Estuari Maksimum (meter)",
-                     value = 5000, min = 1),
-        
-        hr(),
-        
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
+          actionButton(ns("btn_generate_matrix"),
+                       tagList(tags$i(class = "bi bi-file-earmark-excel me-1"),
+                               "Buat Template Matriks"),
+                       class = "btn-outline-primary btn-sm"),
           actionButton(ns("btn_run"),
-                       tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"),
+                               "Jalankan Analisis"),
                        class = "btn-success btn-sm")
         )
       ),
@@ -138,10 +125,10 @@ padu_hs_ui <- function(id) {
             )
           ),
           nav_panel(
-            "Log",
+            "Log Validasi",
             div(
               style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
-              verbatimTextOutput(ns("run_log"))
+              verbatimTextOutput(ns("validation_log"))
             )
           )
         )
@@ -151,11 +138,11 @@ padu_hs_ui <- function(id) {
 }
 
 # ── Server ───────────────────────────────────────────────────
-padu_hs_server <- function(id, output_dir) {
+padu_ke_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     
     analysis_result <- reactiveVal(NULL)
-    log_messages    <- reactiveVal("")  
+    log_messages    <- reactiveVal("")   # log real-time
     is_running      <- reactiveVal(FALSE)
     
     # ── Rename sidecar files and return .shp path ───
@@ -180,12 +167,6 @@ padu_hs_server <- function(id, output_dir) {
       extract_shp_path(file_input)
     }
     
-    # ── Log helper ───────────────────────────────────────────
-    append_log <- function(msg) {
-      current <- log_messages()
-      log_messages(paste0(current, format(Sys.time(), "[%H:%M:%S] "), msg, "\n"))
-    }
-    
     # ── Reactives ────────────────────────────────────────────
     idx_serasi_map <- reactive({
       req(input$idx_serasi_file)
@@ -193,101 +174,120 @@ padu_hs_server <- function(id, output_dir) {
       load_and_validate_shapefile(path)
     })
     
-    tss_rast <- reactive({
-      req(input$tss_file)
-      load_and_validate_raster(input$tss_file$datapath)
+    lulc_vect <- reactive({
+      req(input$lulc_file)
+      load_and_validate_shapefile(extract_shp_path(input$lulc_file))
     })
     
-    estuari_vect <- reactive({
-      req(input$estuari_input_mode == "calculate")
-      req(input$estuari_file)
-      load_and_validate_shapefile(extract_shp_path(input$estuari_file))
+    lulc_ref <- reactive({
+      lulc_vect() %>%
+        sf::st_drop_geometry() %>%
+        dplyr::distinct(ID, LC) %>%
+        dplyr::arrange(ID)
     })
     
-    euc_dist_rast <- reactive({
-      if (input$estuari_input_mode == "upload_raster") {
-        req(input$euc_dist_file)
-        append_log("Memuat raster jarak estuari yang diunggah...")
-        terra::rast(input$euc_dist_file$datapath)
-      } else {
-        req(estuari_vect(), idx_serasi_map())
-        append_log("Menghitung jarak Euclidean dari shapefile estuari...")
-        euc <- calculate_euclidean_dist(
-          estuari_vect(),
-          idx_serasi_map(),
-          resolution = input$euc_resolution
-        )
-        out_path <- file.path(output_dir(), "estuari_euc_dist.tif")
-        terra::writeRaster(euc, out_path, overwrite = TRUE)
-        append_log(paste("Raster jarak disimpan otomatis →", out_path))
-        euc
-      }
+    # ── Generate matrix template ─────────────────────────────
+    observeEvent(input$btn_generate_matrix, {
+      tryCatch({
+        template <- generate_matrix_padu_ke(lulc_ref())
+        out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
+        write.xlsx(template, out_path, overwrite = TRUE)
+        showNotification(paste("Template matriks dibuat →", out_path),
+                         type = "message", duration = 5)
+      }, error = function(e) {
+        showNotification(paste("Gagal membuat template matriks:", e$message),
+                         type = "error", duration = 8)
+      })
     })
     
     # ── Run analysis with progress bar ──────────────────────
     observeEvent(input$btn_run, {
       req(!is_running())
-      req(input$idx_serasi_file, input$tss_file)
-      
-      if (input$estuari_input_mode == "upload_raster") {
-        req(input$euc_dist_file)
-      } else {
-        req(input$estuari_file)
-      }
+      req(input$idx_serasi_file, input$lulc_file, input$matriks_padu_ke_file)
       
       is_running(TRUE)
       analysis_result(NULL)
       log_messages("")   # reset log
       
-      withProgress(message = "Menjalankan Analisis PADU-HS", value = 0, {
+      # Fungsi untuk menambahkan pesan ke log
+      append_log <- function(msg) {
+        current <- log_messages()
+        log_messages(paste0(current, msg, "\n"))
+      }
+      
+      # Bungkus seluruh proses dengan progress bar
+      withProgress(message = "Menjalankan Analisis PADU-KE", value = 0, {
         
         tryCatch({
-          # Step 1: Load data (progress 10%)
-          incProgress(0.1, detail = "Memuat data...")
-          append_log("Memulai analisis PADU-HS...")
+          # Step 1: Load matrix (progress 10%)
+          incProgress(0.1, detail = "Memuat matriks PADU-KE...")
+          append_log(">> Memuat matriks PADU-KE...")
+          matriks_padu_ke <- load_validate_matrix_table(input$matriks_padu_ke_file$datapath, title = "padu_ke")
+          append_log("   Matriks berhasil dimuat.")
           
-          idx_map <- idx_serasi_map()
-          tss <- tss_rast()
-          euc <- euc_dist_rast()
-          append_log("Data berhasil dimuat.")
+          # Step 2: Load maps (progress 25%)
+          incProgress(0.15, detail = "Memuat peta...")
+          append_log(">> Memuat peta SERASI...")
+          idx_map        <- idx_serasi_map()
+          append_log(">> Memuat peta tutupan lahan...")
+          lulc_vect_data <- lulc_vect()
+          class_col      <- intersect(c("ID", "Class", "class", "LULC", "Kelas"), names(lulc_vect_data))[1]
+          append_log(paste0("   Kolom kelas: ", class_col))
           
-          # Step 2: Proses perhitungan PADU-HS (progress 20% → 80%)
-          incProgress(0.1, detail = "Mempersiapkan perhitungan...")
-          append_log("Menghitung indeks PADU-HS...")
-      
-          incProgress(0.2, detail = "Memproses jarak estuari dan TSS...")
-          padu_hs <- calculate_padu_hs(
-            idx_serasi_map    = idx_map,
-            estuari_euc_dist  = euc,
-            tss_rast          = tss
+          # Step 3: Calculate adjacency (progress 30% → 70%)
+          incProgress(0.05, detail = "Menghitung ketetanggaan...")
+          append_log(">> Menghitung ketetanggaan tutupan lahan...")
+          
+          lulc_adjacencies <- withCallingHandlers(
+            calculate_lulc_adjacency(
+              lulc         = lulc_vect_data,
+              admin_vector = idx_map,
+              id_col       = "id_pu",
+              class_col    = class_col,
+              parallel     = input$parallel,
+              workers      = input$workers
+            ),
+            message = function(m) append_log(paste0("   [INFO] ", m$message)),
+            warning = function(w) append_log(paste0("   [WARN] ", w$message))
           )
-          incProgress(0.3, detail = "Menggabungkan hasil...")
           
-          idx_padu_hs_map <- padu_hs$idx_padu_hs_map  
-          idx_padu_hs_table <- as_tibble(idx_padu_hs_map %>% sf::st_drop_geometry())
-          append_log("Perhitungan indeks selesai.")
+          incProgress(0.4, detail = "Ketetanggaan selesai, memproses hasil...")
+          append_log("   Ketetanggaan selesai.")
           
-          # Step 3: Save results (progress 90%)
-          incProgress(0.2, detail = "Menyimpan hasil...")
-          append_log("Menyimpan hasil ke disk...")
-          out_map   <- file.path(output_dir(), "idx_padu_hs.gpkg")
-          out_table <- file.path(output_dir(), "idx_padu_hs.csv")
-          sf::st_write(idx_padu_hs_map, out_map, delete_dsn = TRUE, quiet = TRUE)
-          write.csv(idx_padu_hs_table, out_table, row.names = FALSE)
-          append_log(paste("Peta disimpan →", out_map))
-          append_log(paste("Tabel disimpan →", out_table))
+          # Step 4: Calculate PADU-KE (progress 80%)
+          incProgress(0.1, detail = "Menghitung indeks PADU-KE...")
+          append_log(">> Menghitung indeks PADU-KE...")
+          padu_ke <- calculate_padu_ke(
+            matriks_padu_ke   = matriks_padu_ke,
+            lulc_ref          = lulc_ref(),
+            lulc_adjacencies  = lulc_adjacencies,
+            idx_serasi_map    = idx_map,
+            normalize         = TRUE
+          )
           
-          analysis_result(list(map = idx_padu_hs_map, table = idx_padu_hs_table))
-          append_log("Analisis PADU-HS berhasil diselesaikan.")
+          idx_padu_ke <- padu_ke$idx_padu_ke %>% select(-idx_padu_ke_abs)
+          idx_padu_ke_map <- padu_ke$idx_padu_ke_map
           
+          # Step 5: Save results (progress 90%)
+          incProgress(0.1, detail = "Menyimpan hasil...")
+          append_log(">> Menyimpan hasil ke disk...")
+          out_path <- file.path(output_dir(), "idx_padu_ke.gpkg")
+          sf::st_write(idx_padu_ke_map, out_path, delete_dsn = TRUE, quiet = TRUE)
+          append_log(paste0("   Hasil disimpan di: ", out_path))
+          
+          result_table <- as_tibble(idx_padu_ke_map %>% sf::st_drop_geometry())
+          analysis_result(list(map = idx_padu_ke_map, table = result_table))
+          append_log("Analisis PADU-KE berhasil diselesaikan.")
+          
+          # Progress selesai
           incProgress(0.1, detail = "Selesai!")
-          showNotification("Analisis PADU-HS selesai. Hasil disimpan ke direktori output.",
+          showNotification("Analisis selesai! Periksa tab Peta dan Tabel.",
                            type = "message", duration = 5)
           
         }, error = function(e) {
           msg <- conditionMessage(e)
           if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
-          append_log(paste("ERROR:", msg))
+          append_log(paste0("ERROR: ", msg))
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
@@ -316,7 +316,7 @@ padu_hs_server <- function(id, output_dir) {
     # ── Map output ───────────────────────────────────────────
     output$result_map <- renderPlot({
       req(analysis_result())
-      plot(analysis_result()$map["idx_padu_hs"], main = "Peta Indeks PADU-HS")
+      plot(analysis_result()$map["idx_padu_ke"], main = "Peta Indeks PADU-KE")
     })
     
     # ── Table output ─────────────────────────────────────────
@@ -325,8 +325,8 @@ padu_hs_server <- function(id, output_dir) {
       analysis_result()$table
     })
     
-    # ── Log output (real-time) ──────────────────────────────
-    output$run_log <- renderPrint({
+    # ── Validation log (real-time) ──────────────────────────
+    output$validation_log <- renderPrint({
       invalidateLater(100, session)   # perbarui setiap 100ms
       cat(log_messages())
     })

@@ -3,8 +3,8 @@
 #  MODULE: PADU-RTp (2.5 PADU-RTp)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
 padu_rtp_ui <- function(id) {

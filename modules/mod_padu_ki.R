@@ -1,21 +1,21 @@
-# ui/modules/mod_padu_kl.R
+# ui/modules/mod_padu_ki.R
 # ============================================================
-#  MODULE: PADU-KL (2.3 Conservation Area Analysis)
+#  MODULE: PADU-KI (2.7 PADU-KI: Disaster Risk Analysis)
 # ============================================================
 
-source("../R/functions.R")
-source("../R/helpers.R")
+source("R/functions.R")
+source("R/helpers.R")
 
 # ── UI ───────────────────────────────────────────────────────
-padu_kl_ui <- function(id) {
+padu_ki_ui <- function(id) {
   ns <- NS(id)
   tagList(
     
     div(
       style = "margin-bottom: 20px;",
-      h4("2.3 PADU-KL (Kawasan Lindung)", style = "margin: 0; font-weight: 700;"),
+      h4("2.7 PADU-KI (Ketahanan Iklim)", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung pada bentang darat dan laut untuk menghasilkan nilai indeks PADU-KL.",
+        "Menilai kepaduan lingkungan berdasarkan ketahanan iklim untuk menghasilkan nilai indeks PADU-KI.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -41,17 +41,21 @@ padu_kl_ui <- function(id) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-shield-check me-1"),
-               "Shapefile Kawasan Lindung",
+        tags$p(tags$i(class = "bi bi-exclamation-triangle me-1"),
+               "Peta Risiko Bencana (.shp)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         tags$small(
           style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Layer vektor kawasan lindung/konservasi yang akan ditumpangtindihkan dengan unit perencanaan."
+          "Unggah vektor Risiko Bencana."
         ),
-        fileInput(ns("protected_area_file"),
+        fileInput(ns("disaster_risk_file"),
                   label    = NULL,
                   accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
+        
+        hr(),
+        
+        textInput(ns("risk_col_name"), "Nama Kolom Atribut Risiko", value = "Kerawanan"),
         
         hr(),
         
@@ -79,7 +83,7 @@ padu_kl_ui <- function(id) {
         hr(),
         
         div(
-          style = "display: flex; gap: 8px;",
+          style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run"),
                        tagList(tags$i(class = "bi bi-play-fill me-1"),
                                "Jalankan Analisis"),
@@ -121,7 +125,7 @@ padu_kl_ui <- function(id) {
 }
 
 # ── Server ───────────────────────────────────────────────────
-padu_kl_server <- function(id, output_dir) {
+padu_ki_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     
     analysis_result <- reactiveVal(NULL)
@@ -163,62 +167,62 @@ padu_kl_server <- function(id, output_dir) {
       load_and_validate_shapefile(path)
     })
     
-    protected_area_vect <- reactive({
-      req(input$protected_area_file)
-      load_and_validate_shapefile(extract_shp_path(input$protected_area_file))
+    disaster_risk_vect <- reactive({
+      req(input$disaster_risk_file)
+      load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
     })
     
     # ── Run analysis with progress bar ──────────────────────
     observeEvent(input$btn_run, {
-      req(!is_running(), input$idx_serasi_file, input$protected_area_file)
+      req(!is_running(), input$idx_serasi_file, input$disaster_risk_file)
       
       is_running(TRUE)
       analysis_result(NULL)
       log_messages("")   # reset log
       
-      # Bungkus seluruh proses dengan progress bar
-      withProgress(message = "Menjalankan Analisis PADU-KL", value = 0, {
+      withProgress(message = "Menjalankan Analisis PADU-KI", value = 0, {
         
         tryCatch({
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          append_log("Memulai analisis PADU-KL...")
+          append_log("Memulai analisis PADU-KI...")
           
-          pu <- idx_serasi_map()
-          overlay <- protected_area_vect()
+          idx_map <- idx_serasi_map()
+          dr_vect <- disaster_risk_vect()
+          risk_col <- input$risk_col_name
           append_log("Data berhasil dimuat.")
+          append_log(paste("Kolom risiko yang digunakan:", risk_col))
           
-          # Step 2: Calculate overlay percentage (progress 20% → 80%)
-          incProgress(0.1, detail = "Menghitung tumpang tindih kawasan lindung...")
-          append_log("Menghitung persentase tumpang tindih dengan Kawasan Lindung...")
+          # Step 2: Calculate PADU-KI (progress 20% → 80%)
+          incProgress(0.1, detail = "Mempersiapkan perhitungan...")
+          append_log("Menghitung indeks PADU-KI...")
           
-          idx_padu_kl_map <- calculate_overlay_pct(
-            pu           = pu,
-            overlay_area = overlay,
-            title        = "protected",
-            parallel     = input$parallel,
-            workers      = input$workers
-          ) %>%
-            mutate(idx_padu_kl = protected_pct / 100)
+          padu_ki <- calculate_padu_ki(
+            idx_serasi_map      = idx_map,
+            disaster_risk_vect  = dr_vect,
+            value_col           = risk_col,
+            parallel            = input$parallel,
+            workers             = input$workers
+          )
           
-          incProgress(0.6, detail = "Pemrosesan selesai...")
-          append_log("Perhitungan persentase selesai.")
+          incProgress(0.6, detail = "Perhitungan selesai...")
+          append_log("Perhitungan indeks selesai.")
+          
+          idx_padu_ki_map <- padu_ki$idx_padu_ki_map
           
           # Step 3: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
           append_log("Menyimpan hasil ke disk...")
-          out_path <- file.path(output_dir(), "idx_padu_kl.gpkg")
-          sf::st_write(idx_padu_kl_map, out_path, delete_dsn = TRUE, quiet = TRUE)
+          out_path <- file.path(output_dir(), "idx_padu_ki.gpkg")
+          sf::st_write(idx_padu_ki_map, out_path, delete_dsn = TRUE, quiet = TRUE)
           append_log(paste("Peta disimpan →", out_path))
           
-          analysis_result(list(
-            map   = idx_padu_kl_map,
-            table = as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
-          ))
-          append_log("Analisis PADU-KL berhasil diselesaikan.")
+          idx_padu_ki_table <- as_tibble(sf::st_drop_geometry(idx_padu_ki_map))
+          analysis_result(list(map = idx_padu_ki_map, table = idx_padu_ki_table))
+          append_log("Analisis PADU-KI berhasil diselesaikan.")
           
           incProgress(0.1, detail = "Selesai!")
-          showNotification(paste("Analisis selesai. Hasil disimpan ke", out_path),
+          showNotification("Berhasil: Perhitungan PADU-KI selesai.",
                            type = "message", duration = 5)
           
         }, error = function(e) {
@@ -253,9 +257,7 @@ padu_kl_server <- function(id, output_dir) {
     # ── Map output ───────────────────────────────────────────
     output$result_map <- renderPlot({
       req(analysis_result())
-      plot(analysis_result()$map["idx_padu_kl"],
-           main = "Peta Indeks PADU-KL (Tumpang Tindih Kawasan Konservasi)",
-           border = "grey60")
+      plot(analysis_result()$map["idx_padu_ki"], main = "Peta Indeks PADU-KI (Ketahanan Bencana)")
     })
     
     # ── Table output ─────────────────────────────────────────
