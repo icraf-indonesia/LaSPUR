@@ -1362,10 +1362,15 @@ extract_raster_to_sf <- function(pu, rast, id_col, new_col = NULL, na.rm = TRUE,
 #'
 #' @details
 #' The function uses `extract_raster_to_sf()` to extract mean raster values per
-#' polygon. It then combines the two extracted variables:
-#' \deqn{filter\_estuari = 1 - \min(estuari\_dist\_mean / max\_dist, 1)}
-#' \deqn{idx\_padu\_hs = (filter\_estuari + tss\_mean) / 2}
-#' Missing values in either component propagate as `NA` in the final index.
+#' polygon. It then computes two sub‑indices:
+#' \itemize{
+#'   \item \strong{Estuary proximity}: `1 - min(abs(dist) / max_dist, 1)`, clamped to [0,1].
+#'         Distances beyond `max_dist` get a score of 0.
+#'   \item \strong{TSS quality}: `(max_tss - tss) / (max_tss - min_tss)`, clamped to [0,1].
+#'         If TSS is constant, the score becomes 1 for all non‑missing values.
+#' }
+#' The final index is the arithmetic mean of the two sub‑indices.
+#' Missing values in either component propagate as `NA`.
 #'
 #' @examples
 #' \dontrun{
@@ -1374,7 +1379,7 @@ extract_raster_to_sf <- function(pu, rast, id_col, new_col = NULL, na.rm = TRUE,
 #' hs_tbl <- result$idx_padu_hs
 #' }
 #'
-#' @importFrom dplyr left_join select mutate
+#' @importFrom dplyr left_join select mutate case_when
 #' @importFrom sf st_drop_geometry
 #' @importFrom tibble as_tibble
 #' @export
@@ -1384,7 +1389,6 @@ calculate_padu_hs <- function(idx_serasi_map,
                               id_col = "id_pu",
                               max_dist = 5000) {
   
-  # Extract estuarine distance
   estuari_dist_extracted <- extract_raster_to_sf(
     idx_serasi_map,
     estuari_euc_dist,
@@ -1392,41 +1396,68 @@ calculate_padu_hs <- function(idx_serasi_map,
     new_col = "estuari_dist_mean"
   )
   
-  # Extract TSS
   tss_extracted <- extract_raster_to_sf(
     idx_serasi_map,
     tss_rast,
     id_col = id_col,
     new_col = "tss_mean"
   )
-  
-  # Drop geometry from TSS for joining
+
   tss_to_merge <- tss_extracted %>%
     sf::st_drop_geometry() %>%
     dplyr::select(dplyr::all_of(c(id_col, "tss_mean")))
   
-  # Join and calculate PADU-HS
+  if (is.na(max_dist) || max_dist <= 0) {
+    max_dist_val <- max(estuari_dist_extracted$estuari_dist_mean, na.rm = TRUE)
+    if (is.infinite(max_dist_val) || max_dist_val == 0) {
+      max_dist_val <- 1
+      warning("All distances are NA or zero. Estuary sub‑index set to 1 for all non‑NA rows.")
+    }
+  } else {
+    max_dist_val <- max_dist
+  }
+  
+  min_tss <- min(tss_extracted$tss_mean, na.rm = TRUE)
+  max_tss <- max(tss_extracted$tss_mean, na.rm = TRUE)
+  
+  if (is.infinite(min_tss) || is.infinite(max_tss)) {
+    min_tss <- 0
+    max_tss <- 1
+    tss_constant <- FALSE  
+    warning("All TSS values are NA. TSS sub‑index will be NA for all rows.")
+  } else if (max_tss == min_tss) {
+    tss_constant <- TRUE
+  } else {
+    tss_constant <- FALSE
+  }
+  
+  # Calculate index hs
   idx_padu_hs_map <- estuari_dist_extracted %>%
     dplyr::left_join(tss_to_merge, by = id_col) %>%
     dplyr::mutate(
-      filter_estuari = ifelse(
-        is.na(.data$estuari_dist_mean),
-        NA,
-        1 - pmin(.data$estuari_dist_mean / max_dist, 1)
+      filter_estuari = pmax(0, pmin(1,
+                                    1 - pmin(abs(.data$estuari_dist_mean) / max_dist_val, 1)
+      )),
+
+      tss_norm = dplyr::case_when(
+        is.na(.data$tss_mean) ~ NA_real_,
+        tss_constant ~ 1.0, 
+        TRUE ~ pmax(0, pmin(1,
+                            (max_tss - .data$tss_mean) / (max_tss - min_tss)
+        ))
       ),
-      idx_padu_hs = (.data$filter_estuari + .data$tss_mean) / 2
+      
+      idx_padu_hs = (filter_estuari + tss_norm) / 2
     ) %>%
-    dplyr::select(-dplyr::all_of("filter_estuari"))
+    dplyr::select(-filter_estuari, -tss_norm)
   
-  # Create geometry‑free tibble
-  idx_padu_hs <- tibble::as_tibble(
+  idx_padu_hs_tbl <- tibble::as_tibble(
     idx_padu_hs_map %>% sf::st_drop_geometry()
   )
   
-  # Return as a list
   list(
     idx_padu_hs_map = idx_padu_hs_map,
-    idx_padu_hs     = idx_padu_hs
+    idx_padu_hs     = idx_padu_hs_tbl
   )
 }
 
@@ -2697,15 +2728,13 @@ generate_reconciliation_excel <- function(recon_map,
   df_flat <- sf::st_drop_geometry(recon_map)
   
   if (step == 2) {
-    # Two separate decision columns
-    df_flat$decision_rtrw   <- NA_character_
-    df_flat$decision_rzwp3k <- NA_character_
-  } else { # step == 1
-    # Single combined decision column
+    df_flat$user_decision_rtrw   <- NA_character_
+    df_flat$user_decision_rzwp3k <- NA_character_
+  } else { 
     df_flat$user_decision <- NA_character_
   }
   
-  # Extract option lists (remove NAs)
+  # Extract option lists 
   rtrw_opts   <- as.character(rtrw_prioritas$RTRW)
   rzwp3k_opts <- as.character(rzwp3k_prioritas$RZWP3K)
   rtrw_opts   <- rtrw_opts[!is.na(rtrw_opts)]
@@ -2715,18 +2744,13 @@ generate_reconciliation_excel <- function(recon_map,
   wb <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(wb, "Data")
   openxlsx::addWorksheet(wb, "Lists")
-  
-  # Write main data
   openxlsx::writeData(wb, "Data", df_flat)
   
   # Write option lists to the Lists sheet
-  # Column A: RTRW options
   openxlsx::writeData(wb, "Lists", x = "RTRW Options", startCol = 1, startRow = 1)
   if (length(rtrw_opts) > 0) {
     openxlsx::writeData(wb, "Lists", x = rtrw_opts, startCol = 1, startRow = 2, colNames = FALSE)
   }
-  
-  # Column B: RZWP3K options
   openxlsx::writeData(wb, "Lists", x = "RZWP3K Options", startCol = 2, startRow = 1)
   if (length(rzwp3k_opts) > 0) {
     openxlsx::writeData(wb, "Lists", x = rzwp3k_opts, startCol = 2, startRow = 2, colNames = FALSE)
@@ -2740,11 +2764,10 @@ generate_reconciliation_excel <- function(recon_map,
       openxlsx::writeData(wb, "Lists", x = combined_opts, startCol = 3, startRow = 2, colNames = FALSE)
     }
     
-    # Find the column index of 'user_decision'
     col_decision <- which(names(df_flat) == "user_decision")
     if (length(col_decision) == 0) stop("Column 'user_decision' not found in data frame.")
     rows <- 2:(nrow(df_flat) + 1)
-    last_row_combined <- length(combined_opts) + 1  # +1 for header
+    last_row_combined <- length(combined_opts) + 1 
     formula_combined <- paste0("=Lists!$C$2:$C$", last_row_combined)
     
     openxlsx::dataValidation(wb, "Data",
@@ -2754,8 +2777,8 @@ generate_reconciliation_excel <- function(recon_map,
                              value = formula_combined)
   } else {
     # step == 2: apply validations for both decision columns
-    col_rtrw   <- which(names(df_flat) == "decision_rtrw")
-    col_rzwp3k <- which(names(df_flat) == "decision_rzwp3k")
+    col_rtrw   <- which(names(df_flat) == "user_decision_rtrw")
+    col_rzwp3k <- which(names(df_flat) == "user_decision_rzwp3k")
     if (length(col_rtrw) == 0 || length(col_rzwp3k) == 0) {
       stop("Required decision columns not found in data frame.")
     }
@@ -2791,138 +2814,98 @@ generate_reconciliation_excel <- function(recon_map,
   invisible(NULL)
 }
 
-#' Reconcile a land-use class column with decisions from an Excel reconciliation table
+#' Reconcile land-use data using either overlap reconciliation or simple class reconciliation
 #'
-#' Overwrites the specified class column (`RTRW` or `RZWP3K`) in an `sf` object
-#' using the corresponding `decision_*` column from the Excel file. Only rows with
-#' an `id` that appears in the Excel table and a non‑empty decision are updated.
-#' Rows without a matching `id` or with an empty decision remain unchanged.
+#' This is a combined function that dispatches to two original reconciliation workflows
+#' based on the value of `step`. When `step = 1`, it runs the overlap reconciliation
+#' logic (originally `reconcile_map_overlap`). When `step = 2`, it runs the simple
+#' class reconciliation using an Excel decision table (originally `reconcile_map`).
 #'
-#' @param sf_obj An `sf` object that must contain an integer column `id` and
-#'   either a `RTRW` or `RZWP3K` column (as determined by `class_type`).
-#' @param xlsx_path Path to the Excel file. The file must have a sheet named
-#'   `"Data"` containing columns `id`, `decision_rtrw`, and `decision_rzwp3k`.
-#' @param class_type Either `"RTRW"` or `"RZWP3K"`; determines which column is
-#'   updated and which decision column is used.
+#' The returned `sf` object includes an additional character column `reconcile`
+#' indicating whether the row was changed (`"Yes"`) or not (`"No"`).
 #'
-#' @return The input `sf` object with the specified class column overwritten by
-#'   the reconciled values. All other columns and the geometry are unchanged.
+#' @param step Integer; `1` for overlap reconciliation, `2` for simple reconciliation.
+#' @param sf_obj For `step = 2`: an `sf` object with an `id` column and either
+#'   `RTRW` or `RZWP3K` column.
+#' @param xlsx_path For `step = 2`: path to Excel file with sheet "Data" containing
+#'   `id`, `user_decision_rtrw`, and `user_decision_rzwp3k`.
+#' @param class_type For `step = 2`: either `"RTRW"` or `"RZWP3K"`.
+#' @param union For `step = 1`: an `sf` object with columns `id_pu`, `stat_pu`,
+#'   `RTRW`, `RZWP3K`, `id_rtrw`, `id_rzwp3k`, and geometry.
+#' @param recon_table For `step = 1`: data frame with columns `id_rtrw`, `id_rzwp3k`,
+#'   `user_decision`.
+#' @param rtrw_prioritas For `step = 1`: data frame with a column `RTRW` containing
+#'   priority class names (non‑NA values used).
+#' @param rzwp3k_prioritas For `step = 1`: data frame with a column `RZWP3K` containing
+#'   priority class names (non‑NA values used).
+#'
+#' @return An `sf` object with all original columns plus the new `reconcile` column.
 #'
 #' @importFrom readxl read_excel
-#' @importFrom dplyr filter
-#' @importFrom rlang .data
-#'
-#' @examples
-#' \dontrun{
-#' rtrw <- reconcile_map(rtrw, "reconciliation.xlsx", "RTRW")
-#' rz <- reconcile_map(rz, "reconciliation.xlsx", "RZWP3K")
-#' }
-reconcile_map <- function(sf_obj, xlsx_path, class_type = c("RTRW", "RZWP3K")) {
-  class_type <- match.arg(class_type)
-  
-  decision_col <- paste0("decision_", tolower(class_type))
-  orig_col <- class_type
-  
-  xlsx_data <- read_excel(xlsx_path, sheet = "Data")
-  
-  update_data <- xlsx_data %>%
-    filter(!is.na(.data[[decision_col]]) & .data[[decision_col]] != "")
-  
-  if (!orig_col %in% names(sf_obj)) {
-    stop("Column '", orig_col, "' not found in the input sf object.")
-  }
-  
-  new_vals <- sf_obj[[orig_col]]
-  
-  for (i in seq_len(nrow(update_data))) {
-    id_val <- update_data$id[i]
-    new_val <- update_data[[decision_col]][i]
-    match_idx <- which(sf_obj$id == id_val)
-    if (length(match_idx) > 0) {
-      new_vals[match_idx] <- new_val
-    }
-  }
-  
-  sf_obj[[orig_col]] <- new_vals
-  return(sf_obj)
-}
-
-#' Reconcile overlapping polygons using user decisions and priority lists
-#'
-#' @param union An `sf` object with columns: id_pu, stat_pu, RTRW, RZWP3K,
-#'   id_rtrw, id_rzwp3k, geometry.
-#' @param recon_table A data frame with columns: id_rtrw, id_rzwp3k, user_decision.
-#' @param rtrw_prioritas A data frame with a column `"RTRW"` containing valid
-#'   class names for RTRW (non‑NA values used).
-#' @param rzwp3k_prioritas A data frame with a column `"RZWP3K"` containing valid
-#'   class names for RZWP3K (non‑NA values used).
-#'
-#' @return An `sf` object with additional columns `final_class` and
-#'   `stat_pu_final` (never `"intersection"`).
-#'
+#' @importFrom dplyr left_join mutate case_when
 #' @importFrom sf st_as_sf
-#' @importFrom dplyr left_join mutate case_when filter
 #' @export
-reconcile_map_overlap <- function(union, recon_table,
-                                  rtrw_prioritas, rzwp3k_prioritas) {
-  # Check packages
-  if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
-  if (!requireNamespace("dplyr", quietly = TRUE)) stop("package 'dplyr' is required.")
+reconcile_map <- function(step,
+                          sf_obj = NULL, xlsx_path = NULL, class_type = c("RTRW", "RZWP3K"),
+                          union = NULL, recon_table = NULL,
+                          rtrw_prioritas = NULL, rzwp3k_prioritas = NULL) {
   
-  # Check required columns
-  required_union <- c("id_pu", "stat_pu", "RTRW", "RZWP3K", "id_rtrw", "id_rzwp3k")
-  if (!all(required_union %in% colnames(union))) {
-    stop("'union' must contain columns: ", paste(required_union, collapse = ", "))
-  }
-  required_recon <- c("id_rtrw", "id_rzwp3k", "user_decision")
-  if (!all(required_recon %in% colnames(recon_table))) {
-    stop("'recon_table' must contain columns: ", paste(required_recon, collapse = ", "))
-  }
-  
-  # Extract priority lists (remove NAs)
-  rtrw_classes <- as.character(rtrw_prioritas$RTRW)
-  rtrw_classes <- rtrw_classes[!is.na(rtrw_classes)]
-  rzwp3k_classes <- as.character(rzwp3k_prioritas$RZWP3K)
-  rzwp3k_classes <- rzwp3k_classes[!is.na(rzwp3k_classes)]
-  
-  all_classes <- unique(c(rtrw_classes, rzwp3k_classes))
-  source_map <- setNames(
-    sapply(all_classes, function(cls) {
-      in_rtrw <- cls %in% rtrw_classes
-      in_rzwp3k <- cls %in% rzwp3k_classes
-      if (in_rtrw && in_rzwp3k) "BOTH"
-      else if (in_rtrw) "RTRW"
-      else if (in_rzwp3k) "RZWP3K"
-      else NA_character_
-    }),
-    all_classes
-  )
-  
-  # Convert join keys to character
-  union <- dplyr::mutate(union,
-                         id_rtrw = as.character(id_rtrw),
-                         id_rzwp3k = as.character(id_rzwp3k))
-  recon_table <- dplyr::mutate(recon_table,
-                               id_rtrw = as.character(id_rtrw),
-                               id_rzwp3k = as.character(id_rzwp3k))
-  
-  # Join user_decision
-  union_with_decision <- dplyr::left_join(
-    union,
-    recon_table[, c("id_rtrw", "id_rzwp3k", "user_decision")],
-    by = c("id_rtrw", "id_rzwp3k")
-  )
-  
-  # Warn about missing decisions for intersection polygons
-  missing_dec <- dplyr::filter(union_with_decision,
-                               stat_pu == "intersection" & is.na(user_decision))
-  if (nrow(missing_dec) > 0) {
-    warning("Intersection polygons with missing user_decision (id_pu = ",
-            paste(missing_dec$id_pu, collapse = ", "), ") will have NA in final_class and stat_pu_final.")
-  }
-  
-  final_sf <- union_with_decision %>%
-    dplyr::mutate(
+  if (step == 1) {
+    if (is.null(union)) stop("'union' must be provided for step = 1")
+    if (is.null(recon_table)) stop("'recon_table' must be provided for step = 1")
+    if (is.null(rtrw_prioritas)) stop("'rtrw_prioritas' must be provided for step = 1")
+    if (is.null(rzwp3k_prioritas)) stop("'rzwp3k_prioritas' must be provided for step = 1")
+    
+    if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
+    if (!requireNamespace("dplyr", quietly = TRUE)) stop("package 'dplyr' is required.")
+    
+    required_union <- c("id_pu", "stat_pu", "RTRW", "RZWP3K", "id_rtrw", "id_rzwp3k")
+    if (!all(required_union %in% colnames(union))) {
+      stop("'union' must contain columns: ", paste(required_union, collapse = ", "))
+    }
+    required_recon <- c("id_rtrw", "id_rzwp3k", "user_decision")
+    if (!all(required_recon %in% colnames(recon_table))) {
+      stop("'recon_table' must contain columns: ", paste(required_recon, collapse = ", "))
+    }
+    rtrw_classes <- as.character(rtrw_prioritas$RTRW)
+    rtrw_classes <- rtrw_classes[!is.na(rtrw_classes)]
+    rzwp3k_classes <- as.character(rzwp3k_prioritas$RZWP3K)
+    rzwp3k_classes <- rzwp3k_classes[!is.na(rzwp3k_classes)]
+    
+    all_classes <- unique(c(rtrw_classes, rzwp3k_classes))
+    source_map <- setNames(
+      sapply(all_classes, function(cls) {
+        in_rtrw <- cls %in% rtrw_classes
+        in_rzwp3k <- cls %in% rzwp3k_classes
+        if (in_rtrw && in_rzwp3k) "BOTH"
+        else if (in_rtrw) "RTRW"
+        else if (in_rzwp3k) "RZWP3K"
+        else NA_character_
+      }),
+      all_classes
+    )
+
+    union$id_rtrw <- as.character(union$id_rtrw)
+    union$id_rzwp3k <- as.character(union$id_rzwp3k)
+    recon_table$id_rtrw <- as.character(recon_table$id_rtrw)
+    recon_table$id_rzwp3k <- as.character(recon_table$id_rzwp3k)
+
+    union_with_decision <- dplyr::left_join(
+      union,
+      recon_table[, c("id_rtrw", "id_rzwp3k", "user_decision")],
+      by = c("id_rtrw", "id_rzwp3k")
+    )
+
+    missing_dec <- union_with_decision[
+      union_with_decision$stat_pu == "intersection" & is.na(union_with_decision$user_decision),
+    ]
+    if (nrow(missing_dec) > 0) {
+      warning("Intersection polygons with missing user_decision (id_pu = ",
+              paste(missing_dec$id_pu, collapse = ", "), ") will have NA in final_class and stat_pu_final.")
+    }
+
+    final_sf <- dplyr::mutate(
+      union_with_decision,
       final_class = dplyr::case_when(
         stat_pu == "intersection" ~ user_decision,
         stat_pu == "RTRW" ~ RTRW,
@@ -2937,20 +2920,70 @@ reconcile_map_overlap <- function(union, recon_table,
         TRUE ~ NA_character_
       )
     )
-  
-  both_cases <- dplyr::filter(final_sf,
-                              stat_pu == "intersection" & stat_pu_final == "BOTH")
-  if (nrow(both_cases) > 0) {
-    warning("Some intersection polygons have decisions that appear in BOTH priority lists (id_pu = ",
-            paste(both_cases$id_pu, collapse = ", "), "). Set to 'BOTH'.")
+
+    both_cases <- final_sf[
+      final_sf$stat_pu == "intersection" & final_sf$stat_pu_final == "BOTH",
+    ]
+    if (nrow(both_cases) > 0) {
+      warning("Some intersection polygons have decisions that appear in BOTH priority lists (id_pu = ",
+              paste(both_cases$id_pu, collapse = ", "), "). Set to 'BOTH'.")
+    }
+    neither_cases <- final_sf[
+      final_sf$stat_pu == "intersection" & is.na(final_sf$stat_pu_final) & !is.na(final_sf$user_decision),
+    ]
+    if (nrow(neither_cases) > 0) {
+      warning("Some intersection polygons have decisions that appear in NEITHER priority list (id_pu = ",
+              paste(neither_cases$id_pu, collapse = ", "), "). Set to NA.")
+    }
+    
+    final_sf$reconcile <- ifelse(final_sf$stat_pu == "intersection" & !is.na(final_sf$user_decision),
+                                 "Yes", "No")
+    
+    return(sf::st_as_sf(final_sf))
+    
+  } else if (step == 2) {
+    if (is.null(sf_obj)) stop("'sf_obj' must be provided for step = 2")
+    if (is.null(xlsx_path)) stop("'xlsx_path' must be provided for step = 2")
+    
+    class_type <- match.arg(class_type)
+    decision_col <- paste0("user_decision_", tolower(class_type))
+    orig_col <- class_type
+    
+    if (!requireNamespace("readxl", quietly = TRUE)) {
+      stop("package 'readxl' is required for step = 2.")
+    }
+    
+    xlsx_data <- readxl::read_excel(xlsx_path, sheet = "Data")
+    update_data <- xlsx_data[
+      !is.na(xlsx_data[[decision_col]]) & xlsx_data[[decision_col]] != "",
+    ]
+    
+    if (!orig_col %in% names(sf_obj)) {
+      stop("Column '", orig_col, "' not found in the input sf object.")
+    }
+
+    orig_vals <- sf_obj[[orig_col]]
+    new_vals <- orig_vals 
+    
+    for (i in seq_len(nrow(update_data))) {
+      id_val <- update_data$id[i]
+      new_val <- update_data[[decision_col]][i]
+      match_idx <- which(sf_obj$id == id_val)
+      if (length(match_idx) > 0) {
+        new_vals[match_idx] <- new_val
+      }
+    }
+    sf_obj[[orig_col]] <- new_vals
+
+    changed <- !(
+      (is.na(new_vals) & is.na(orig_vals)) |
+        (!is.na(new_vals) & !is.na(orig_vals) & new_vals == orig_vals)
+    )
+    sf_obj$reconcile <- ifelse(changed, "Yes", "No")
+    
+    return(sf_obj)
+    
+  } else {
+    stop("step must be 1 or 2")
   }
-  neither_cases <- dplyr::filter(final_sf,
-                                 stat_pu == "intersection" & is.na(stat_pu_final) & !is.na(user_decision))
-  if (nrow(neither_cases) > 0) {
-    warning("Some intersection polygons have decisions that appear in NEITHER priority list (id_pu = ",
-            paste(neither_cases$id_pu, collapse = ", "), "). Set to NA.")
-  }
-  
-  # Return as sf
-  sf::st_as_sf(final_sf)
 }

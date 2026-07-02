@@ -105,12 +105,90 @@ tab_config <- list(
 # ── UI ───────────────────────────────────────────────────────
 ui <- page_sidebar(
   title = "Land & Sea Planning Unit Reconcilliation (LaSPUR)",
-  theme = bs_theme(version = 5, bootswatch = "flatly"),
   
+  # ── Custom theme ────────────────────────────────────────────
+  theme = bs_theme(
+    version = 5,
+    bootswatch = "cerulean",
+    bg = "#f8fafc",
+    fg = "#1a2a3a",
+    primary = "#2ba6cb",
+    base_font = font_google("Nunito")
+  ),
+  
+  tags$style(HTML("
+    /* Cards – soft shadows & no harsh borders */
+    .card {
+      border: none !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+      background-color: #ffffff !important;
+    }
+    .card-header {
+      border-bottom: 1px solid #e5edf2 !important;
+      background-color: transparent !important;
+      color: #1a2a3a;
+    }
+  
+    /* Buttons – subtle shadows & bright white text */
+    .btn {
+      color: #ffffff !important;       
+      
+      border: none !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+    }
+    .btn:hover {
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+      transform: translateY(-1px);
+    }
+  
+    .btn-outline-primary {
+      color: #2ba6cb !important; 
+    }
+    .btn-outline-secondary {
+      color: #6c7a8a !important;
+    }
+  
+    /* Sidebar – light border */
+    .sidebar {
+      border-right: 1px solid #e5edf2 !important;
+      background-color: #f8fafc !important;
+    }
+  
+    /* Tabs – clean underline */
+    .nav-tabs .nav-link {
+      border: none !important;
+      color: #4a5a6a !important;
+      padding: 8px 16px;
+      border-bottom: 3px solid transparent !important;
+    }
+    .nav-tabs .nav-link.active {
+      border-bottom: 3px solid #2ba6cb !important;
+      background-color: transparent !important;
+      color: #1a2a3a !important;
+    }
+  
+    /* Accordion – light borders */
+    .accordion-item {
+      border: 1px solid #e5edf2 !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+    }
+  ")),
+  
+  # ── Sidebar with logo ──────────────────────────────────────
   sidebar = sidebar(
+    tags$div(
+      style = "text-align: center; margin-bottom: 8px;",
+      tags$img(
+        src = "pur_icon.png",
+        width = "100%",
+        max_width = "75px",
+        style = "border-radius: 8px;"
+      )
+    ),
+    
     title = "Jelajahi Modul",
     
-    # ── Output Directory ─────────────────────────────────────
+    # Output directory selection 
     div(
       style = "margin-bottom: 16px;",
       tags$label("Direktori Output",
@@ -129,16 +207,15 @@ ui <- page_sidebar(
     
     hr(),
     
+    # Accordion panels 
     accordion(
       open = FALSE,
-      # ── Panel 1: Identifikasi Konflik Spasial ─────────────
       accordion_panel(
         "1. Identifikasi Konflik Spasial",
         nav_item("nav_overlap",         "1.1", "Area Tumpang Tindih"),
         nav_item("nav_adjacent",        "1.2", "Area Bertetangga"),
         nav_item("nav_interconnection", "1.3", "Area Saling Terhubung")
       ),
-      # ── Panel 2: Analisis PADU ────────────────────────────
       accordion_panel(
         "2. Analisis PADU",
         nav_item("nav_padu_ke",      "2.1", "PADU-KE"),
@@ -150,17 +227,14 @@ ui <- page_sidebar(
         nav_item("nav_padu_ki",      "2.7", "PADU-KI"),
         nav_item("nav_padu_combine", "2.8", "PADU-Kombinasi")
       ),
-      # ── Panel 3: Analisis PADAN ───────────────────────────
       accordion_panel(
         "3. Analisis PADAN",
         nav_item("nav_padan", "3", "Analisis PADAN")
       ),
-      # ── Panel 4: Rekomendasi ──────────────────────────────
       accordion_panel(
         "4. Rekomendasi",
         nav_item("nav_recommendation", "4", "Rekomendasi")
       ),
-      # ── Panel 5: Rekonsiliasi ─────────────────────────────
       accordion_panel(
         "5. Rekonsiliasi",
         nav_item("nav_rekonsiliasi", "5", "Rekonsiliasi")

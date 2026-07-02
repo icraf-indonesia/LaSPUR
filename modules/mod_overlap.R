@@ -20,115 +20,126 @@ overlap_ui <- function(id) {
       )
     ),
     
-    layout_column_wrap(
-      width = 1/2,
+    # ── Two‑column layout: 1/3 (Input) + 2/3 (Output) ──
+    fluidRow(
+      class = "g-3",  
       
-      # ── Card A: Input & Parameter ────────────────────────
-      card(
-        card_header("Input & Parameter"),
-        
-        tags$p(tags$i(class = "bi bi-map me-1"),
-               "Peta RTRW (.shp)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        tags$small(
-          style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Unggah semua komponen shapefile RTRW (.shp, .dbf, .prj, .shx)."
-        ),
-        fileInput(ns("rtrw_file"),
-                  label    = NULL,
-                  accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                  multiple = TRUE),
-        
-        tags$p(tags$i(class = "bi bi-map me-1"),
-               "Peta RZWP3K (.shp)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        tags$small(
-          style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Unggah semua komponen shapefile RZWP3K (.shp, .dbf, .prj, .shx)."
-        ),
-        fileInput(ns("rzwp3k_file"),
-                  label    = NULL,
-                  accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                  multiple = TRUE),
-        
-        hr(),
-        
-        tags$p(tags$i(class = "bi bi-table me-1"),
-               "Tabel Prioritas RTRW (.xlsx)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        fileInput(ns("rtrw_prioritas_file"),
-                  label  = NULL,
-                  accept = ".xlsx"),
-        
-        tags$p(tags$i(class = "bi bi-table me-1"),
-               "Tabel Prioritas RZWP3K (.xlsx)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        fileInput(ns("rzwp3k_prioritas_file"),
-                  label  = NULL,
-                  accept = ".xlsx"),
-        
-        tags$p(tags$i(class = "bi bi-grid-3x3 me-1"),
-               "Tabel Matriks SERASI (.xlsx)",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        fileInput(ns("matriks_serasi_file"),
-                  label  = NULL,
-                  accept = ".xlsx"),
-        
-        hr(),
-        
-        tags$p(tags$i(class = "bi bi-sliders me-1"),
-               "Parameter",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        numericInput(ns("threshold_ha"),
-                     "Ambang Batas Luas Minimum (ha)",
-                     value = 156.25, min = 0),
-        
-        hr(),
-        
-        div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap;",
+      # ── Card A: Input & Parameter (1/3 width) ────────────
+      column(
+        width = 4,
+        card(
+          card_header("Input & Parameter"),
+          
+          tags$p(tags$i(class = "bi bi-map me-1"),
+                 "Peta RTRW (.shp)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          tags$small(
+            style = "color: #6c757d; display: block; margin-bottom: 8px;",
+            "Unggah semua komponen shapefile RTRW (.shp, .dbf, .prj, .shx)."
+          ),
+          fileInput(ns("rtrw_file"),
+                    label    = NULL,
+                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                    multiple = TRUE),
+          
+          tags$p(tags$i(class = "bi bi-map me-1"),
+                 "Peta RZWP3K (.shp)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          tags$small(
+            style = "color: #6c757d; display: block; margin-bottom: 8px;",
+            "Unggah semua komponen shapefile RZWP3K (.shp, .dbf, .prj, .shx)."
+          ),
+          fileInput(ns("rzwp3k_file"),
+                    label    = NULL,
+                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                    multiple = TRUE),
+          
+          hr(),
+          
+          tags$p(tags$i(class = "bi bi-table me-1"),
+                 "Tabel Prioritas RTRW (.xlsx)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          fileInput(ns("rtrw_prioritas_file"),
+                    label  = NULL,
+                    accept = ".xlsx"),
+          
+          tags$p(tags$i(class = "bi bi-table me-1"),
+                 "Tabel Prioritas RZWP3K (.xlsx)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          fileInput(ns("rzwp3k_prioritas_file"),
+                    label  = NULL,
+                    accept = ".xlsx"),
+          
+          tags$p(tags$i(class = "bi bi-grid-3x3 me-1"),
+                 "Tabel Matriks SERASI (.xlsx)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          fileInput(ns("matriks_serasi_file"),
+                    label  = NULL,
+                    accept = ".xlsx"),
+          tags$small(
+            style = "color: #6c757d; display: block; margin-bottom: 8px;",
+            "Butuh panduan dalam membuat matriks?"
+          ),
           actionButton(ns("btn_generate_matrix"),
                        tagList(tags$i(class = "bi bi-file-earmark-excel me-1"),
-                               "Buat Template Matriks"),
+                               "Unduh Templat Matriks SERASI"),
                        class = "btn-outline-primary btn-sm"),
-          actionButton(ns("btn_run"),
-                       tagList(tags$i(class = "bi bi-play-fill me-1"),
-                               "Jalankan Analisis"),
-                       class = "btn-success btn-sm")
-        )
-      ),
+          
+          hr(),
+          
+          tags$p(tags$i(class = "bi bi-sliders me-1"),
+                 "Parameter",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          numericInput(ns("threshold_ha"),
+                       "Ambang Batas Luas Minimum (ha)",
+                       value = 156.25, min = 0),
+          
+          hr(),
+          
+          div(
+            style = "display: flex; gap: 8px; flex-wrap: wrap;",
+            actionButton(ns("btn_run"),
+                         tagList(tags$i(class = "bi bi-play-fill me-1"),
+                                 "Jalankan Analisis"),
+                         class = "btn-success btn-sm")
+          )
+        )  
+      ),  
       
-      # ── Card B: Output & Hasil ───────────────────────────
-      card(
-        card_header("Output & Hasil"),
-        
-        uiOutput(ns("status_box")),
-        
-        hr(),
-        
-        navset_tab(
-          nav_panel(
-            "Peta",
-            plotOutput(ns("result_map"), height = "300px")
-          ),
-          nav_panel(
-            "Tabel",
-            div(
-              style = "overflow-x: auto; max-height: 300px; overflow-y: auto;",
-              tableOutput(ns("result_table"))
-            )
-          ),
-          nav_panel(
-            "Log Validasi",
-            div(
-              style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
-              verbatimTextOutput(ns("validation_log"))
+      # ── Card B: Output & Hasil (2/3 width) ──────────────
+      column(
+        width = 8,
+        card(
+          card_header("Output & Hasil"),
+          
+          uiOutput(ns("status_box")),
+          
+          hr(),
+          
+          navset_tab(
+            nav_panel(
+              "Peta",
+              leafletOutput(ns("result_map"), height = "500px")
+            ),
+            nav_panel(
+              "Tabel",
+              div(
+                style = "height: 500px; overflow: auto;", 
+                tableOutput(ns("result_table"))
+              )
+            ),
+            nav_panel(
+              "Log Validasi",
+              div(
+                style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
+                verbatimTextOutput(ns("validation_log"))
+              )
             )
           )
-        )
-      )
-    )
-  )
+        ) 
+      )  
+    )   
+  )   
 }
 
 # ── Server ───────────────────────────────────────────────────
@@ -297,14 +308,63 @@ overlap_server <- function(id, output_dir) {
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Siap. Unggah file dan klik Jalankan Analisis.")
+            "Unggah file dan klik Jalankan Analisis.")
       }
     })
     
     # ── Map output ───────────────────────────────────────────
-    output$result_map <- renderPlot({
+    output$result_map <- renderLeaflet({
       req(analysis_result())
-      plot(analysis_result()$map["idx_serasi"], main = "Peta Indeks SERASI")
+      
+      map_sf <- analysis_result()$map
+      
+      # Ensure CRS is WGS84 for leaflet
+      if (!sf::st_is_longlat(map_sf)) {
+        map_sf <- sf::st_transform(map_sf, crs = 4326)
+      }
+      
+      # Discrete color palette for idx_serasi (0, 0.5, 1)
+      pal <- leaflet::colorFactor(
+        palette = c("red", "orange", "green"),
+        domain  = c(0, 0.5, 1),
+        na.color = "grey"
+      )
+      
+      leaflet::leaflet(map_sf) %>%
+        leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+        leaflet::addPolygons(
+          fillColor   = ~pal(idx_serasi),
+          fillOpacity = 0.7,
+          weight      = 1,
+          color       = "black",
+          label       = ~paste0(
+            "<strong>Indeks SERASI:</strong> ", round(idx_serasi, 2), "<br>",
+            "<strong>Luas (ha):</strong> ", round(area_ha, 2)
+          ) %>% lapply(htmltools::HTML),
+          popup       = ~paste(
+            "<b>ID PU:</b>", id_pu, "<br>",
+            "<b>Status:</b>", stat_pu, "<br>",
+            "<b>ID RTRW:</b>", id_rtrw, "<br>",
+            "<b>ID RZWP3K:</b>", id_rzwp3k, "<br>",
+            "<b>RTRW:</b>", RTRW, "<br>",
+            "<b>RZWP3K:</b>", RZWP3K, "<br>",
+            "<b>Luas (ha):</b>", round(area_ha, 2), "<br>",
+            "<b>Area Flag:</b>", area_flag, "<br>",
+            "<b>Indeks SERASI:</b>", round(idx_serasi, 2)
+          ) %>% lapply(htmltools::HTML),
+          highlightOptions = leaflet::highlightOptions(
+            weight = 3,
+            color  = "red",
+            fillOpacity = 0.9
+          )
+        ) %>%
+        leaflet::addLegend(
+          position = "bottomright",
+          pal      = pal,
+          values   = c(0, 0.5, 1),
+          title    = "Indeks SERASI",
+          opacity  = 0.7
+        )
     })
     
     # ── Table output ─────────────────────────────────────────
@@ -315,7 +375,7 @@ overlap_server <- function(id, output_dir) {
     
     # ── Validation log (real-time) ──────────────────────────
     output$validation_log <- renderPrint({
-      invalidateLater(100, session)   # perbarui setiap 100ms
+      invalidateLater(100, session)  
       cat(log_messages())
     })
     

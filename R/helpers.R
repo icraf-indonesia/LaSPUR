@@ -24,7 +24,10 @@ pacman::p_load(
   utils,
   furrr,
   future,
-  data.table
+  data.table,
+  leaflet,
+  htmltools,
+  readxl
 )
 
 #' Load and Validate a Shapefile

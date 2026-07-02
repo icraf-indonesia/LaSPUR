@@ -81,6 +81,8 @@ matriks_land_distribution_rzwp3k_path <- "data/tabular/matriks_land_distribution
 # Recommendation input data
 rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
+best_rtrw_path <- "data/tabular/tabel_acuan_RTRW_terbaik_untuk_RZWP3K.xlsx"
+best_rzwp3k_path <- "data/tabular/tabel_acuan_RZWP3K_terbaik_untuk_RTRW.xlsx"
 ```
 
 # Tahap 1. Identifikasi area berdampingan
@@ -156,7 +158,7 @@ if (length(valid_class$mismatch_col3) == 0 &&
   idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) 
   idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
   write_sf(idx_serasi_map, "output/step2/idx_serasi_adjacent.gpkg", overwrite = TRUE)
-  plot(idx_serasi_map["idx_serasi"])
+  # plot(idx_serasi_map["idx_serasi"])
   print(idx_serasi_table)
   
   message("All class names matched. Compatibility values merged successfully.")
@@ -310,7 +312,7 @@ tss_rast <- load_and_validate_raster(tss_rast_path)
 
 # Calculate euclidean distance
 #estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
-estuari_euc_dist <- rast("data/raster/all_sulteng/TSS_Sulteng.tif")
+estuari_euc_dist <- rast("data/raster/padu_hs/EUDist_Estuati_Palu-Parigi.tif")
 ```
 
 ### Tahap 3.2.2. Perhitungan PADU-HS RTRW
@@ -325,7 +327,8 @@ estuari_euc_dist <- rast("data/raster/all_sulteng/TSS_Sulteng.tif")
 padu_hs_rtrw <- calculate_padu_hs(
   idx_serasi_map    = adjacent_map_rtrw,
   estuari_euc_dist  = estuari_euc_dist,
-  tss_rast          = tss_rast
+  tss_rast          = tss_rast,
+  max_dist          = NA
 )
 
 idx_padu_hs_rtrw <- padu_hs_rtrw$idx_padu_hs
@@ -346,7 +349,8 @@ plot(idx_padu_hs_map_rtrw["idx_padu_hs"], border = 1)
 padu_hs_rzwp3k <- calculate_padu_hs(
   idx_serasi_map    = adjacent_map_rzwp3k,
   estuari_euc_dist  = estuari_euc_dist,
-  tss_rast          = tss_rast
+  tss_rast          = tss_rast,
+  max_dist          = NA
 )
 
 idx_padu_hs_rzwp3k <- padu_hs_rzwp3k$idx_padu_hs
@@ -383,7 +387,7 @@ idx_padu_kl_map_rtrw <- calculate_overlay_pct(
   protected_area_vect, 
   title = "protected",
   parallel = TRUE,
-  workers = 4
+  workers = 5
 ) %>%
   mutate(
     idx_padu_kl = protected_pct/100
@@ -408,7 +412,7 @@ idx_padu_kl_map_rzwp3k <- calculate_overlay_pct(
   protected_area_vect, 
   title = "protected",
   parallel = TRUE,
-  workers = 4
+  workers = 5
 ) %>%
   mutate(
     idx_padu_kl = protected_pct/100
@@ -434,8 +438,8 @@ Analisis ini melihat persentase luas area habitat yang berada di dalam batas are
 #| include: true
 
 # Define source of habitat map
-habitat_from_lulc <- "Yes"
-id_column <- "ID" # column that identify class id
+habitat_from_lulc <- "No"
+id_column <- "ID" 
 
 # Define mangrove, seagrass, and coral class IDs
 habitat_id <- c(
@@ -445,19 +449,42 @@ habitat_id <- c(
   25  # seagrass
 )
 
-# Conditional calculation based on habitat map source
+# Define habitat maps path file
+habitat_paths <- list(
+  coral    = coral_vect_path,
+  seagrass = seagrass_vect_path,
+  mangrove = mangrove_vect_path
+)
+
 if (habitat_from_lulc == "Yes") {
-  coastal_habitat <- lulc_vect[lulc_vect[[id_column]] %in% 
-                                 as.numeric(habitat_id),] %>% st_make_valid()
-  } else {
-  coral_vect <- load_and_validate_shapefile(coral_vect_path)
-  seagrass_vect <- load_and_validate_shapefile(seagrass_vect_path)
-  mangrove_vect <- load_and_validate_shapefile(mangrove_vect_path)
-  coastal_habitat <- list(
-    coral_vect,
-    seagrass_vect,
-    mangrove_vect
-  )
+  
+  # Combine habitat map
+  sf::sf_use_s2(FALSE)
+  coastal_habitat <- lulc_vect[lulc_vect[[id_column]] %in% as.numeric(habitat_id),] %>% 
+    sf::st_make_valid() %>% 
+    sf::st_combine() %>%       
+    sf::st_make_valid() %>% 
+    sf::st_as_sf()
+  sf::sf_use_s2(TRUE)
+  
+} else {
+  
+  # Load habitat maps
+  loaded_vects <- lapply(habitat_paths, load_and_validate_shapefile)
+  target_crs <- sf::st_crs(idx_serasi_map)
+  projected_vects <- lapply(loaded_vects, function(v) {
+    sf::st_transform(v, target_crs)
+  })
+  
+  # Combine habitat map
+  combined_vect <- dplyr::bind_rows(projected_vects)
+  sf::sf_use_s2(FALSE)
+  coastal_habitat <- combined_vect %>% 
+    sf::st_make_valid() %>% 
+    sf::st_combine() %>%    
+    sf::st_make_valid() %>%    
+    sf::st_as_sf()
+  sf::sf_use_s2(TRUE)
 }
 ```
 
@@ -475,9 +502,8 @@ coastal_habitat_map_rtrw <- calculate_overlay_pct(
   coastal_habitat, 
   title = "coastal_habitat",
   parallel = TRUE,
-  workers = 4
+  workers = 6
   )
-# coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
 
 # Calculate idx padu kh
 idx_padu_kh_map_rtrw <- coastal_habitat_map_rtrw %>%
@@ -499,8 +525,13 @@ plot(idx_padu_kh_map_rtrw["idx_padu_kh"], border = 1)
 #| include: true
 
 # Calculate overlay
-coastal_habitat_map_rzwp3k <- calculate_overlay_pct(adjacent_map_rzwp3k, coastal_habitat, title = "coastal_habitat")
-# coastal_habitat_map <- st_read("output/coastal_habitat_map.gpkg")
+coastal_habitat_map_rzwp3k <- calculate_overlay_pct(
+  adjacent_map_rzwp3k, 
+  coastal_habitat, 
+  title = "coastal_habitat",
+  parallel = TRUE,
+  workers = 6
+)
 
 # Calculate idx padu kh
 idx_padu_kh_map_rzwp3k <- coastal_habitat_map_rzwp3k %>%
@@ -608,7 +639,7 @@ padu_ki_rtrw <- calculate_padu_ki(
   disaster_risk_vect  = disaster_risk_vect,
   value_col           = "Kerawanan",
   parallel            = TRUE,
-  workers             = 4
+  workers             = 6
 )
 
 idx_padu_ki_map_rtrw <- padu_ki_rtrw$idx_padu_ki_map
@@ -630,7 +661,7 @@ padu_ki_rzwp3k <- calculate_padu_ki(
   disaster_risk_vect  = disaster_risk_vect,
   value_col           = "Kerawanan",
   parallel            = TRUE,
-  workers             = 4
+  workers             = 6
 )
 
 idx_padu_ki_map_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki_map
@@ -798,9 +829,11 @@ Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap 
 #| message: false
 #| include: true
 
-best_rtrw <- read.xlsx("data/tabular/tabel_acuan_RTRW_terbaik_untuk_RZWP3K.xlsx")
-best_rzwp3k <- read.xlsx("data/tabular/tabel_acuan_RZWP3K_terbaik_untuk_RTRW.xlsx")
+# Load reference table for determine best alternative
+best_rtrw <- load_and_validate_table(best_rtrw_path)
+best_rzwp3k <- load_and_validate_table(best_rzwp3k_path)
 
+# Select the best alternative class using reference table
 idx_padan_map_alt <- idx_padan_map %>%
   mutate(
     RZWP3K_plus1 = lead(RZWP3K),
@@ -818,6 +851,7 @@ idx_padan_map_alt <- idx_padan_map %>%
   ungroup() %>%
   select(-RZWP3K_plus1, -RTRW_minus1)
 
+# # Select the best alternative class using SERASI index consideration
 # idx_padan_map_alt <- idx_padan_map %>%
 #   mutate(
 #     RZWP3K_plus1 = lead(RZWP3K),
@@ -871,9 +905,13 @@ pu_rzwp3k <- idx_padan_map_alt %>%
 # Calculate actual LULC distribution for each feature unit RTRW
 land_distribution_rtrw_long <- calculate_land_distribution(
   pu_rtrw, lulc_vect,
-  id_pu = "id_pu", lulc_class = class_name,
-  use_parallel = TRUE,
-  workers = 4
+  id_pu = "id_pu", 
+  lulc_class = class_name,
+  # use_parallel = TRUE,
+  # workers = 4
+  calculate_from_matrix = TRUE,
+  matrix_tbl = matriks_land_distribution_rtrw,
+  selected_zone = "RTRW"
 ) 
 
 land_distribution_rtrw_wide <- land_distribution_rtrw_long %>%
@@ -891,9 +929,13 @@ land_distribution_rtrw <- st_drop_geometry(pu_rtrw) %>%
 # Calculate actual LULC distribution for each feature unit RZWP3K
 land_distribution_rzwp3k_long <- calculate_land_distribution(
   pu_rzwp3k, lulc_vect,
-  id_pu = "id_pu", lulc_class = class_name,
-  use_parallel = TRUE,
-  workers = 4
+  id_pu = "id_pu", 
+  lulc_class = class_name,
+  # use_parallel = TRUE,
+  # workers = 4
+  calculate_from_matrix = TRUE,
+  matrix_tbl = matriks_land_distribution_rzwp3k,
+  selected_zone = "RZWP3K"
 ) 
 
 land_distribution_rzwp3k_wide <- land_distribution_rzwp3k_long %>%
@@ -1015,62 +1057,78 @@ new_cols_rzwp3k <- setdiff(names(npv_lulc_rzwp3k), names(idx_padan_map_alt))
 
 adjacent_economy_map <- idx_padan_map_alt %>%
   left_join(
-    npv_lulc_rtrw %>% select(all_of(c("id", new_cols_rtrw))),
-    by = "id"
+    npv_lulc_rtrw %>% select(id, id_pu, all_of(new_cols_rtrw)),
+    by = c("id", "id_pu")
   ) %>%
   left_join(
-    npv_lulc_rzwp3k %>% select(all_of(c("id", new_cols_rzwp3k))),
-    by = "id"
+    npv_lulc_rzwp3k %>% select(id, id_pu, all_of(new_cols_rzwp3k)),
+    by = c("id", "id_pu")
   )
 ```
 
 # Tahap 8. Rekomendasi keputusan rekonsiliasi area berdampingan
 
-```{r calculate-recommendation}
+```{r prepare-parameter-recommendation}
 #| error: true
 #| warning: false
 #| message: true
 #| include: true
 
-# Load RTRW & RZWP3K priority reference table
-rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
-rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
-
-# Thresholds
-threshold_serasi <- 0.6
-threshold_padu   <- 0.65
-
 # Extract priority zone class (Prioritas == 1)
 priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
 priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
 
-# Add recommendation
-adjacent_recom_map <- adjacent_economy_map
-setDT(adjacent_recom_map)
+# Define alpha
+alpha <- 0.5
 
-# Create pair data without geometry
-pair_data <- adjacent_recom_map[ , .(
-  RTRW = first(na.omit(RTRW)),
-  RZWP3K = first(na.omit(RZWP3K)),
-  idx_serasi = first(idx_serasi[!is.na(RTRW)]),
-  idx_padu_final = first(idx_padu_final[!is.na(RTRW)])
-), by = id_pu]
+# Define threshold variable for idx_padan
+th_high <- 0.8
+th_med <- 0.5
+th_low <- 0.25
+```
 
-# Add recommendation
-pair_data[, recommendation := case_when(
-  is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
-  RTRW %in% priority_rtrw ~ "",
-  RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
-  idx_serasi >= threshold_serasi ~ "Tetap/Koordinasi",
-  idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
-  idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
-)]
+```{r split-join-map}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
 
-# Update join by reference
-adjacent_recom_map[pair_data, recommendation := i.recommendation, on = "id_pu"]
+# RTRW side
+rtrw_rows <- adjacent_economy_map %>%
+  filter(!is.na(RTRW)) %>%
+  select(id_pu, RTRW, alt_RTRW, idx_padu_rtrw, econ_rtrw_delta, geometry) %>%
+  as_tibble() %>%
+  rename(geom_rtrw = geometry)
 
-# Convert back to sf
-adjacent_recom_map <- st_as_sf(adjacent_recom_map)
+# RZ side
+rz_rows <- adjacent_economy_map %>%
+  filter(!is.na(RZWP3K)) %>%
+  select(id_pu, RZWP3K, alt_RZWP3K, idx_padu_rzwp3k, econ_rzwp3k_delta, geometry) %>%
+  as_tibble() %>%
+  rename(geom_rz = geometry)
+
+# Common columns (plain data frame)
+common_cols <- adjacent_economy_map %>%
+  select(id_pu, idx_padan, area_buffer_ha) %>%
+  st_drop_geometry() %>%
+  distinct(id_pu, .keep_all = TRUE)
+
+# Join to create one row per pair
+split_rtrw_rzwp3k <- rtrw_rows %>%
+  full_join(rz_rows, by = "id_pu") %>%
+  left_join(common_cols, by = "id_pu")
+
+# Ensure both sides exist
+stopifnot(all(!is.na(split_rtrw_rzwp3k$RTRW) & !is.na(split_rtrw_rzwp3k$RZWP3K)))
+
+# Look up compatibility
+get_compat <- function(x, y) {
+  if (is.na(x) || is.na(y)) return(NA_real_)
+  val <- matriks_serasi %>%
+    filter(class1 == x, class2 == y) %>%
+    pull(idx_serasi)
+  if (length(val) == 0) NA_real_ else val
+}
 ```
 
 ```{r calculate-decision}
@@ -1079,44 +1137,30 @@ adjacent_recom_map <- st_as_sf(adjacent_recom_map)
 #| message: true
 #| include: true
 
-alpha <- 0.5
-
-# Calculate decision based on explicit recommendation rules
-adjacent_decision_map <- adjacent_recom_map %>%
+# Calculate considerations for recommendation
+prep_recomendation <- split_rtrw_rzwp3k %>%
   mutate(
-    RTRW_new = case_when(
-      recommendation == "Ubah RTRW" ~ alt_RTRW,
-      recommendation %in% c("Tetap/Koordinasi", " ", "") ~ RTRW,
-      is.na(recommendation) ~ RTRW,  
-      TRUE ~ RTRW                   
+    idx_padu_final = if ("idx_padu_final" %in% names(split_rtrw_rzwp3k)) {
+      idx_padu_final
+    } else {
+      case_when(
+        idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0 ~ 0,
+        TRUE ~ 2 * idx_padu_rtrw * idx_padu_rzwp3k / (idx_padu_rtrw + idx_padu_rzwp3k)
+      )
+    },
+    priority_class = case_when(
+      RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ "Both",
+      RTRW %in% priority_rtrw ~ "Yes",
+      RZWP3K %in% priority_rzwp3k ~ "Yes",
+      TRUE ~ "None"
     ),
-    
-    RZWP3K_new = case_when(
-      recommendation == "Ubah RZWP3K" ~ alt_RZWP3K,
-      recommendation %in% c("Tetap/Koordinasi", " ", "") ~ RZWP3K,
-      is.na(recommendation) ~ RZWP3K,
-      TRUE ~ RZWP3K               
-    )
-  ) %>%
-  mutate(
-    RZWP3K_new_plus1 = lead(RZWP3K_new)
-  ) %>% 
-  rowwise() %>%
-  mutate(
-    idx_serasi_new = get_alternative_serasi(
-      RTRW_new,
-      RZWP3K_new_plus1,
-      matriks_serasi
-    )
-  ) %>%
-  ungroup() %>%
-  select(-RZWP3K_new_plus1) %>%
-  mutate(
-    idx_padan_new = alpha * idx_serasi_new + (1 - alpha) * idx_padu_final
-  ) %>%
-  group_by(id_pu) %>%
-  fill(idx_serasi_new, idx_padan_new, .direction = "down") %>%
-  ungroup()
+    comp_if_rtrw = map2_dbl(alt_RTRW, RZWP3K, get_compat),
+    comp_if_rz   = map2_dbl(RTRW, alt_RZWP3K, get_compat),
+    N_if_rtrw = alpha * comp_if_rtrw + (1 - alpha) * idx_padu_final,
+    N_if_rz   = alpha * comp_if_rz   + (1 - alpha) * idx_padu_final,
+    dR = N_if_rtrw - idx_padan,
+    dZ = N_if_rz   - idx_padan
+  )
 ```
 
 # Tahap 9. Perhitungan penilaian integrasi area berdampingan
@@ -1127,49 +1171,76 @@ adjacent_decision_map <- adjacent_recom_map %>%
 #| message: true
 #| include: true
 
-# define threshold variable for idx_padan
-th_high <- 0.8
-th_med <- 0.5
-th_low <- 0.25
+# Classify integration level (4 tiers)
+classify_integrasi <- function(score) {
+  case_when(
+    score >= th_high ~ "Sangat Terintegrasi",
+    score >= th_med  ~ "Terintegrasi",
+    score >= th_low  ~ "Kurang Terintegrasi",
+    TRUE             ~ "Tidak Terintegrasi"
+  )
+}
 
-# calculate integration result between the actual and recommendation
-adjacent_integration_map <- adjacent_decision_map %>% 
+# Decision logic 
+recommendation_decision <- prep_recomendation %>%
   mutate(
-    actual_integration = case_when(
-      idx_padan >= th_med ~ "Terintegrasi",
-      idx_padan >= th_low ~ "Kurang Terintegrasi",
-      TRUE          ~ "Tidak Terintegrasi"
+    recommendation = case_when(
+      RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ case_when(
+        dZ > dR ~ "Ubah RZ",
+        dR > dZ ~ "Ubah RTRW",
+        TRUE    ~ "Tetap/Koordinasi"
+      ),
+      RTRW %in% priority_rtrw & dZ > 0 ~ "Ubah RZ",
+      RZWP3K %in% priority_rzwp3k & dR > 0 ~ "Ubah RTRW",
+      dR > 0 | dZ > 0 ~ if_else(dR >= dZ, "Ubah RTRW", "Ubah RZ"),
+      TRUE ~ "Tetap/Koordinasi"
     ),
-    recom_integration = case_when(
-      idx_padan_new >= th_med ~ "Terintegrasi",
-      idx_padan_new >= th_low ~ "Kurang Terintegrasi",
-      TRUE          ~ "Tidak Terintegrasi"
-    )
+
+    RTRW_new = if_else(recommendation == "Ubah RTRW", alt_RTRW, RTRW),
+    RZWP3K_new = if_else(recommendation == "Ubah RZ", alt_RZWP3K, RZWP3K),
+    idx_serasi_new = map2_dbl(RTRW_new, RZWP3K_new, get_compat),
+    idx_padan_new = alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
+    actual_integration = classify_integrasi(idx_padan),
+    recom_integration = classify_integrasi(idx_padan_new),
+    econ_delta = case_when(
+      recommendation == "Ubah RTRW" ~ econ_rtrw_delta,
+      recommendation == "Ubah RZ"   ~ econ_rzwp3k_delta,
+      TRUE ~ 0
+    ),
+    area_change_ha = if_else(recommendation == "Tetap/Koordinasi", 0, area_buffer_ha),
+    idx_padan_delta = idx_padan_new - idx_padan
   )
 ```
 
-```{r calculate-final-indicators}
+```{r merge-to-dataframe}
 #| error: true
 #| warning: false
 #| message: true
 #| include: true
 
-# calculate the final components
-adjacent_analysis_map <- adjacent_integration_map %>% 
-  mutate(
-    econ_delta = case_when(
-      recommendation == "Ubah RTRW" ~ econ_rtrw_delta,
-      recommendation == "Ubah RZ"   ~ econ_rzwp3k_delta,
-      TRUE                          ~ 0
-    ),
-    area_change_ha = if_else(
-      recommendation == "Tetap/Koordinasi",
-      0,
-      area_buffer_ha
-    ),
-    delta_idx_padan = idx_padan_new - idx_padan
-  )
+# Select important columns
+recommendation_decision_filter <- recommendation_decision %>%
+  select(id_pu, geom_rtrw, geom_rz,
+         RTRW, RZWP3K, alt_RTRW, alt_RZWP3K,
+         idx_padu_final,
+         recommendation, RTRW_new, RZWP3K_new,
+         idx_serasi_new, idx_padan_new,
+         actual_integration, recom_integration,
+         econ_delta, area_change_ha, idx_padan_delta) %>%
+  select(-geom_rtrw, -geom_rz) %>%       
+  st_drop_geometry()                     
 
+# Return the recommendation back to the adjacent map
+adjacent_recom_map <- adjacent_economy_map %>%
+  left_join(recommendation_decision_filter, by = "id_pu")
+
+# Summary
+table(adjacent_recom_map$recommendation)
+
+adjacent_recom_map %>%
+  st_drop_geometry() %>%
+  count(actual_integration, recom_integration) %>%
+  arrange(actual_integration, recom_integration)
 ```
 
 # Tahap 10. Rekonsiliasi kasus area berdampingan
@@ -1181,19 +1252,33 @@ adjacent_analysis_map <- adjacent_integration_map %>%
 #| include: true
 
 # Prepare adjacent reconciliation map
+apply_length <- TRUE  
+apply_idx    <- TRUE  
 length_filter <- 1500
+idx_filter    <- 0.75
 
-adjacent_recon_map <- adjacent_analysis_map[as.numeric(adjacent_analysis_map$length) > length_filter, ]
+# Compute filter
+keep <- rep(TRUE, nrow(adjacent_recom_map))
+if (apply_length) keep <- keep & (as.numeric(adjacent_recom_map$length) > length_filter)
+if (apply_idx)    keep <- keep & (adjacent_recom_map$idx_padan < idx_filter) 
+adjacent_reconcile_map <- adjacent_recom_map[keep, ]
+
+# Counts
+cat(sprintf("Before: %d pairs\n", nrow(adjacent_recom_map)/2))
+cat(sprintf("After : %d pairs\n", nrow(adjacent_reconcile_map)/2))
+cat(sprintf("Removed: %d pairs (%.1f%%)\n", 
+            (nrow(adjacent_recom_map) - nrow(adjacent_reconcile_map))/2,
+            (1 - (nrow(adjacent_reconcile_map)/2)/(nrow(adjacent_recom_map)/2))*100))
 
 # Generate reconciliation excel table
 generate_reconciliation_excel(
-  adjacent_recon_map = adjacent_recon_map,
+  recon_map          = adjacent_reconcile_map,
   rtrw_prioritas     = rtrw_prioritas,
   rzwp3k_prioritas   = rzwp3k_prioritas,
   output_dir         = output_dir,
+  step               = 2,
   file_name          = "adjacent_reconcilliation_table.xlsx"
 )
-
 ```
 
 ```{r reconcile-unresolved-features}
@@ -1203,7 +1288,7 @@ generate_reconciliation_excel(
 #| include: true
 
 # Read the reconciliation table path
-recon_table_path <- "output/adjacent_reconcilliation_table.xlsx"
+recon_table_path <- "output/step2/AOI_Palu-Parigi/adjacent_reconcilliation_table_filled.xlsx"
 
 # Prepare RTRW and RZWP3K map
 rtrw <- rtrw_vect %>% dplyr::mutate(
@@ -1212,10 +1297,10 @@ rzwp3k <- rzwp3k_vect %>% dplyr::mutate(
   id = dplyr::row_number())
 
 # Reconcile map
-rtrw_resolved <- reconcile_map(rtrw, recon_table_path, "RTRW")
-rzwp3k_resolved <- reconcile_map(rzwp3k, recon_table_path, "RZWP3K")
+rtrw_resolved <- reconcile_map(step = 2, rtrw, recon_table_path, "RTRW")
+rzwp3k_resolved <- reconcile_map(step = 2, rzwp3k, recon_table_path, "RZWP3K")
 
 # Write the resolved map
-write_sf(rtrw_resolved, paste0(output_dir, "step2/ST_RTRW_Resolved_Adjacent.gpkg"))
-write_sf(rzwp3k_resolved, paste0(output_dir, "step2/ST_RZWP3K_Resolved_Adjacent.gpkg"))
+write_sf(rtrw_resolved, paste0(output_dir, "step2/AOI_Palu-Parigi/ST_RTRW_Resolved_Adjacent.gpkg"))
+write_sf(rzwp3k_resolved, paste0(output_dir, "step2/AOI_Palu-Parigi/ST_RZWP3K_Resolved_Adjacent.gpkg"))
 ```
