@@ -2827,7 +2827,7 @@ generate_reconciliation_excel <- function(recon_map,
 #' @param step Integer; `1` for overlap reconciliation, `2` for simple reconciliation.
 #' @param sf_obj For `step = 2`: an `sf` object with an `id` column and either
 #'   `RTRW` or `RZWP3K` column.
-#' @param xlsx_path For `step = 2`: path to Excel file with sheet "Data" containing
+#' @param recon_table For `step = 2`: path to Excel file with sheet "Data" containing
 #'   `id`, `user_decision_rtrw`, and `user_decision_rzwp3k`.
 #' @param class_type For `step = 2`: either `"RTRW"` or `"RZWP3K"`.
 #' @param union For `step = 1`: an `sf` object with columns `id_pu`, `stat_pu`,
@@ -2846,7 +2846,7 @@ generate_reconciliation_excel <- function(recon_map,
 #' @importFrom sf st_as_sf
 #' @export
 reconcile_map <- function(step,
-                          sf_obj = NULL, xlsx_path = NULL, class_type = c("RTRW", "RZWP3K"),
+                          sf_obj = NULL, class_type = NULL, #RTRW or #RZWP3K
                           union = NULL, recon_table = NULL,
                           rtrw_prioritas = NULL, rzwp3k_prioritas = NULL) {
   
@@ -2884,7 +2884,7 @@ reconcile_map <- function(step,
       }),
       all_classes
     )
-
+    
     union$id_rtrw <- as.character(union$id_rtrw)
     union$id_rzwp3k <- as.character(union$id_rzwp3k)
     recon_table$id_rtrw <- as.character(recon_table$id_rtrw)
@@ -2943,7 +2943,7 @@ reconcile_map <- function(step,
     
   } else if (step == 2) {
     if (is.null(sf_obj)) stop("'sf_obj' must be provided for step = 2")
-    if (is.null(xlsx_path)) stop("'xlsx_path' must be provided for step = 2")
+    if (is.null(recon_table)) stop("'recon_table' must be provided for step = 2")
     
     class_type <- match.arg(class_type)
     decision_col <- paste0("user_decision_", tolower(class_type))
@@ -2953,7 +2953,7 @@ reconcile_map <- function(step,
       stop("package 'readxl' is required for step = 2.")
     }
     
-    xlsx_data <- readxl::read_excel(xlsx_path, sheet = "Data")
+    xlsx_data <- readxl::read_excel(recon_table, sheet = "Data")
     update_data <- xlsx_data[
       !is.na(xlsx_data[[decision_col]]) & xlsx_data[[decision_col]] != "",
     ]
