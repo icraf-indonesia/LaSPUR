@@ -6,11 +6,32 @@
 source("R/functions.R")
 source("R/helpers.R")
 
-# ── UI ───────────────────────────────────────────────────────
+# ── small UI helpers ────────────────────────────────────────────
+.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+  div(
+    class = "alert alert-secondary mb-0",
+    tags$i(class = "bi bi-lock-fill me-2"), msg
+  )
+}
+
+.step_nav <- function(ns, back_id = NULL, next_id = NULL, next_label = "Lanjut") {
+  div(
+    style = "display:flex; justify-content:space-between; margin-top:16px;",
+    if (!is.null(back_id)) {
+      actionButton(ns(back_id), tagList(tags$i(class = "bi bi-arrow-left me-1"), "Kembali"),
+                   class = "btn-outline-secondary btn-sm")
+    } else div(),
+    if (!is.null(next_id)) {
+      actionButton(ns(next_id), tagList(next_label, tags$i(class = "bi bi-arrow-right ms-1")),
+                   class = "btn-success btn-sm")
+    } else div()
+  )
+}
+
+# ── UI ──────────────────────────────────────────────────────────
 overlap_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    
     div(
       style = "margin-bottom: 20px;",
       h4("1.1 Identifikasi Area Tumpang Tindih", style = "margin: 0; font-weight: 700;"),
@@ -20,93 +41,37 @@ overlap_ui <- function(id) {
       )
     ),
     
-    # ── Two‑column layout: 1/3 (Input) + 2/3 (Output) ──
     fluidRow(
-      class = "g-3",  
+      class = "g-3",
       
-      # ── Card A: Input & Parameter (1/3 width) ────────────
+      # ── Left column: Wizard (1/3) ─────────────────────────────
       column(
         width = 4,
         card(
           card_header("Input & Parameter"),
-          
-          tags$p(tags$i(class = "bi bi-map me-1"),
-                 "Peta RTRW (.shp)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Unggah semua komponen shapefile RTRW (.shp, .dbf, .prj, .shx)."
-          ),
-          fileInput(ns("rtrw_file"),
-                    label    = NULL,
-                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                    multiple = TRUE),
-          
-          tags$p(tags$i(class = "bi bi-map me-1"),
-                 "Peta RZWP3K (.shp)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Unggah semua komponen shapefile RZWP3K (.shp, .dbf, .prj, .shx)."
-          ),
-          fileInput(ns("rzwp3k_file"),
-                    label    = NULL,
-                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                    multiple = TRUE),
-          
-          hr(),
-          
-          tags$p(tags$i(class = "bi bi-table me-1"),
-                 "Tabel Prioritas RTRW (.xlsx)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          fileInput(ns("rtrw_prioritas_file"),
-                    label  = NULL,
-                    accept = ".xlsx"),
-          
-          tags$p(tags$i(class = "bi bi-table me-1"),
-                 "Tabel Prioritas RZWP3K (.xlsx)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          fileInput(ns("rzwp3k_prioritas_file"),
-                    label  = NULL,
-                    accept = ".xlsx"),
-          
-          tags$p(tags$i(class = "bi bi-grid-3x3 me-1"),
-                 "Tabel Matriks SERASI (.xlsx)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          fileInput(ns("matriks_serasi_file"),
-                    label  = NULL,
-                    accept = ".xlsx"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Butuh panduan dalam membuat matriks?"
-          ),
-          actionButton(ns("btn_generate_matrix"),
-                       tagList(tags$i(class = "bi bi-file-earmark-excel me-1"),
-                               "Unduh Templat Matriks SERASI"),
-                       class = "btn-outline-primary btn-sm"),
-          
-          hr(),
-          
-          tags$p(tags$i(class = "bi bi-sliders me-1"),
-                 "Parameter",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          numericInput(ns("threshold_ha"),
-                       "Ambang Batas Luas Minimum (ha)",
-                       value = 156.25, min = 0),
-          
-          hr(),
-          
-          div(
-            style = "display: flex; gap: 8px; flex-wrap: wrap;",
-            actionButton(ns("btn_run"),
-                         tagList(tags$i(class = "bi bi-play-fill me-1"),
-                                 "Jalankan Analisis"),
-                         class = "btn-success btn-sm")
+          accordion(
+            id = ns("wizard"),
+            open = "step1",
+            multiple = FALSE,
+            
+            accordion_panel(
+              title = "Tahap 1 — Menyiapkan Data Utama",
+              value = "step1",
+              icon = tags$i(class = "bi bi-folder-fill"),
+              uiOutput(ns("step1_ui"))
+            ),
+            
+            accordion_panel(
+              title = "Tahap 2 — Menentukan Kompabilitas",
+              value = "step2",
+              icon = tags$i(class = "bi bi-diagram-3-fill"),
+              uiOutput(ns("step2_ui"))
+            )
           )
-        )  
-      ),  
+        )
+      ),
       
-      # ── Card B: Output & Hasil (2/3 width) ──────────────
+      # ── Right column: Output & Hasil (2/3) ────────────────────
       column(
         width = 8,
         card(
@@ -124,8 +89,8 @@ overlap_ui <- function(id) {
             nav_panel(
               "Tabel",
               div(
-                style = "height: 500px; overflow: auto;", 
-                tableOutput(ns("result_table"))
+                style = "height: 500px; overflow: auto;",
+                DT::DTOutput(ns("result_table"))   # <-- FIXED: use DTOutput
               )
             ),
             nav_panel(
@@ -135,22 +100,50 @@ overlap_ui <- function(id) {
                 verbatimTextOutput(ns("validation_log"))
               )
             )
+          ),
+          
+          div(
+            style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
+            downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
+            downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
           )
-        ) 
-      )  
-    )   
-  )   
+        )
+      )
+    )
+  )
 }
 
-# ── Server ───────────────────────────────────────────────────
+# ── Server ──────────────────────────────────────────────────────
 overlap_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     
-    analysis_result <- reactiveVal(NULL)
-    log_messages    <- reactiveVal("")   # log real-time
-    is_running      <- reactiveVal(FALSE)
+    # ── Reactive values ──────────────────────────────────────────
+    rv <- reactiveValues(
+      unlocked = 1,                # 1 = only step1, 2 = step2 unlocked
+      
+      # step1 data
+      rtrw_vect = NULL,
+      rzwp3k_vect = NULL,
+      rtrw_prioritas = NULL,
+      rzwp3k_prioritas = NULL,
+      
+      # step2 data
+      matriks_serasi = NULL,
+      threshold_ha = 156.25,
+      
+      # analysis results
+      analysis_result = NULL,
+      gpkg_path = NULL,
+      xlsx_path = NULL,
+      log_messages = ""
+    )
     
-    # ── Rename sidecar files and return .shp path ───
+    go_to_panel <- function(value) {
+      accordion_panel_set(id = "wizard", values = value, session = session)
+    }
+    
+    # ── Helpers for shapefile loading ──────────────────────────
     extract_shp_path <- function(file_input) {
       shp_row <- file_input[grepl("\\.shp$", file_input$name, ignore.case = TRUE), ]
       validate(need(
@@ -165,24 +158,108 @@ overlap_server <- function(id, output_dir) {
       paste0(stem, ".shp")
     }
     
-    # ── Reactives ────────────────────────────────────────────
-    rtrw_vect <- reactive({
+    # ── Step 1 UI ──────────────────────────────────────────────
+    output$step1_ui <- renderUI({
+      tagList(
+        tags$p(tags$i(class = "bi bi-map me-1"), "Peta RTRW (.shp)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                   "Unggah semua komponen shapefile RTRW (.shp, .dbf, .prj, .shx)."),
+        fileInput(ns("rtrw_file"), label = NULL,
+                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                  multiple = TRUE),
+        
+        tags$p(tags$i(class = "bi bi-map me-1"), "Peta RZWP3K (.shp)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                   "Unggah semua komponen shapefile RZWP3K (.shp, .dbf, .prj, .shx)."),
+        fileInput(ns("rzwp3k_file"), label = NULL,
+                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                  multiple = TRUE),
+        
+        hr(),
+        
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RTRW (.xlsx)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        fileInput(ns("rtrw_prioritas_file"), label = NULL, accept = ".xlsx"),
+        
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RZWP3K (.xlsx)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        fileInput(ns("rzwp3k_prioritas_file"), label = NULL, accept = ".xlsx"),
+        
+        hr(),
+        
+        div(
+          style = "display: flex; gap: 8px; flex-wrap: wrap;",
+          actionButton(ns("btn_generate_matrix"),
+                       tagList(tags$i(class = "bi bi-file-earmark-excel me-1"),
+                               "Buat Templat Matriks SERASI"),
+                       class = "btn-outline-primary btn-sm"),
+          downloadButton(ns("dl_matrix_template"), "Unduh Matriks",
+                         class = "btn-outline-success btn-sm")
+        ),
+        uiOutput(ns("matrix_template_status")),
+        
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Tahap 2")
+      )
+    })
+    
+    # ── Load shapefiles and tables ─────────────────────────────
+    observeEvent(input$rtrw_file, {
       req(input$rtrw_file)
-      load_and_validate_shapefile(extract_shp_path(input$rtrw_file))
-    })
-    
-    rzwp3k_vect <- reactive({
-      req(input$rzwp3k_file)
-      load_and_validate_shapefile(extract_shp_path(input$rzwp3k_file))
-    })
-    
-    # ── Generate matrix template ─────────────────────────────
-    observeEvent(input$btn_generate_matrix, {
-      req(rtrw_vect(), rzwp3k_vect())
       tryCatch({
-        template <- generate_matrix_serasi(sf_1 = rtrw_vect(), sf_2 = rzwp3k_vect())
+        rv$rtrw_vect <- load_and_validate_shapefile(extract_shp_path(input$rtrw_file))
+        showNotification("Peta RTRW berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$rtrw_vect <- NULL
+        showNotification(paste("Gagal memuat RTRW:", e$message), type = "error")
+      })
+    })
+    
+    observeEvent(input$rzwp3k_file, {
+      req(input$rzwp3k_file)
+      tryCatch({
+        rv$rzwp3k_vect <- load_and_validate_shapefile(extract_shp_path(input$rzwp3k_file))
+        showNotification("Peta RZWP3K berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$rzwp3k_vect <- NULL
+        showNotification(paste("Gagal memuat RZWP3K:", e$message), type = "error")
+      })
+    })
+    
+    observeEvent(input$rtrw_prioritas_file, {
+      req(input$rtrw_prioritas_file)
+      tryCatch({
+        rv$rtrw_prioritas <- load_and_validate_table(input$rtrw_prioritas_file$datapath)
+        showNotification("Prioritas RTRW berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$rtrw_prioritas <- NULL
+        showNotification(paste("Gagal memuat prioritas RTRW:", e$message), type = "error")
+      })
+    })
+    
+    observeEvent(input$rzwp3k_prioritas_file, {
+      req(input$rzwp3k_prioritas_file)
+      tryCatch({
+        rv$rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_prioritas_file$datapath)
+        showNotification("Prioritas RZWP3K berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$rzwp3k_prioritas <- NULL
+        showNotification(paste("Gagal memuat prioritas RZWP3K:", e$message), type = "error")
+      })
+    })
+    
+    # ── Generate matrix template ───────────────────────────────
+    matrix_template_path <- reactiveVal(NULL)
+    
+    observeEvent(input$btn_generate_matrix, {
+      req(rv$rtrw_vect, rv$rzwp3k_vect)
+      tryCatch({
+        template <- generate_matrix_serasi(sf_1 = rv$rtrw_vect, sf_2 = rv$rzwp3k_vect)
         out_path <- file.path(output_dir(), "matriks_serasi.xlsx")
+        dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
         write.xlsx(template, out_path, overwrite = TRUE)
+        matrix_template_path(out_path)
         showNotification(paste("Template matriks dibuat →", out_path),
                          type = "message", duration = 5)
       }, error = function(e) {
@@ -191,58 +268,133 @@ overlap_server <- function(id, output_dir) {
       })
     })
     
-    # ── Run analysis with progress bar ──────────────────────
+    output$matrix_template_status <- renderUI({
+      req(matrix_template_path())
+      div(class = "alert alert-success mb-0",
+          tags$i(class = "bi bi-check-circle me-2"),
+          "Template siap diunduh.")
+    })
+    
+    output$dl_matrix_template <- downloadHandler(
+      filename = function() "matriks_serasi.xlsx",
+      content = function(file) {
+        req(matrix_template_path())
+        file.copy(matrix_template_path(), file, overwrite = TRUE)
+      }
+    )
+    
+    # ── Step 1 -> Step 2 ──────────────────────────────────────
+    observeEvent(input$btn_next_1, {
+      # Validate that all required files are uploaded
+      if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
+          is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
+        showNotification("Harap unggah semua data utama (peta dan prioritas) sebelum melanjutkan.",
+                         type = "warning", duration = 8)
+        return()
+      }
+      rv$unlocked <- max(rv$unlocked, 2)
+      go_to_panel("step2")
+    })
+    
+    # ── Step 2 UI ──────────────────────────────────────────────
+    output$step2_ui <- renderUI({
+      if (rv$unlocked < 2) return(.locked_panel())
+      
+      tagList(
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Matriks SERASI (.xlsx)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        fileInput(ns("matriks_serasi_file"), label = NULL, accept = ".xlsx"),
+        uiOutput(ns("matriks_serasi_status")),
+        
+        hr(),
+        
+        tags$p(tags$i(class = "bi bi-sliders me-1"), "Parameter",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        numericInput(ns("threshold_ha"),
+                     "Ambang Batas Luas Minimum (ha)",
+                     value = 156.25, min = 0),
+        
+        hr(),
+        
+        div(
+          style = "display: flex; gap: 8px; flex-wrap: wrap;",
+          actionButton(ns("btn_run"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"),
+                               "Jalankan Analisis"),
+                       class = "btn-success btn-sm")
+        ),
+        
+        .step_nav(ns, back_id = "btn_back_2", next_id = NULL)
+      )
+    })
+    
+    # ── Load matrix in step2 ──────────────────────────────────
+    observeEvent(input$matriks_serasi_file, {
+      req(input$matriks_serasi_file)
+      tryCatch({
+        rv$matriks_serasi <- load_validate_matrix_table(
+          input$matriks_serasi_file$datapath, title = "serasi"
+        )
+        showNotification("Matriks SERASI berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$matriks_serasi <- NULL
+        showNotification(paste("Gagal memuat matriks:", e$message), type = "error")
+      })
+    })
+    
+    output$matriks_serasi_status <- renderUI({
+      if (is.null(rv$matriks_serasi)) return(NULL)
+      div(class = "alert alert-success mb-0",
+          tags$i(class = "bi bi-check-circle me-2"),
+          "Matriks SERASI berhasil divalidasi.")
+    })
+    
+    observeEvent(input$btn_back_2, {
+      go_to_panel("step1")
+    })
+    
+    # ── Run analysis (with progress) ──────────────────────────
     observeEvent(input$btn_run, {
-      req(!is_running())
-      req(input$rtrw_file, input$rzwp3k_file,
-          input$rtrw_prioritas_file,
-          input$rzwp3k_prioritas_file,
-          input$matriks_serasi_file)
+      req(rv$rtrw_vect, rv$rzwp3k_vect,
+          rv$rtrw_prioritas, rv$rzwp3k_prioritas,
+          rv$matriks_serasi)
       
-      is_running(TRUE)
-      analysis_result(NULL)
-      log_messages("")   # reset log
+      # Reset previous results
+      rv$analysis_result <- NULL
+      rv$gpkg_path <- NULL
+      rv$xlsx_path <- NULL
+      rv$log_messages <- ""
       
-      # Fungsi untuk menambahkan pesan ke log
       append_log <- function(msg) {
-        current <- log_messages()
-        log_messages(paste0(current, msg, "\n"))
+        rv$log_messages <- paste0(rv$log_messages, msg, "\n")
       }
       
-      # Bungkus seluruh proses dengan progress bar
       withProgress(message = "Menjalankan Analisis Overlap", value = 0, {
         
         tryCatch({
           
-          # Step 1: Load matrices (progress 10%)
-          incProgress(0.1, detail = "Memuat matriks dan prioritas...")
-          append_log(">> Memuat matriks SERASI...")
-          matriks_serasi   <- load_validate_matrix_table(
-            input$matriks_serasi_file$datapath, title = "serasi"
-          )
-          append_log(">> Memuat prioritas RTRW...")
-          rtrw_prioritas   <- load_and_validate_table(input$rtrw_prioritas_file$datapath)
-          append_log(">> Memuat prioritas RZWP3K...")
-          rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_prioritas_file$datapath)
-          append_log("   Semua tabel berhasil dimuat.")
+          # Step 1: load already loaded, skip
+          incProgress(0.1, detail = "Memulai analisis...")
+          append_log(">> Memulai analisis overlap...")
           
           # Step 2: Identify overlaps (progress 30%)
           incProgress(0.2, detail = "Mengidentifikasi tumpang tindih...")
           append_log(">> Mengidentifikasi tumpang tindih antara RTRW dan RZWP3K...")
-          union_sf          <- identify_overlaps(rtrw_vect(), rzwp3k_vect())
+          union_sf <- identify_overlaps(rv$rtrw_vect, rv$rzwp3k_vect)
           append_log("   Tumpang tindih berhasil diidentifikasi.")
           
           # Step 3: Filter by threshold (progress 50%)
           incProgress(0.2, detail = "Menyaring berdasarkan luas minimum...")
-          append_log(paste0(">> Menyaring poligon dengan luas >= ", input$threshold_ha, " ha..."))
-          filtered_union_sf <- filter_overlaps(union_sf, input$threshold_ha)
+          threshold <- input$threshold_ha
+          append_log(paste0(">> Menyaring poligon dengan luas >= ", threshold, " ha..."))
+          filtered_union_sf <- filter_overlaps(union_sf, threshold)
           append_log(paste0("   ", nrow(filtered_union_sf), " poligon tersisa setelah penyaringan."))
           
           # Step 4: Validate zone class (progress 70%)
           incProgress(0.2, detail = "Memvalidasi kesesuaian kelas zona...")
           append_log(">> Memvalidasi kesesuaian nama kelas antara peta dan prioritas...")
           valid_class <- validate_zone_class(
-            filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas
+            filtered_union_sf, rv$rtrw_prioritas, rv$rzwp3k_prioritas
           )
           
           # Step 5: Merge and save (progress 90%)
@@ -251,21 +403,26 @@ overlap_server <- function(id, output_dir) {
               length(valid_class$mismatch_col4) == 0) {
             
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
-            idx_serasi_map   <- merge_attributes_to_map(filtered_union_sf, matriks_serasi)
+            idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            out_path <- file.path(output_dir(), "idx_serasi.gpkg")
-            sf::st_write(idx_serasi_map, out_path, delete_dsn = TRUE, quiet = TRUE)
-            append_log(paste0("   Hasil disimpan di: ", out_path))
+            gpkg_path <- file.path(output_dir(), "idx_serasi.gpkg")
+            xlsx_path <- file.path(output_dir(), "idx_serasi.xlsx")
+            dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
             
-            analysis_result(list(map = idx_serasi_map, table = idx_serasi_table))
+            sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
+            openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
+            
+            rv$gpkg_path <- gpkg_path
+            rv$xlsx_path <- xlsx_path
+            rv$analysis_result <- list(map = idx_serasi_map, table = idx_serasi_table)
+            
+            append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis overlap berhasil diselesaikan.")
-            showNotification(paste("Analisis selesai. Hasil disimpan ke", out_path),
+            showNotification(paste("Analisis selesai. Hasil disimpan ke", gpkg_path),
                              type = "message", duration = 5)
             
           } else {
-            
-            # Jika ada ketidakcocokan, catat di log
             log_msg <- paste(
               "Ketidakcocokan nama kelas terdeteksi:",
               if (length(valid_class$mismatch_col3) > 0)
@@ -291,39 +448,35 @@ overlap_server <- function(id, output_dir) {
         })
         
       }) # end withProgress
-      
-      is_running(FALSE)
     })
     
-    # ── Status box ───────────────────────────────────────────
+    # ── Status box ─────────────────────────────────────────────
     output$status_box <- renderUI({
-      if (is_running()) {
-        div(class = "alert alert-info mb-0",
-            tags$i(class = "bi bi-hourglass-split me-2"),
-            "Menjalankan analisis...")
-      } else if (!is.null(analysis_result())) {
+      if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
             "Analisis selesai.")
+      } else if (rv$unlocked >= 2 && !is.null(rv$matriks_serasi)) {
+        div(class = "alert alert-secondary mb-0",
+            tags$i(class = "bi bi-circle me-2"),
+            "Siap menjalankan analisis.")
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Unggah file dan klik Jalankan Analisis.")
+            "Lengkapi tahap sebelumnya.")
       }
     })
     
-    # ── Map output ───────────────────────────────────────────
+    # ── Map output ─────────────────────────────────────────────
     output$result_map <- renderLeaflet({
-      req(analysis_result())
+      req(rv$analysis_result)
       
-      map_sf <- analysis_result()$map
+      map_sf <- rv$analysis_result$map
       
-      # Ensure CRS is WGS84 for leaflet
       if (!sf::st_is_longlat(map_sf)) {
         map_sf <- sf::st_transform(map_sf, crs = 4326)
       }
       
-      # Discrete color palette for idx_serasi (0, 0.5, 1)
       pal <- leaflet::colorFactor(
         palette = c("red", "orange", "green"),
         domain  = c(0, 0.5, 1),
@@ -367,17 +520,44 @@ overlap_server <- function(id, output_dir) {
         )
     })
     
-    # ── Table output ─────────────────────────────────────────
-    output$result_table <- renderTable({
-      req(analysis_result())
-      analysis_result()$table
+    # ── Table output ───────────────────────────────────────────
+    output$result_table <- DT::renderDT({
+      req(rv$analysis_result)
+      DT::datatable(
+        rv$analysis_result$table,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'Bfrtip'
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      )
     })
     
-    # ── Validation log (real-time) ──────────────────────────
+    # ── Validation log ─────────────────────────────────────────
     output$validation_log <- renderPrint({
-      invalidateLater(100, session)  
-      cat(log_messages())
+      invalidateLater(100, session)
+      cat(rv$log_messages)
     })
+    
+    # ── Download handlers ──────────────────────────────────────
+    output$dl_gpkg <- downloadHandler(
+      filename = function() "idx_serasi.gpkg",
+      content = function(file) {
+        req(rv$gpkg_path)
+        file.copy(rv$gpkg_path, file, overwrite = TRUE)
+      }
+    )
+    
+    output$dl_xlsx <- downloadHandler(
+      filename = function() "idx_serasi.xlsx",
+      content = function(file) {
+        req(rv$xlsx_path)
+        file.copy(rv$xlsx_path, file, overwrite = TRUE)
+      }
+    )
     
   })
 }

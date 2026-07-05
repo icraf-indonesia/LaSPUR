@@ -5,6 +5,8 @@ if (!requireNamespace("pacman", quietly = TRUE)) {
   install.packages("pacman")
 }
 
+library(pacman)
+
 pacman::p_load(
   terra,
   sf,
@@ -28,7 +30,10 @@ pacman::p_load(
   leaflet,
   htmltools,
   readxl,
-  shinyjs
+  shinyjs,
+  shinyFiles,
+  promises,
+  bslib
 )
 
 #' Load and Validate a Shapefile

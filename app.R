@@ -6,6 +6,7 @@ library(bslib)
 library(future)
 library(promises)
 library(shinyFiles)
+library(shinyjs) 
 
 plan(multisession)
 
@@ -53,12 +54,14 @@ safe_source("modules/mod_padu_se.R",         "padu_se_ui",         "padu_se_serv
 safe_source("modules/mod_padu_ki.R",         "padu_ki_ui",         "padu_ki_server")
 safe_source("modules/mod_padu_combine.R",    "padu_combine_ui",    "padu_combine_server")
 safe_source("modules/mod_padan.R",           "padan_ui",           "padan_server")
-safe_source("modules/mod_recommendation.R",  "recommendation_ui",  "recommendation_server")
-safe_source("modules/mod_rekonsiliasi.R",    "rekonsiliasi_ui",    "rekonsiliasi_server")  
+safe_source("modules/mod_recommendation_overlaps.R",  "recommendation_overlaps_ui",  "recommendation_overlaps_server")
+safe_source("modules/mod_recommendation_adjacent.R",  "recommendation_adjacent_ui",  "recommendation_adjacent_server")
+safe_source("modules/mod_reconcile.R",    "reconcile_ui",    "reconcile_server")  
 
 # ── Sidebar nav helper ───────────────────────────────────────
 nav_item <- function(input_id, number, label) {
   div(
+    id = paste0("wrapper_", input_id),
     style = paste(
       "display: flex; align-items: center; gap: 8px;",
       "padding: 6px 10px; border-radius: 6px; cursor: pointer;",
@@ -98,15 +101,74 @@ tab_config <- list(
   padu_ki         = list(label = "2.7 PADU-KI",             ui_fn = padu_ki_ui,         srv_fn = padu_ki_server),
   padu_combine    = list(label = "2.8 PADU-Kombinasi",        ui_fn = padu_combine_ui,    srv_fn = padu_combine_server),
   padan           = list(label = "3. PADAN",                ui_fn = padan_ui,           srv_fn = padan_server),
-  recommendation  = list(label = "4. Rekomendasi",          ui_fn = recommendation_ui,  srv_fn = recommendation_server),
-  rekonsiliasi    = list(label = "5. Rekonsiliasi",            ui_fn = rekonsiliasi_ui,    srv_fn = rekonsiliasi_server) 
+  recommendation_overlaps  = list(label = "4.1 Rekomendasi Tumpang Tindih",          ui_fn = recommendation_overlaps_ui,  srv_fn = recommendation_overlaps_server),
+  recommendation_adjacent  = list(label = "4.2 Rekomendasi Bertetangga",          ui_fn = recommendation_adjacent_ui,  srv_fn = recommendation_adjacent_server),
+  reconcile    = list(label = "5. Rekonsiliasi",            ui_fn = reconcile_ui,    srv_fn = reconcile_server) 
+)
+
+# ── Landing Page UI ──────────────────────────────────────────
+landing_page <- tabPanel(
+  title = "Beranda",
+  value = "home",
+  div(
+    style = "padding: 40px 20px; max-width: 1200px; margin: 0 auto; text-align: center;",
+    
+    tags$img(src = "pur_icon.png", style = "max-width: 120px; margin-bottom: 20px;"),
+    
+    h1("LaSPUR", style = "color: #246484; font-weight: 800; font-size: 3.5rem; margin-bottom: 20px;"),
+    
+    p(
+      "Land and Seascape Planning Unit Reconciliation adalah alat bantu yang dirancang untuk mengintegrasikan dan merekonsiliasi tata ruang darat (Rencana Tata Ruang Wilayah Provinsi/RTRWP) dengan tata ruang laut (Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil/RZWP3K).",
+      style = "font-size: 1.15rem; color: #4a5a6a; margin-bottom: 50px; max-width: 900px; margin-left: auto; margin-right: auto; line-height: 1.6;"
+    ),
+    
+    layout_columns(
+      col_widths = c(4, 4, 4),
+      
+      div(
+        style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
+        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+            icon("layer-group", style = "font-size: 3.5rem; color: #e66430;")),
+        h3("Tumpang Tindih", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
+        p("Merekomendasikan penyelesaian persoalan alokasi ruang darat dan laut saling bertampalan secara spasial pada lokasi yang sama, baik sebagian maupun keseluruhan.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
+        actionButton("btn_path_overlap", "Pilih Tumpang Tindih", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+      ),
+      
+      div(
+        style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
+        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+            icon("map", style = "font-size: 3.5rem; color: #e66430;")),
+        h3("Bertetangga", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
+        p("Merekomendasikan penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
+        actionButton("btn_path_adjacent", "Pilih Bertetangga", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+      ),
+      
+      div(
+        style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
+        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+            icon("project-diagram", style = "font-size: 3.5rem; color: #e66430;")),
+        h3("Berpengaruh", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
+        p("Merekomendasikan alokasi ruang darat atau laut yang memberikan dampak ekologis, sosial, atau ekonomi terhadap sisi lainnya melalui keterhubungan sistem alami maupun fungsional.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
+        actionButton("btn_path_interconnect", "Pilih Berpengaruh", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+      )
+    ),
+    
+    div(
+      style = "margin-top: 60px; text-align: center;",
+      tags$img(src = "logo_konsorsium.png", style = "max-height: 80px; max-width: 100%;")
+    )
+  )
 )
 
 # ── UI ───────────────────────────────────────────────────────
 ui <- page_sidebar(
+  useShinyjs(), 
+  
   title = "Land & Sea Planning Unit Reconcilliation (LaSPUR)",
   
-  # ── Custom theme ────────────────────────────────────────────
   theme = bs_theme(
     version = 5,
     bootswatch = "cerulean",
@@ -161,10 +223,12 @@ ui <- page_sidebar(
       padding: 8px 16px;
       border-bottom: 3px solid transparent !important;
     }
+    
+    /* Active tab font color set to white */
     .nav-tabs .nav-link.active {
       border-bottom: 3px solid #2ba6cb !important;
-      background-color: transparent !important;
-      color: #1a2a3a !important;
+      background-color: #2ba6cb !important;
+      color: #ffffff !important;       
     }
   
     /* Accordion – light borders */
@@ -172,23 +236,29 @@ ui <- page_sidebar(
       border: 1px solid #e5edf2 !important;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }
+    
+    /* Hide Home tab title in main navigation for a cleaner look */
+    .nav-tabs li:first-child a {
+      display: none !important;
+    }
   ")),
   
-  # ── Sidebar with logo ──────────────────────────────────────
   sidebar = sidebar(
     tags$div(
-      style = "text-align: center; margin-bottom: 8px;",
+      style = "text-align: center; margin-bottom: 15px;",
       tags$img(
         src = "pur_icon.png",
         width = "100%",
         max_width = "75px",
-        style = "border-radius: 8px;"
-      )
+        style = "border-radius: 8px; margin-bottom: 15px;"
+      ),
+      actionButton("btn_home", "Beranda / Ubah Jalur", icon = icon("home"), 
+                   class = "btn-primary w-100", 
+                   style = "font-weight: bold; font-size: 0.9rem;")
     ),
     
     title = "Jelajahi Modul",
     
-    # Output directory selection 
     div(
       style = "margin-bottom: 16px;",
       tags$label("Direktori Output",
@@ -207,14 +277,13 @@ ui <- page_sidebar(
     
     hr(),
     
-    # Accordion panels 
     accordion(
       open = FALSE,
       accordion_panel(
         "1. Identifikasi Konflik Spasial",
         nav_item("nav_overlap",         "1.1", "Area Tumpang Tindih"),
         nav_item("nav_adjacent",        "1.2", "Area Bertetangga"),
-        nav_item("nav_interconnection", "1.3", "Area Saling Terhubung")
+        shinyjs::hidden(nav_item("nav_interconnection", "1.3", "Area Saling Terhubung"))
       ),
       accordion_panel(
         "2. Analisis PADU",
@@ -233,16 +302,16 @@ ui <- page_sidebar(
       ),
       accordion_panel(
         "4. Rekomendasi",
-        nav_item("nav_recommendation", "4", "Rekomendasi")
+        nav_item("nav_recommendation_overlaps", "4.1", "Rekomendasi Tumpang Tindih"),
+        nav_item("nav_recommendation_adjacent", "4.2", "Rekomendasi Bertetangga")
       ),
       accordion_panel(
         "5. Rekonsiliasi",
-        nav_item("nav_rekonsiliasi", "5", "Rekonsiliasi")
+        nav_item("nav_reconcile", "5", "Rekonsiliasi")
       )
     )
   ),
   
-  # ── Confirmation modal ───────────────────────────────────────
   tags$div(
     id = "close_confirm_modal", class = "modal fade",
     tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
@@ -274,7 +343,7 @@ ui <- page_sidebar(
     )
   ),
   
-  navset_card_pill(id = "tabs")
+  navset_card_pill(id = "tabs", landing_page)
 )
 
 # ── Server ───────────────────────────────────────────────────
@@ -283,7 +352,74 @@ server <- function(input, output, session) {
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
   
-  # ── Output directory ─────────────────────────────────────────
+  active_path   <- reactiveVal("overlap") 
+  
+  seq_overlap <- c("overlap", "padu_ke", "padu_hs", "padu_kl", "padu_kh", "padu_rtp", "padu_se", "padu_ki", "padu_combine", "padan", "recommendation_overlaps", "reconcile")
+  seq_adjacent <- c("adjacent", "padu_ke", "padu_hs", "padu_kl", "padu_kh", "padu_rtp", "padu_se", "padu_ki", "padu_combine", "padan", "recommendation_adjacent", "reconcile")
+  
+  disable_tabs <- function(tabs_to_disable, warning_message) {
+    closed_any <- FALSE
+    current_open <- open_tabs()
+    
+    for (t in tabs_to_disable) {
+      if (t %in% current_open) {
+        removeTab(inputId = "tabs", target = t)
+        current_open <- current_open[current_open != t]
+        closed_any <- TRUE
+      }
+    }
+    
+    open_tabs(current_open)
+    
+    if (closed_any) {
+      showNotification(warning_message, type = "warning", duration = 8)
+    }
+  }
+  
+  observeEvent(input$btn_home, {
+    updateTabsetPanel(session, "tabs", selected = "home")
+  })
+  
+  observeEvent(input$btn_path_overlap, {
+    active_path("overlap")
+    
+    shinyjs::show("wrapper_nav_overlap")
+    shinyjs::show("wrapper_nav_recommendation_overlaps")
+    
+    shinyjs::hide("wrapper_nav_adjacent")
+    shinyjs::hide("wrapper_nav_recommendation_adjacent")
+    
+    disable_tabs(
+      c("adjacent", "recommendation_adjacent"),
+      "Jalur diubah ke Tumpang Tindih. Tab Area Bertetangga dinonaktifkan dan ditutup."
+    )
+    
+    showNotification("Jalur Tumpang Tindih aktif. Silakan pilih modul di menu sebelah kiri.", type = "message", duration = 5)
+    add_tab("overlap")
+  })
+  
+  observeEvent(input$btn_path_adjacent, {
+    active_path("adjacent")
+    
+    shinyjs::hide("wrapper_nav_overlap")
+    shinyjs::hide("wrapper_nav_recommendation_overlaps")
+    
+    shinyjs::show("wrapper_nav_adjacent")
+    shinyjs::show("wrapper_nav_recommendation_adjacent")
+    
+    disable_tabs(
+      c("overlap", "recommendation_overlaps"),
+      "Jalur diubah ke Bertetangga. Tab Area Tumpang Tindih dinonaktifkan dan ditutup."
+    )
+    
+    showNotification("Jalur Bertetangga aktif. Silakan pilih modul di menu sebelah kiri.", type = "message", duration = 5)
+    add_tab("adjacent")
+  })
+  
+  observeEvent(input$btn_path_interconnect, {
+    showNotification("Fitur ini sedang dalam pengembangan.", type = "warning", duration = 5)
+  })
+  
   roots <- c(
     Home    = path.expand("~"),
     Project = normalizePath(".."),
@@ -344,6 +480,37 @@ server <- function(input, output, session) {
       return()
     }
     
+    # ── Top Navigation Bar Layout ──────────────────────────────────
+    nav_buttons <- div(
+      style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5edf2; padding-bottom: 15px;",
+      
+      # LEFT SIDE: Home/Back & Next Buttons
+      div(
+        style = "display: flex; gap: 10px;",
+        
+        # Home (Beranda) if on the first module, else Back (Sebelumnya)
+        if (tab_id %in% c("overlap", "adjacent")) {
+          actionButton(paste0("btn_back_", tab_id), "Beranda", icon = icon("home"), class = "btn-outline-secondary btn-sm")
+        } else {
+          actionButton(paste0("btn_back_", tab_id), "Sebelumnya", icon = icon("arrow-left"), class = "btn-outline-secondary btn-sm")
+        },
+        
+        # Next (hidden on the last module 'reconcile')
+        if (tab_id != "reconcile") {
+          actionButton(paste0("btn_next_", tab_id), "Selanjutnya", icon = icon("arrow-right"), class = "btn-primary btn-sm")
+        }
+      ),
+      
+      # RIGHT SIDE: Close Tab Button
+      div(
+        actionButton(
+          paste0("close_", tab_id),
+          tagList(tags$i(class = "bi bi-x-lg me-1"), "Tutup Tab"),
+          class = "btn-outline-danger btn-sm"
+        )
+      )
+    )
+    
     appendTab(
       inputId = "tabs",
       tabPanel(
@@ -351,13 +518,8 @@ server <- function(input, output, session) {
         value = tab_id,
         div(
           style = "padding: 20px;",
-          cfg$ui_fn(tab_id),
-          hr(),
-          actionButton(
-            session$ns(paste0("close_", tab_id)),
-            tagList(tags$i(class = "bi bi-x-lg me-1"), "Tutup Tab"),
-            class = "btn-outline-danger btn-sm"
-          )
+          nav_buttons, # Top Navigation bar injected here
+          cfg$ui_fn(tab_id)
         )
       ),
       select = TRUE
@@ -366,6 +528,31 @@ server <- function(input, output, session) {
     open_tabs(c(open_tabs(), tab_id))
     cfg$srv_fn(tab_id, session$userData$output_dir)
     
+    # Listeners
+    observeEvent(input[[paste0("btn_back_", tab_id)]], {
+      if (tab_id %in% c("overlap", "adjacent")) {
+        updateTabsetPanel(session, "tabs", selected = "home")
+      } else {
+        seq <- if (active_path() == "adjacent") seq_adjacent else seq_overlap
+        idx <- match(tab_id, seq)
+        if (!is.na(idx) && idx > 1) {
+          prev_tab <- seq[idx - 1]
+          add_tab(prev_tab) 
+        }
+      }
+    }, ignoreInit = TRUE)
+    
+    if (tab_id != "reconcile") {
+      observeEvent(input[[paste0("btn_next_", tab_id)]], {
+        seq <- if (active_path() == "adjacent") seq_adjacent else seq_overlap
+        idx <- match(tab_id, seq)
+        if (!is.na(idx) && idx < length(seq)) {
+          next_tab <- seq[idx + 1]
+          add_tab(next_tab) 
+        }
+      }, ignoreInit = TRUE)
+    }
+    
     observeEvent(input[[paste0("close_", tab_id)]], {
       pending_close(tab_id)
       session$sendCustomMessage("update_modal_label", list(label = cfg$label))
@@ -373,7 +560,6 @@ server <- function(input, output, session) {
     }, once = FALSE, ignoreInit = TRUE)
   }
   
-  # ── Confirm close ─────────────────────────────────────────────
   observeEvent(input$confirm_close_yes, {
     tab_id <- pending_close()
     req(!is.null(tab_id))
@@ -383,7 +569,6 @@ server <- function(input, output, session) {
     pending_close(NULL)
   })
   
-  # ── Sidebar observers ─────────────────────────────────────────
   observeEvent(input$nav_overlap,         { add_tab("overlap") })
   observeEvent(input$nav_adjacent,        { add_tab("adjacent") })
   observeEvent(input$nav_interconnection, { add_tab("interconnection") })
@@ -396,11 +581,11 @@ server <- function(input, output, session) {
   observeEvent(input$nav_padu_ki,         { add_tab("padu_ki") })
   observeEvent(input$nav_padu_combine,    { add_tab("padu_combine") })
   observeEvent(input$nav_padan,           { add_tab("padan") })
-  observeEvent(input$nav_recommendation,  { add_tab("recommendation") })
-  observeEvent(input$nav_rekonsiliasi,    { add_tab("rekonsiliasi") })
+  observeEvent(input$nav_recommendation_overlaps,  { add_tab("recommendation_overlaps") })
+  observeEvent(input$nav_recommendation_adjacent,  { add_tab("recommendation_adjacent") })
+  observeEvent(input$nav_reconcile,    { add_tab("reconcile") })
 }
 
-# ── JS handlers ──────────────────────────────────────────────
 jsCode <- "
 $(document).ready(function() {
   Shiny.addCustomMessageHandler('show_close_modal', function(msg) {
