@@ -27,7 +27,8 @@ pacman::p_load(
   data.table,
   leaflet,
   htmltools,
-  readxl
+  readxl,
+  shinyjs
 )
 
 #' Load and Validate a Shapefile

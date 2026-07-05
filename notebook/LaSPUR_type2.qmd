@@ -3,7 +3,6 @@ title: "LaSPUR Type 2 Implementation"
 author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
 format: html
 editor: visual
----idx
 ---
 
 # LaSPUR Step 2 - Rekonsiliasi Area Berdampingan
@@ -823,211 +822,64 @@ idx_padan_map <- idx_padu_map %>%
 
 Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap unit zona/pola ruang yang berdampingan berdasarkan penentuan opsi keputusan penyelesaian konflik tumpang tindih sesuai pertimbangan pada analisis SERASI dan PADU.
 
+## Tahap 6.1. Menyaring kasus-kasus berdasarkan nilai indeks PADAN dan panjang segmen bertetangga
+
+```{r filter-pu-recommendation}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Prepare adjacent reconciliation map
+apply_length <- TRUE  
+apply_idx    <- TRUE  
+length_filter <- 1500
+idx_filter    <- 0.75
+
+# Compute filter
+keep <- rep(TRUE, nrow(idx_padan_map))
+if (apply_length) keep <- keep & (as.numeric(idx_padan_map$length) > length_filter)
+if (apply_idx)    keep <- keep & (idx_padan_map$idx_padan < idx_filter) 
+idx_padan_map_filter <- idx_padan_map[keep, ]
+
+# Counts
+cat(sprintf("Before: %d pairs\n", nrow(idx_padan_map)/2))
+cat(sprintf("After : %d pairs\n", nrow(idx_padan_map_filter)/2))
+cat(sprintf("Removed: %d pairs (%.1f%%)\n", 
+            (nrow(idx_padan_map) - nrow(idx_padan_map_filter))/2,
+            (1 - (nrow(idx_padan_map_filter)/2)/(nrow(idx_padan_map)/2))*100))
+```
+
+## Tahap 6.2. Menentukan opsi rekomendasi kawasan/zona RTRW dan RZWP3K alternatif
+
 ```{r calculate-alternative-zone}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-# Load reference table for determine best alternative
-best_rtrw <- load_and_validate_table(best_rtrw_path)
-best_rzwp3k <- load_and_validate_table(best_rzwp3k_path)
+# Select the best alternative zones using SERASI index consideration
+alternative_zones <- determine_alternative_zones(
+  idx_padan_map_filter = idx_padan_map_filter,
+  serasi_matrix = matriks_serasi,
+  n_alt = 5,
+  step = "step2",
+  output_dir = "output/step2/AOI_Palu-Parigi"
+)
 
-# Select the best alternative class using reference table
-idx_padan_map_alt <- idx_padan_map %>%
-  mutate(
-    RZWP3K_plus1 = lead(RZWP3K),
-    RTRW_minus1  = lag(RTRW)
-  ) %>%
-  rowwise() %>%
-  mutate(
-    alt_RTRW = best_rtrw$Best_RTRW[
-      match(RZWP3K_plus1, best_rtrw$RZ_cat)
-    ],
-    alt_RZWP3K = best_rzwp3k$Best_RZ[
-      match(RTRW_minus1, best_rzwp3k$RTRW_cat)
-    ]
-  ) %>%
-  ungroup() %>%
-  select(-RZWP3K_plus1, -RTRW_minus1)
+# Read alternative table
+alt_table_path <- "output/step2/AOI_Palu-Parigi/idx_padan_map_alt_dropdown_filled.xlsx"
+alt_table <- load_and_validate_table(alt_table_path)
 
-# # Select the best alternative class using SERASI index consideration
-# idx_padan_map_alt <- idx_padan_map %>%
-#   mutate(
-#     RZWP3K_plus1 = lead(RZWP3K),
-#     RTRW_minus1  = lag(RTRW)
-#   ) %>%
-#   rowwise() %>%
-#   mutate(
-#     alt_RTRW = get_alternative_zone(
-#       RZWP3K_plus1,
-#       RTRW,
-#       "RTRW",
-#       matriks_serasi
-#     ),
-# 
-#     alt_RZWP3K = get_alternative_zone(
-#       RTRW_minus1,
-#       RZWP3K,
-#       "RZWP3K",
-#       matriks_serasi
-#     )
-#   ) %>%
-#   ungroup() %>%
-#   select(-RZWP3K_plus1, -RTRW_minus1)
+# Left join the alt_RTRW and alt_RZWP3K
+alt_map_with_decision <- dplyr::left_join(
+  idx_padan_map_filter,
+  alt_table[, c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")],
+  by = c("id", "id_pu")
+)
 ```
 
 # Tahap 7. Perhitungan ekonomi/NPV untuk area RTRW dan RZWP3K
-
-## Tahap 7.1. Menghitung distribusi tutupan/penggunaan lahan dan nilai NPV per ha aktual
-
-```{r calculate-land-distribution-&-npv-ha-actual}
-#| error: true
-#| warning: false
-#| message: true
-#| include: true
-
-# Prepare data
-class_name = "LC"
-npv_lulc <- load_and_validate_table(npv_lulc_path)
-matriks_land_distribution_rtrw <- load_validate_matrix_table(matriks_land_distribution_rtrw_path)
-matriks_land_distribution_rzwp3k <- load_validate_matrix_table(matriks_land_distribution_rzwp3k_path)
-
-# Prepare RTRW and RZWP3K data
-pu_rtrw <- idx_padan_map_alt %>%
-  filter(!is.na(RTRW)) %>% 
-  select(-RZWP3K)
-
-pu_rzwp3k <- idx_padan_map_alt %>%
-  filter(!is.na(RZWP3K)) %>% 
-  select(-RTRW)
-
-# Calculate actual LULC distribution for each feature unit RTRW
-land_distribution_rtrw_long <- calculate_land_distribution(
-  pu_rtrw, lulc_vect,
-  id_pu = "id_pu", 
-  lulc_class = class_name,
-  # use_parallel = TRUE,
-  # workers = 4
-  calculate_from_matrix = TRUE,
-  matrix_tbl = matriks_land_distribution_rtrw,
-  selected_zone = "RTRW"
-) 
-
-land_distribution_rtrw_wide <- land_distribution_rtrw_long %>%
-  pivot_wider(
-    names_from = class_name,
-    values_from = proportion,
-    values_fill = 0
-  )
-
-land_distribution_rtrw <- st_drop_geometry(pu_rtrw) %>% 
-  left_join(
-    land_distribution_rtrw_wide, by = "id_pu"
-    )
-
-# Calculate actual LULC distribution for each feature unit RZWP3K
-land_distribution_rzwp3k_long <- calculate_land_distribution(
-  pu_rzwp3k, lulc_vect,
-  id_pu = "id_pu", 
-  lulc_class = class_name,
-  # use_parallel = TRUE,
-  # workers = 4
-  calculate_from_matrix = TRUE,
-  matrix_tbl = matriks_land_distribution_rzwp3k,
-  selected_zone = "RZWP3K"
-) 
-
-land_distribution_rzwp3k_wide <- land_distribution_rzwp3k_long %>%
-  pivot_wider(
-    names_from = class_name,
-    values_from = proportion,
-    values_fill = 0
-  )
-
-land_distribution_rzwp3k <- st_drop_geometry(pu_rzwp3k) %>% 
-  left_join(
-    land_distribution_rzwp3k_wide, by = "id_pu"
-    )
-
-# Calculate actual npv/ha value for rtrw features
-npv_lulc_rtrw_ha <- calculate_npv_ha_per_unit(land_distribution_rtrw, npv_lulc) %>% 
-  rename(
-    npv_ha_actual_rtrw = npv_ha
-  )
-
-# Calculate actual npv/ha value for rzwp3k features
-npv_lulc_rzwp3k_ha <- calculate_npv_ha_per_unit(land_distribution_rzwp3k, npv_lulc) %>% 
-  rename(
-    npv_ha_actual_rzwp3k = npv_ha
-  )
-
-```
-
-## Tahap 7.2. Menghitung distribusi tutupan/penggunaan lahan dan nilai NPV per ha rekomendasi
-
-```{r calculate-land-distribution-&-npv-ha-recommendation}
-#| error: true
-#| warning: false
-#| message: true
-#| include: true
-
-# Calculate recommendation of LULC distribution for each feature unit RTRW
-land_distribution_rtrw_recom_only <- calculate_land_distribution(
-  pu = pu_rtrw,
-  id_pu = "id_pu",
-  lulc_class = class_name,
-  calculate_from_matrix = TRUE,
-  matrix_tbl = matriks_land_distribution_rtrw,
-  selected_zone = "alt_RTRW"
-) %>%
-  pivot_wider(
-    names_from = class_name,
-    values_from = proportion,
-    values_fill = 0
-  ) %>%
-  st_drop_geometry() 
-
-land_distribution_rtrw_recom <- npv_lulc_rtrw_ha %>% left_join(
-    land_distribution_rtrw_recom_only,
-    by = "id_pu"
-  )
-
-# Calculate recommendation of LULC distribution for each feature unit RZWP3K
-land_distribution_rzwp3k_recom_only <- calculate_land_distribution(
-  pu = pu_rzwp3k,
-  id_pu = "id_pu",
-  lulc_class = class_name,
-  calculate_from_matrix = TRUE,
-  matrix_tbl = matriks_land_distribution_rzwp3k,
-  selected_zone = "alt_RZWP3K"
-) %>%
-  pivot_wider(
-    names_from = class_name,
-    values_from = proportion,
-    values_fill = 0
-  ) %>%
-  st_drop_geometry() 
-
-land_distribution_rzwp3k_recom <- npv_lulc_rzwp3k_ha %>% left_join(
-    land_distribution_rzwp3k_recom_only,
-    by = "id_pu"
-  )
-
-# Calculate actual npv/ha value for rtrw features
-npv_lulc_rtrw_ha_recom <- calculate_npv_ha_per_unit(land_distribution_rtrw_recom, npv_lulc) %>% 
-  rename(
-    npv_ha_recom_rtrw = npv_ha
-  )
-
-# Calculate actual npv/ha value for rtrw features
-npv_lulc_rzwp3k_ha_recom <- calculate_npv_ha_per_unit(land_distribution_rzwp3k_recom, npv_lulc) %>% 
-  rename(
-    npv_ha_recom_rzwp3k = npv_ha
-  )
-```
-
-## Tahap 7.3. Menghitung nilai ekonomi berbasis NPV
 
 ```{r calculate-npv}
 #| error: true
@@ -1035,35 +887,18 @@ npv_lulc_rzwp3k_ha_recom <- calculate_npv_ha_per_unit(land_distribution_rzwp3k_r
 #| message: true
 #| include: true
 
-# Calculate npv for rtrw
-npv_lulc_rtrw <- npv_lulc_rtrw_ha_recom %>% 
-  mutate(
-    econ_rtrw_actual = area_ha * npv_ha_actual_rtrw,
-    econ_rtrw_recom = area_ha * npv_ha_recom_rtrw,
-    econ_rtrw_delta = econ_rtrw_recom - econ_rtrw_actual
-  )
+# Prepare input for economic calculation
+npv_lulc <- load_and_validate_table(npv_lulc_path)
+matriks_land_distribution_rtrw <- load_validate_matrix_table(matriks_land_distribution_rtrw_path)
+matriks_land_distribution_rzwp3k <- load_validate_matrix_table(matriks_land_distribution_rzwp3k_path)
 
-# Calculate npv for rzwp3k
-npv_lulc_rzwp3k <- npv_lulc_rzwp3k_ha_recom %>% 
-  mutate(
-    econ_rzwp3k_actual = area_ha * npv_ha_actual_rzwp3k,
-    econ_rzwp3k_recom = area_ha * npv_ha_recom_rzwp3k,
-    econ_rzwp3k_delta = econ_rzwp3k_recom - econ_rzwp3k_actual
-  )
-
-# merge with sf object
-new_cols_rtrw <- setdiff(names(npv_lulc_rtrw), names(idx_padan_map_alt))
-new_cols_rzwp3k <- setdiff(names(npv_lulc_rzwp3k), names(idx_padan_map_alt))
-
-adjacent_economy_map <- idx_padan_map_alt %>%
-  left_join(
-    npv_lulc_rtrw %>% select(id, id_pu, all_of(new_cols_rtrw)),
-    by = c("id", "id_pu")
-  ) %>%
-  left_join(
-    npv_lulc_rzwp3k %>% select(id, id_pu, all_of(new_cols_rzwp3k)),
-    by = c("id", "id_pu")
-  )
+# calculate economy npv
+adjacent_economy_map <- calculate_economic_npv(
+  alt_map_with_decision = alt_map_with_decision,
+  npv_lulc = npv_lulc,
+  matriks_land_distribution_rtrw = matriks_land_distribution_rtrw,
+  matriks_land_distribution_rzwp3k = matriks_land_distribution_rzwp3k
+)
 ```
 
 # Tahap 8. Rekomendasi keputusan rekonsiliasi area berdampingan
@@ -1251,28 +1086,9 @@ adjacent_recom_map %>%
 #| message: true
 #| include: true
 
-# Prepare adjacent reconciliation map
-apply_length <- TRUE  
-apply_idx    <- TRUE  
-length_filter <- 1500
-idx_filter    <- 0.75
-
-# Compute filter
-keep <- rep(TRUE, nrow(adjacent_recom_map))
-if (apply_length) keep <- keep & (as.numeric(adjacent_recom_map$length) > length_filter)
-if (apply_idx)    keep <- keep & (adjacent_recom_map$idx_padan < idx_filter) 
-adjacent_reconcile_map <- adjacent_recom_map[keep, ]
-
-# Counts
-cat(sprintf("Before: %d pairs\n", nrow(adjacent_recom_map)/2))
-cat(sprintf("After : %d pairs\n", nrow(adjacent_reconcile_map)/2))
-cat(sprintf("Removed: %d pairs (%.1f%%)\n", 
-            (nrow(adjacent_recom_map) - nrow(adjacent_reconcile_map))/2,
-            (1 - (nrow(adjacent_reconcile_map)/2)/(nrow(adjacent_recom_map)/2))*100))
-
 # Generate reconciliation excel table
 generate_reconciliation_excel(
-  recon_map          = adjacent_reconcile_map,
+  recon_map          = adjacent_recom_map,
   rtrw_prioritas     = rtrw_prioritas,
   rzwp3k_prioritas   = rzwp3k_prioritas,
   output_dir         = output_dir,

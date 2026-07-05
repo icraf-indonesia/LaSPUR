@@ -3,7 +3,6 @@ title: "LaSPUR Type 1 Implementation"
 author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
 format: html
 editor: visual
----idx
 ---
 
 # LaSPUR Step 1 - Rekonsiliasi Area Tumpang Tindih
@@ -544,6 +543,42 @@ idx_padan_map <- idx_padu_map %>%
 
 Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap unit zona/pola ruang yang bertumpang tindih berdasarkan penentuan opsi keputusan penyelesaian konflik tumpang tindih sesuai pertimbangan pada analisis SERASI dan PADU.
 
+```{r filter-cases}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Set the filter criteria
+apply_area_ha <- TRUE  
+apply_idx    <- TRUE  
+area_filter <- 10
+idx_filter    <- 0.75
+
+# Compute filter 
+idx_padan_map_filter <- idx_padan_map
+
+if (apply_area_ha) {
+  idx_padan_map_filter <- idx_padan_map_filter %>% 
+    dplyr::filter(as.numeric(.data$area_ha) > area_filter)
+}
+
+if (apply_idx) {
+  idx_padan_map_filter <- idx_padan_map_filter %>% 
+    dplyr::filter(.data$idx_padan < idx_filter)
+}
+
+# Calculate summary
+n_before  <- nrow(idx_padan_map) %/% 2
+n_after   <- nrow(idx_padan_map_filter) %/% 2
+n_removed <- n_before - n_after
+pct_removed <- if (n_before > 0) (n_removed / n_before) * 100 else 0
+
+cat(sprintf("Before: %d pairs\n", n_before))
+cat(sprintf("After : %d pairs\n", n_after))
+cat(sprintf("Removed: %d pairs (%.1f%%)\n", n_removed, pct_removed))
+```
+
 ## Tahap 6.1 Perhitungan zona alternatif
 
 Pada tahap ini, sistem menyajikan opsi zona/pola ruang alternatif berdasarkan pencarian nilai indeks SERASI tertinggi dari pasangan tumpang tindih RTRW/RZWP3K saat ini.
@@ -554,19 +589,31 @@ Pada tahap ini, sistem menyajikan opsi zona/pola ruang alternatif berdasarkan pe
 2.  **Zona alternatif untuk RZWP3K:**\
     Kelas RTRW saat ini dipasangkan dengan kelas RZWP3K lainnya. Jika nilai indeks SERASI dari kelas RZWP3K alternatif sama dengan nilai kelas RZWP3K saat ini, maka kelas dengan nilai tertinggi kedua dipilih sebagai kelas alternatif. Namun, jika kelas RZWP3K alternatif memiliki nilai indeks SERASI yang lebih tinggi daripada kelas saat ini, maka kelas tersebut langsung dipilih sebagai kelas alternatif.
 
-```{r calculate-alternative-zone}
+```{r determine-alternative-zone-options}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-idx_padan_map_alt <- idx_padan_map %>%
-  rowwise() %>%
-  mutate(
-    alt_RTRW = get_alternative_zone(RZWP3K, RTRW, "RTRW", matriks_serasi),
-    alt_RZWP3K = get_alternative_zone(RTRW, RZWP3K, "RZWP3K", matriks_serasi)
-  ) %>%
-  ungroup()
+# Determine alternative_zones
+overlaps_alternatives_zones <- determine_alternative_zones(
+  idx_padan_map_filter = idx_padan_map_filter,
+  serasi_matrix = matriks_serasi,
+  step = "step1",
+  n_alt = 5,
+  output_dir = output_dir
+)
+
+# Read alternative table
+alt_table_path <- "D:/OneDrive - CIFOR-ICRAF/Documents/GitHub/LaSPUR/output/step1/AOI_Palu-Parigi/overlaps_alternative_zones_selections_filled.xlsx"
+alt_table <- load_and_validate_table(alt_table_path)
+
+# Left join the alt_RTRW and alt_RZWP3K
+alt_map_with_decision <- dplyr::left_join(
+  idx_padan_map_filter,
+  alt_table[, c("id_pu", "id_rtrw", "id_rzwp3k", "alt_RTRW", "alt_RZWP3K")],
+  by = c("id_pu", "id_rtrw", "id_rzwp3k")
+)
 ```
 
 ## Tahap 6.2 Perhitungan indeks SERASI untuk zona alternatif
@@ -579,7 +626,7 @@ Perhitungan ulang nilai indeks SERASI dari pasangan zona/pola alternatif.
 #| message: false
 #| include: true
 
-idx_padan_map_alt <- idx_padan_map_alt %>%
+idx_padan_map_alt <- alt_map_with_decision %>%
   rowwise() %>%
   mutate(
     idx_serasi_rtrw_alt = get_alternative_serasi(RZWP3K, alt_RTRW, matriks_serasi),
@@ -692,7 +739,7 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
 #| message: false
 #| include: true
 
-idx_padan_map_alt <- idx_padan_map_alt %>%
+overlaps_recom_map <- idx_padan_map_alt %>%
   mutate(
     idx_padan_final = case_when(
       grepl("Ubah RTRW", decision, fixed = TRUE) ~ idx_padan_rtrw_alt,
@@ -702,11 +749,11 @@ idx_padan_map_alt <- idx_padan_map_alt %>%
     )
   )
 
-idx_padan_alt_table <- idx_padan_map_alt %>% st_drop_geometry()
+overlaps_recom_table <- overlaps_recom_map %>% st_drop_geometry()
 
-write.xlsx(idx_padan_alt_table, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.xlsx", overwrite = TRUE)
+write.xlsx(overlaps_recom_table, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.xlsx", overwrite = TRUE)
 
-st_write(idx_padan_map_alt, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.gpkg", append=FALSE)
+st_write(overlaps_recom_map, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.gpkg", append=FALSE)
 ```
 
 # Tahap 7. Menghasilkan laporan
@@ -772,38 +819,9 @@ generate_report(output = out, dir = output_dir)
 #| message: true
 #| include: true
 
-# Set the filter criteria
-apply_area_ha <- TRUE  
-apply_idx    <- TRUE  
-area_filter <- 25
-idx_filter    <- 1
-
-# Compute filter 
-overlap_reconcile_map <- idx_padan_map_alt
-
-if (apply_area_ha) {
-  overlap_reconcile_map <- overlap_reconcile_map %>% 
-    dplyr::filter(as.numeric(.data$area_ha) > area_filter)
-}
-
-if (apply_idx) {
-  overlap_reconcile_map <- overlap_reconcile_map %>% 
-    dplyr::filter(.data$idx_padan < idx_filter)
-}
-
-# Calculate summary
-n_before  <- nrow(idx_padan_map_alt) %/% 2
-n_after   <- nrow(overlap_reconcile_map) %/% 2
-n_removed <- n_before - n_after
-pct_removed <- if (n_before > 0) (n_removed / n_before) * 100 else 0
-
-cat(sprintf("Before: %d pairs\n", n_before))
-cat(sprintf("After : %d pairs\n", n_after))
-cat(sprintf("Removed: %d pairs (%.1f%%)\n", n_removed, pct_removed))
-
 # Generate reconciliation excel table
 generate_reconciliation_excel(
-  recon_map          = overlap_reconcile_map,
+  recon_map          = overlaps_recom_map,
   rtrw_prioritas     = rtrw_prioritas,
   rzwp3k_prioritas   = rzwp3k_prioritas,
   output_dir         = output_dir,

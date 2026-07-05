@@ -2518,63 +2518,67 @@ calculate_npv_ha_per_unit <- function(land_distribution, npv_lulc) {
 
 # calculate_alternative_zone
 
-#' Determine alternative zone using compatibility matrix
+#' Determine alternative zones using compatibility matrix
 #'
 #' @description
 #' Given a pair zone (e.g., RZWP3K or RTRW) and a current zone value, this function
-#' returns either the best‑matching or second‑best‑matching zone from the opposite
-#' classification system, based on a compatibility matrix. If the current zone
-#' equals the best match, the second best is returned; otherwise the best match is
-#' returned.
+#' returns all candidate zones from the opposite classification system that have a
+#' higher SERASI index than the current zone. If none are higher, it returns all
+#' candidates with the same index (excluding the current zone itself). Ties are
+#' included in full.
 #'
 #' @param pair_zone Character: the zone value used as the filter criterion.
 #'   For `return_type = "RTRW"`, this should be an RZWP3K value.
 #'   For `return_type = "RZWP3K"`, this should be an RTRW value.
 #' @param current_zone Character: the current value of the zone type we are
-#'   trying to replace. Used for comparison with the best match.
+#'   trying to replace. Used to determine its SERASI index from the matrix.
 #' @param return_type Character: either `"RTRW"` or `"RZWP3K"`.
 #'   - `"RTRW"`: filter by `class2` (RZWP3K), return a `class1` (RTRW) zone.
 #'   - `"RZWP3K"`: filter by `class1` (RTRW), return a `class2` (RZWP3K) zone.
 #' @param df A data frame (or tibble) containing the compatibility matrix with
-#'   exactly three columns in this order:
+#'   exactly three columns:
 #'   \enumerate{
 #'     \item `class1` – RTRW zone names
 #'     \item `class2` – RZWP3K zone names
 #'     \item `idx_serasi` – numeric compatibility scores
 #'   }
+#' @param n_alt Integer or `NULL`. Maximum number of alternatives to return.
+#'   If `NULL` (default), all qualifying alternatives are returned.
+#'   If a positive integer, returns at most that many (after sorting by
+#'   descending score and then alphabetically).
 #'
-#' @return A character string with the chosen alternative zone name, or `NA`
-#'   if no valid alternative exists (e.g., input missing, no data, or no second
-#'   best when needed).
+#' @return A character vector of alternative zone names (length 0 if none).
 #'
 #' @examples
 #' \dontrun{
-#' # Example compatibility matrix (first few rows)
+#' # Example compatibility matrix
 #' mat <- tibble::tribble(
 #'   ~class1,                          ~class2,                  ~idx_serasi,
 #'   "Kawasan Lindung",                "Suaka",                  1.0,
 #'   "Kawasan Perikanan",              "Suaka",                  0.5,
 #'   "Kawasan Lindung",                "Taman",                  0.8,
-#'   "Kawasan Perikanan",              "Taman",                  1.0
+#'   "Kawasan Perikanan",              "Taman",                  1.0,
+#'   "Kawasan Budidaya",               "Suaka",                  1.0
 #' )
 #'
-#' # Alternative RTRW for a polygon with RZWP3K = "Suaka" and current RTRW = "Kawasan Lindung"
-#' get_alternative_zone("Suaka", "Kawasan Lindung", "RTRW", mat)
-#' # Returns "Kawasan Perikanan" (second best)
-#'
-#' # Alternative RZWP3K for a polygon with RTRW = "Kawasan Lindung" and current RZWP3K = "Suaka"
-#' get_alternative_zone("Kawasan Lindung", "Suaka", "RZWP3K", mat)
-#' # Returns "Taman" (best match because "Suaka" is already best? Actually "Suaka" has score 1.0,
-#' # which equals current, so second best "Taman" is returned)
+#' # Return at most 2 alternatives for RZWP3K = "Suaka", current RTRW = "Kawasan Lindung"
+#' get_alternative_zone("Suaka", "Kawasan Lindung", "RTRW", mat, n_alt = 2)
+#' # Returns "Kawasan Budidaya" (score 1.0) – only one qualifies, so returns one.
 #' }
 #'
-#' @importFrom dplyr filter
-#' @importFrom tibble tibble
-#'
 #' @export
-get_alternative_zone <- function(pair_zone, current_zone, return_type, df) {
+get_alternative_zone <- function(pair_zone, current_zone, return_type, df, n_alt = NULL) {
   
-  if (is.na(pair_zone) || pair_zone == "") return(NA_character_)
+  # Validate n_alt if provided
+  if (!is.null(n_alt)) {
+    if (!is.numeric(n_alt) || length(n_alt) != 1 || n_alt < 1) {
+      stop("n_alt must be NULL or a positive integer")
+    }
+    n_alt <- as.integer(n_alt)
+  }
+  
+  # Early exit if pair_zone is missing
+  if (is.na(pair_zone) || pair_zone == "") return(character(0))
   
   # Determine filter column and return column based on return_type
   if (return_type == "RTRW") {
@@ -2589,25 +2593,48 @@ get_alternative_zone <- function(pair_zone, current_zone, return_type, df) {
   
   # Filter rows where the filter column equals pair_zone
   filtered <- df[df[[filter_col]] == pair_zone, ]
-  if (nrow(filtered) == 0) return(NA_character_)
+  if (nrow(filtered) == 0) return(character(0))
   
-  scores <- filtered[[3]]          # idx_serasi
+  # Extract candidates and scores
   candidates <- filtered[[return_col]]
+  scores <- filtered[[3]]  # idx_serasi
   
-  max_score <- max(scores, na.rm = TRUE)
-  best_idx <- which(scores == max_score)[1]
-  best_zone <- candidates[best_idx]
-  
-  if (!is.na(current_zone) && best_zone == current_zone) {
-    # Second best
-    sorted_scores <- sort(scores, decreasing = TRUE)
-    second_score <- sorted_scores[2]
-    if (is.na(second_score)) return(NA_character_)
-    second_idx <- which(scores == second_score)[1]
-    return(candidates[second_idx])
+  # Find the score of the current zone
+  current_idx <- which(candidates == current_zone)
+  if (length(current_idx) == 0) {
+    # If current_zone is not in the matrix for this pair, we cannot compare.
+    # Return all candidates as a fallback (with warning).
+    warning("current_zone not found in the filtered data for pair_zone = ", pair_zone,
+            ". Returning all candidates.")
+    selected <- candidates
   } else {
-    return(best_zone)
+    current_score <- scores[current_idx[1]]  
+    
+    # Find candidates with a higher score than current
+    higher_mask <- scores > current_score
+    if (any(higher_mask)) {
+      selected <- candidates[higher_mask]
+    } else {
+      # If none higher, select candidates with equal score but not the current zone itself
+      equal_mask <- scores == current_score & candidates != current_zone
+      selected <- candidates[equal_mask]
+    }
   }
+  
+  # Sort selected by descending score and then alphabetically for ties
+  if (length(selected) > 0) {
+    # Get scores for selected
+    sel_scores <- scores[candidates %in% selected]
+    ord <- order(-sel_scores, selected)
+    selected <- selected[ord]
+    
+    # Apply limit if n_alt is provided
+    if (!is.null(n_alt)) {
+      selected <- head(selected, n_alt)
+    }
+  }
+  
+  return(selected)
 }
 
 # determine serasi index for the alternative zones
@@ -2654,6 +2681,442 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
   if (nrow(match_row) == 1) return(match_row$idx_serasi)
 
   return(NA_real_)
+}
+
+#' Determine alternative zones and create an Excel workbook with dropdowns
+#'
+#' @param idx_padan_map_filter sf object. For step = "step2", must contain
+#'   columns: id, id_pu, RTRW, RZWP3K, area_ha, length, idx_serasi. For
+#'   step = "step1", must contain columns: id_pu, id_rtrw, id_rzwp3k, RTRW,
+#'   RZWP3K, area_ha, idx_serasi. The row order matters for step2's
+#'   lead/lag operations.
+#' @param serasi_matrix data.frame or tibble. Compatibility matrix used by
+#'   `get_alternative_zone()`.
+#' @param step character. Either "step2" (default, uses lead/lag on
+#'   neighboring rows' RTRW/RZWP3K to derive alternatives) or "step1" (uses
+#'   each row's own RTRW/RZWP3K directly, no lead/lag).
+#' @param n_alt integer. Number of alternatives to consider (passed to
+#'   `get_alternative_zone`). Default = 5.
+#' @param output_dir character. Directory where the output Excel file will be
+#'   saved. The file will be named "alternative_zones_selections.xlsx" for
+#'   step2, or "alternative_zones_selections_step1.xlsx" for step1.
+#'   Default = "." (current working directory).
+#'
+#' @return A list with two components:
+#'   \item{workbook}{The openxlsx workbook object (for further customization).}
+#'   \item{data}{The final cleaned data frame (without the temporary alternative
+#'     columns).}
+#'
+#' @details The function assumes that `get_alternative_zone()` is available in
+#'   the calling environment. For step2 it uses `lead()` and `lag()` from
+#'   dplyr, so the input data should be ordered appropriately (e.g., by
+#'   geography or ID). For step1 no lead/lag is used. The workbook includes
+#'   data validation dropdowns based on row-specific alternative lists, and
+#'   cells with "No alternative" are coloured black.
+#'
+#' @importFrom openxlsx createWorkbook addWorksheet writeData dataValidation
+#'   createStyle addStyle freezePane saveWorkbook int2col
+#' @importFrom dplyr mutate lead lag rowwise ungroup select rename_with
+#'   starts_with all_of everything
+#' @importFrom tidyr unnest_wider
+#' @importFrom sf st_drop_geometry
+#'
+#' @examples
+#' \dontrun{
+#' # Step 2 (existing behaviour, unchanged)
+#' result2 <- determine_alternative_zones(
+#'   idx_padan_map_filter = my_sf_data,
+#'   serasi_matrix = matriks_serasi,
+#'   step = "step2",
+#'   n_alt = 5,
+#'   output_dir = "output/step2/AOI_Palu-Parigi"
+#' )
+#'
+#' # Step 1 (new)
+#' result1 <- determine_alternative_zones(
+#'   idx_padan_map_filter = my_sf_data,
+#'   serasi_matrix = matriks_serasi,
+#'   step = "step1",
+#'   n_alt = 5,
+#'   output_dir = "output/step1/AOI_Palu-Parigi"
+#' )
+#' }
+determine_alternative_zones <- function(idx_padan_map_filter,
+                                        serasi_matrix,
+                                        step = c("step2", "step1"),
+                                        n_alt = 5,
+                                        output_dir = ".") {
+  
+  step <- match.arg(step)
+  
+  # Package requirements
+  if (!require(openxlsx)) stop("Package 'openxlsx' is required but not installed.")
+  if (!require(dplyr))    stop("Package 'dplyr' is required but not installed.")
+  if (!require(tidyr))    stop("Package 'tidyr' is required but not installed.")
+  if (!require(sf))       stop("Package 'sf' is required but not installed.")
+  
+  # Input validation
+  if (!inherits(idx_padan_map_filter, "sf")) {
+    stop("'idx_padan_map_filter' must be an sf object.")
+  }
+  if (nrow(idx_padan_map_filter) == 0) {
+    warning("Input idx_padan_map_filter has 0 rows. Returning empty workbook.")
+    wb <- createWorkbook()
+    addWorksheet(wb, "Data")
+    addWorksheet(wb, "Validation_Lists")
+    return(list(workbook = wb, data = data.frame()))
+  }
+  
+  # Required columns and base export columns differ by step
+  if (step == "step2") {
+    required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi")
+    base_cols     <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi")
+  } else {
+    required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+    base_cols     <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+  }
+  
+  missing <- setdiff(required_cols, names(idx_padan_map_filter))
+  if (length(missing) > 0) {
+    stop("Input data missing required columns: ", paste(missing, collapse = ", "))
+  }
+  
+  if (!is.data.frame(serasi_matrix)) {
+    stop("'serasi_matrix' must be a data.frame or tibble.")
+  }
+  matriks_serasi <- serasi_matrix
+  
+  if (step == "step2") {
+    
+    idx_padan_map_alt <- idx_padan_map_filter %>%
+      mutate(
+        RZWP3K_plus1 = lead(RZWP3K),
+        RTRW_minus1  = lag(RTRW)
+      ) %>%
+      rowwise() %>%
+      mutate(
+        alt_RTRW_list = list(
+          get_alternative_zone(RZWP3K_plus1, RTRW, "RTRW", matriks_serasi, n_alt = n_alt)
+        ),
+        alt_RZWP3K_list = list(
+          get_alternative_zone(RTRW_minus1, RZWP3K, "RZWP3K", matriks_serasi, n_alt = n_alt)
+        )
+      ) %>%
+      ungroup() %>%
+      unnest_wider(alt_RTRW_list, names_sep = "_", names_repair = "unique") %>%
+      unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
+      select(-RZWP3K_plus1, -RTRW_minus1) %>%
+      rename_with(~ gsub("alt_RTRW_list_", "alt_RTRW_", .x), starts_with("alt_RTRW_list_")) %>%
+      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x), starts_with("alt_RZWP3K_list_"))
+    
+  } else { # step1
+    
+    idx_padan_map_alt <- idx_padan_map_filter %>%
+      rowwise() %>%
+      mutate(
+        alt_RTRW_list = list(
+          get_alternative_zone(RZWP3K, RTRW, "RTRW", matriks_serasi, n_alt = n_alt)
+        ),
+        alt_RZWP3K_list = list(
+          get_alternative_zone(RTRW, RZWP3K, "RZWP3K", matriks_serasi, n_alt = n_alt)
+        )
+      ) %>%
+      ungroup() %>%
+      unnest_wider(alt_RTRW_list, names_sep = "_", names_repair = "unique") %>%
+      unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
+      rename_with(~ gsub("alt_RTRW_list_", "alt_RTRW_", .x), starts_with("alt_RTRW_list_")) %>%
+      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x), starts_with("alt_RZWP3K_list_"))
+    
+  }
+  
+  # Prepare data frame for export
+  df_export <- idx_padan_map_alt %>%
+    st_drop_geometry() %>%
+    select(all_of(base_cols), starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
+    mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
+    select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
+  
+  rtrw_cols <- grep("^alt_RTRW_", names(df_export), value = TRUE)
+  rzwp3k_cols <- grep("^alt_RZWP3K_", names(df_export), value = TRUE)
+  
+  # Helper: clean alternatives
+  clean_alternatives <- function(df, cols) {
+    mat <- as.matrix(df[, cols, drop = FALSE])
+    cleaned <- t(apply(mat, 1, function(x) {
+      u <- unique(x[!is.na(x) & x != ""])
+      if (length(u) == 0) u <- "No alternative"
+      c(u, rep(NA, length(cols) - length(u)))
+    }))
+    as.data.frame(cleaned, stringsAsFactors = FALSE)
+  }
+  
+  df_lists_rtrw <- clean_alternatives(df_export, rtrw_cols)
+  df_lists_rzwp3k <- clean_alternatives(df_export, rzwp3k_cols)
+  df_validation_lists <- cbind(df_lists_rtrw, df_lists_rzwp3k)
+  names(df_validation_lists) <- c(
+    paste0("RTRW_", seq_along(rtrw_cols)),
+    paste0("RZWP3K_", seq_along(rzwp3k_cols))
+  )
+  
+  df_export_clean <- df_export %>% select(-all_of(c(rtrw_cols, rzwp3k_cols)))
+  
+  # Create workbook
+  wb <- createWorkbook()
+  addWorksheet(wb, "Data")
+  addWorksheet(wb, "Validation_Lists")
+  writeData(wb, "Data", df_export_clean, startRow = 1, startCol = 1)
+  writeData(wb, "Validation_Lists", df_validation_lists, startRow = 1, startCol = 1)
+  
+  alt_rtrw_col_idx <- which(names(df_export_clean) == "alt_RTRW")
+  alt_rzwp3k_col_idx <- which(names(df_export_clean) == "alt_RZWP3K")
+  
+  rtrw_start <- int2col(1)
+  rtrw_end   <- int2col(length(rtrw_cols))
+  rzwp3k_start <- int2col(length(rtrw_cols) + 1)
+  rzwp3k_end   <- int2col(length(rtrw_cols) + length(rzwp3k_cols))
+  
+  valid_rows_rtrw <- which(df_lists_rtrw[, 1] != "No alternative") + 1
+  valid_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] != "No alternative") + 1
+  
+  get_contiguous_blocks <- function(indices) {
+    if (length(indices) == 0) return(list())
+    split(indices, cumsum(c(1, diff(indices) != 1)))
+  }
+  
+  blocks_rtrw <- get_contiguous_blocks(valid_rows_rtrw)
+  blocks_rzwp3k <- get_contiguous_blocks(valid_rows_rzwp3k)
+  
+  # Apply dropdowns
+  for (block in blocks_rtrw) {
+    start_r <- min(block)
+    end_r <- max(block)
+    rtrw_formula <- sprintf("'Validation_Lists'!$%s%d:$%s%d", rtrw_start, start_r, rtrw_end, start_r)
+    dataValidation(
+      wb = wb, sheet = "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
+      type = "list", value = rtrw_formula
+    )
+  }
+  
+  for (block in blocks_rzwp3k) {
+    start_r <- min(block)
+    end_r <- max(block)
+    rzwp3k_formula <- sprintf("'Validation_Lists'!$%s%d:$%s%d", rzwp3k_start, start_r, rzwp3k_end, start_r)
+    dataValidation(
+      wb = wb, sheet = "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
+      type = "list", value = rzwp3k_formula
+    )
+  }
+  
+  # Colour "No alternative" cells black
+  black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
+  black_rows_rtrw <- which(df_lists_rtrw[, 1] == "No alternative") + 1
+  black_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] == "No alternative") + 1
+  
+  if (length(black_rows_rtrw) > 0) {
+    addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx, rows = black_rows_rtrw, gridExpand = FALSE)
+  }
+  if (length(black_rows_rzwp3k) > 0) {
+    addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = black_rows_rzwp3k, gridExpand = FALSE)
+  }
+  
+  freezePane(wb, "Data", firstRow = TRUE)
+  
+  # Ensure output directory exists
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  output_filename <- if (step == "step2") {
+    "adjacent_alternative_zones_selections.xlsx"
+  } else {
+    "overlaps_alternative_zones_selections.xlsx"
+  }
+  output_path <- file.path(output_dir, output_filename)
+  saveWorkbook(wb, output_path, overwrite = TRUE)
+  
+  invisible(list(workbook = wb, data = df_export_clean))
+}
+
+#' Calculate economic values (NPV) from land use/cover distributions
+#'
+#' This function performs the full economic assessment (Stages 7.1–7.3) for
+#' RTRW and RZWP3K zones. It computes actual and recommended land cover
+#' distributions, NPV per hectare, and total economic values, then joins
+#' the results back to the input spatial feature set.
+#'
+#' @param alt_map_with_decision An `sf` object containing planning units,
+#'   with columns: `id`, `id_pu`, `RTRW`, `RZWP3K`, and `area_ha` (or as
+#'   specified). The geometry is preserved.
+#' @param npv_lulc A data frame with LULC classes and their NPV per hectare
+#'   (columns as expected by `calculate_npv_ha_per_unit()`).
+#' @param matriks_land_distribution_rtrw A matrix or data frame of land
+#'   distribution rules for RTRW zones.
+#' @param matriks_land_distribution_rzwp3k A matrix or data frame of land
+#'   distribution rules for RZWP3K zones.
+#' @param class_name Character. Name of the LULC class column (used in pivoting).
+#'   Default `"LC"`. This must match the class names in the matrix tables.
+#' @param id_pu Character. Name of the planning unit ID column. Default `"id_pu"`.
+#' @param area_col Character. Name of the area column (in hectares). Default
+#'   `"area_ha"`.
+#' @param id_col Character. Name of the unique feature ID column (for merging).
+#'   Default `"id"`.
+#'
+#' @return An `sf` object identical to `alt_map_with_decision` but augmented
+#'   with additional columns:
+#'   - `npv_ha_actual_rtrw`, `npv_ha_actual_rzwp3k`
+#'   - `npv_ha_recom_rtrw`, `npv_ha_recom_rzwp3k`
+#'   - `econ_rtrw_actual`, `econ_rtrw_recom`, `econ_rtrw_delta`
+#'   - `econ_rzwp3k_actual`, `econ_rzwp3k_recom`, `econ_rzwp3k_delta`
+#'
+#' @importFrom dplyr filter select left_join mutate rename all_of
+#' @importFrom tidyr pivot_wider
+#' @importFrom sf st_drop_geometry
+#' @export
+calculate_economic_npv <- function(
+    alt_map_with_decision,
+    npv_lulc,
+    matriks_land_distribution_rtrw,
+    matriks_land_distribution_rzwp3k,
+    class_name = "LC",
+    id_pu = "id_pu",
+    area_col = "area_ha",
+    id_col = "id"
+) {
+  # Input validation 
+  required_cols <- c(id_col, id_pu, "RTRW", "RZWP3K", area_col)
+  missing <- setdiff(required_cols, names(alt_map_with_decision))
+  if (length(missing) > 0) {
+    stop("alt_map_with_decision missing columns: ", paste(missing, collapse = ", "))
+  }
+
+  # Filter planning units with non-NA zone assignments
+  pu_rtrw <- alt_map_with_decision %>%
+    dplyr::filter(!is.na(RTRW)) %>%
+    dplyr::select(-RZWP3K)
+  
+  pu_rzwp3k <- alt_map_with_decision %>%
+    dplyr::filter(!is.na(RZWP3K)) %>%
+    dplyr::select(-RTRW)
+  
+  # Helper to get distribution (long format)
+  get_distribution <- function(pu, matrix_tbl, zone_type) {
+    calculate_land_distribution(
+      pu = pu,
+      id_pu = id_pu,
+      lulc_class = class_name,
+      calculate_from_matrix = TRUE,
+      matrix_tbl = matrix_tbl,
+      selected_zone = zone_type
+    )
+  }
+  
+  # RTRW actual
+  land_dist_rtrw_long <- get_distribution(pu_rtrw, matriks_land_distribution_rtrw, "RTRW")
+  land_dist_rtrw_wide <- land_dist_rtrw_long %>%
+    tidyr::pivot_wider(
+      names_from = all_of(class_name),
+      values_from = proportion,
+      values_fill = 0
+    )
+  land_dist_rtrw <- sf::st_drop_geometry(pu_rtrw) %>%
+    dplyr::left_join(land_dist_rtrw_wide, by = id_pu)
+  
+  # RZWP3K actual
+  land_dist_rzwp3k_long <- get_distribution(pu_rzwp3k, matriks_land_distribution_rzwp3k, "RZWP3K")
+  land_dist_rzwp3k_wide <- land_dist_rzwp3k_long %>%
+    tidyr::pivot_wider(
+      names_from = all_of(class_name),
+      values_from = proportion,
+      values_fill = 0
+    )
+  land_dist_rzwp3k <- sf::st_drop_geometry(pu_rzwp3k) %>%
+    dplyr::left_join(land_dist_rzwp3k_wide, by = id_pu)
+  
+  # Actual NPV/ha
+  npv_actual_rtrw <- calculate_npv_ha_per_unit(land_dist_rtrw, npv_lulc) %>%
+    dplyr::rename(npv_ha_actual_rtrw = npv_ha)
+  
+  npv_actual_rzwp3k <- calculate_npv_ha_per_unit(land_dist_rzwp3k, npv_lulc) %>%
+    dplyr::rename(npv_ha_actual_rzwp3k = npv_ha)
+  
+  # Recommended LULC distribution and NPV/ha
+  # RTRW recommended
+  land_dist_rtrw_recom_only <- calculate_land_distribution(
+    pu = pu_rtrw,
+    id_pu = id_pu,
+    lulc_class = class_name,
+    calculate_from_matrix = TRUE,
+    matrix_tbl = matriks_land_distribution_rtrw,
+    selected_zone = "alt_RTRW"
+  ) %>%
+    tidyr::pivot_wider(
+      names_from = all_of(class_name),
+      values_from = proportion,
+      values_fill = 0
+    ) %>%
+    sf::st_drop_geometry()
+  
+  land_dist_rtrw_recom <- npv_actual_rtrw %>%
+    dplyr::left_join(land_dist_rtrw_recom_only, by = id_pu)
+  
+  # RZWP3K recommended
+  land_dist_rzwp3k_recom_only <- calculate_land_distribution(
+    pu = pu_rzwp3k,
+    id_pu = id_pu,
+    lulc_class = class_name,
+    calculate_from_matrix = TRUE,
+    matrix_tbl = matriks_land_distribution_rzwp3k,
+    selected_zone = "alt_RZWP3K"
+  ) %>%
+    tidyr::pivot_wider(
+      names_from = all_of(class_name),
+      values_from = proportion,
+      values_fill = 0
+    ) %>%
+    sf::st_drop_geometry()
+  
+  land_dist_rzwp3k_recom <- npv_actual_rzwp3k %>%
+    dplyr::left_join(land_dist_rzwp3k_recom_only, by = id_pu)
+  
+  # Recommended NPV/ha
+  npv_recom_rtrw <- calculate_npv_ha_per_unit(land_dist_rtrw_recom, npv_lulc) %>%
+    dplyr::rename(npv_ha_recom_rtrw = npv_ha)
+  
+  npv_recom_rzwp3k <- calculate_npv_ha_per_unit(land_dist_rzwp3k_recom, npv_lulc) %>%
+    dplyr::rename(npv_ha_recom_rzwp3k = npv_ha)
+  
+  # Total economic values
+  # RTRW
+  npv_rtrw <- npv_recom_rtrw %>%
+    dplyr::mutate(
+      econ_rtrw_actual = .data[[area_col]] * npv_ha_actual_rtrw,
+      econ_rtrw_recom  = .data[[area_col]] * npv_ha_recom_rtrw,
+      econ_rtrw_delta  = econ_rtrw_recom - econ_rtrw_actual
+    )
+  
+  # RZWP3K
+  npv_rzwp3k <- npv_recom_rzwp3k %>%
+    dplyr::mutate(
+      econ_rzwp3k_actual = .data[[area_col]] * npv_ha_actual_rzwp3k,
+      econ_rzwp3k_recom  = .data[[area_col]] * npv_ha_recom_rzwp3k,
+      econ_rzwp3k_delta  = econ_rzwp3k_recom - econ_rzwp3k_actual
+    )
+  
+  # Merge into final map
+  # Identify new columns not already in alt_map_with_decision
+  new_cols_rtrw <- setdiff(names(npv_rtrw), names(alt_map_with_decision))
+  new_cols_rzwp3k <- setdiff(names(npv_rzwp3k), names(alt_map_with_decision))
+  
+  adjacent_economy_map <- alt_map_with_decision %>%
+    dplyr::left_join(
+      npv_rtrw %>% dplyr::select(dplyr::all_of(c(id_col, id_pu, new_cols_rtrw))),
+      by = c(id_col, id_pu)
+    ) %>%
+    dplyr::left_join(
+      npv_rzwp3k %>% dplyr::select(dplyr::all_of(c(id_col, id_pu, new_cols_rzwp3k))),
+      by = c(id_col, id_pu)
+    )
+  
+  return(adjacent_economy_map)
 }
 
 #' Generate an Excel file for reconciliation with dropdown validation
@@ -2945,7 +3408,7 @@ reconcile_map <- function(step,
     if (is.null(sf_obj)) stop("'sf_obj' must be provided for step = 2")
     if (is.null(recon_table)) stop("'recon_table' must be provided for step = 2")
     
-    class_type <- match.arg(class_type)
+    class_type <- match.arg(class_type, choices = c("RTRW", "RZWP3K"))
     decision_col <- paste0("user_decision_", tolower(class_type))
     orig_col <- class_type
     
