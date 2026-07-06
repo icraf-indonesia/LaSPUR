@@ -1135,12 +1135,12 @@ calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
     filter(!is.na(adj_index)) %>%
     mutate(weighted = percentage * adj_index) %>%
     group_by(id_pu) %>%
-    summarise(idx_padu_ke_abs = sum(weighted, na.rm = TRUE), .groups = "drop")
+    summarise(abs_idx_padu_ke = sum(weighted, na.rm = TRUE), .groups = "drop")
   
   if (normalize) {
     max_val <- max(matriks_padu_ke_id$adj_index, na.rm = TRUE)
     idx_padu_ke <- idx_padu_ke %>%
-      mutate(idx_padu_ke = idx_padu_ke_abs / (max_val * 100))
+      mutate(idx_padu_ke = abs_idx_padu_ke / (max_val * 100))
   }
   
   # Merge with base map to create idx_padu_ke_map
