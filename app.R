@@ -127,32 +127,80 @@ landing_page <- tabPanel(
       
       div(
         style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
-        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
-            icon("layer-group", style = "font-size: 3.5rem; color: #e66430;")),
-        h3("Tumpang Tindih", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
-        p("Merekomendasikan penyelesaian persoalan alokasi ruang darat dan laut saling bertampalan secara spasial pada lokasi yang sama, baik sebagian maupun keseluruhan.",
-          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
-        actionButton("btn_path_overlap", "Pilih Tumpang Tindih", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+        
+        div(
+          style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #F4A300; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+          icon("layer-group", style = "font-size: 3.5rem; color: #F4A300;")
+        ),
+        
+        h3(
+          "Tumpang Tindih",
+          style = "font-weight: 700; color: #F4A300; margin-bottom: 20px;"
+        ),
+        
+        p(
+          "Merekomendasikan penyelesaian persoalan alokasi ruang darat dan laut saling bertampalan secara spasial pada lokasi yang sama, baik sebagian maupun keseluruhan.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"
+        ),
+        
+        actionButton(
+          "btn_path_overlap",
+          "Pilih Tumpang Tindih",
+          class = "btn-light w-100",
+          style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;"
+        )
       ),
       
       div(
         style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
-        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
-            icon("map", style = "font-size: 3.5rem; color: #e66430;")),
-        h3("Bertetangga", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
-        p("Merekomendasikan penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
-          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
-        actionButton("btn_path_adjacent", "Pilih Bertetangga", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+        
+        div(
+          style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #F4A300; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+          icon("map", style = "font-size: 3.5rem; color: #F4A300;")
+        ),
+        
+        h3(
+          "Bertetangga",
+          style = "font-weight: 700; color: #F4A300; margin-bottom: 20px;"
+        ),
+        
+        p(
+          "Merekomendasikan penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"
+        ),
+        
+        actionButton(
+          "btn_path_adjacent",
+          "Pilih Bertetangga",
+          class = "btn-light w-100",
+          style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;"
+        )
       ),
       
       div(
         style = "background-color: #246484; border-radius: 20px; padding: 40px 25px; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 20px rgba(0,0,0,0.1);",
-        div(style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #e66430; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
-            icon("project-diagram", style = "font-size: 3.5rem; color: #e66430;")),
-        h3("Berpengaruh", style = "font-weight: 700; color: #e66430; margin-bottom: 20px;"),
-        p("Merekomendasikan alokasi ruang darat atau laut yang memberikan dampak ekologis, sosial, atau ekonomi terhadap sisi lainnya melalui keterhubungan sistem alami maupun fungsional.",
-          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"),
-        actionButton("btn_path_interconnect", "Pilih Berpengaruh", class = "btn-light w-100", style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;")
+        
+        div(
+          style = "width: 130px; height: 130px; border-radius: 50%; background-color: #fff; border: 10px solid #F4A300; margin: 0 auto 25px auto; display: flex; align-items: center; justify-content: center;",
+          icon("project-diagram", style = "font-size: 3.5rem; color: #F4A300;")
+        ),
+        
+        h3(
+          "Berpengaruh",
+          style = "font-weight: 700; color: #F4A300; margin-bottom: 20px;"
+        ),
+        
+        p(
+          "Merekomendasikan alokasi ruang darat atau laut yang memberikan dampak ekologis, sosial, atau ekonomi terhadap sisi lainnya melalui keterhubungan sistem alami maupun fungsional.",
+          style = "font-size: 0.95rem; flex-grow: 1; line-height: 1.5;"
+        ),
+        
+        actionButton(
+          "btn_path_interconnect",
+          "Pilih Berpengaruh",
+          class = "btn-light w-100",
+          style = "color: #246484 !important; font-weight: bold; font-size: 1.1rem; padding: 12px; margin-top: 20px; border-radius: 10px;"
+        )
       )
     ),
     
@@ -343,6 +391,24 @@ ui <- page_sidebar(
     )
   ),
   
+  tags$a(
+    id = "user-guide-link",
+    href = "https://lumens.or.id/id/",
+    target = "_blank",
+    class = "btn btn-warning btn-sm",
+    style = "
+    display: none;
+    white-space: nowrap;
+    padding: 6px 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  ",
+    tags$i(class = "bi bi-question-circle"),
+    span("User Guide")
+  ),
+  
   navset_card_pill(id = "tabs", landing_page)
 )
 
@@ -423,7 +489,7 @@ server <- function(input, output, session) {
   roots <- c(
     Home    = path.expand("~"),
     Project = normalizePath(".."),
-    C       = "C:/"
+    shinyFiles::getVolumes()()  
   )
   
   shinyDirChoose(input, "btn_browse_output",
@@ -588,17 +654,51 @@ server <- function(input, output, session) {
 
 jsCode <- "
 $(document).ready(function() {
+
+  function addUserGuideButton() {
+
+    if ($('#navbar-user-guide').length)
+      return;
+
+    var btn = $('#user-guide-link');
+
+    if (!btn.length)
+      return;
+
+    btn.attr('id', 'navbar-user-guide');
+    btn.css('display', 'inline-flex');
+
+    // Right side of the title bar
+    $('.navbar').append(
+      $('<div>')
+        .css({
+          'margin-left':'auto',
+          'margin-right':'15px'
+        })
+        .append(btn)
+    );
+  }
+
+  addUserGuideButton();
+
   Shiny.addCustomMessageHandler('show_close_modal', function(msg) {
-    var modal = new bootstrap.Modal(document.getElementById('close_confirm_modal'));
+    var modal = new bootstrap.Modal(
+      document.getElementById('close_confirm_modal')
+    );
     modal.show();
   });
+
   Shiny.addCustomMessageHandler('hide_close_modal', function(msg) {
-    var modal = bootstrap.Modal.getInstance(document.getElementById('close_confirm_modal'));
+    var modal = bootstrap.Modal.getInstance(
+      document.getElementById('close_confirm_modal')
+    );
     if (modal) modal.hide();
   });
+
   Shiny.addCustomMessageHandler('update_modal_label', function(msg) {
     document.getElementById('modal_tab_label').innerText = msg.label;
   });
+
 });
 "
 
