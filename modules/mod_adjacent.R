@@ -253,6 +253,17 @@ adjacent_server <- function(id, output_dir) {
     matrix_template_path <- reactiveVal(NULL)
     
     observeEvent(input$btn_generate_matrix, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$rtrw_vect, rv$rzwp3k_vect)
       tryCatch({
         template <- generate_matrix_serasi(sf_1 = rv$rtrw_vect, sf_2 = rv$rzwp3k_vect)
@@ -315,6 +326,13 @@ adjacent_server <- function(id, output_dir) {
                      value = 156.25, min = 0),
         
         hr(),
+        
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
         
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",

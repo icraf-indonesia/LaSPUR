@@ -363,6 +363,14 @@ recommendation_adjacent_server <- function(id, output_dir) {
       tagList(
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         numericInput(ns("n_alt"), "Jumlah Opsi Alternatif per Kasus", value = 5, min = 1, max = 10, step = 1),
+        
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
+        
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_make_template"),
@@ -380,6 +388,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     # ── Step 2: make template ───────────────────────────────
     observeEvent(input$btn_make_template, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$idx_padan_map_filter, input$matrix_file)
       tryCatch({
         rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
@@ -579,6 +598,14 @@ recommendation_adjacent_server <- function(id, output_dir) {
         ),
         sliderInput(ns("alpha_val"), "Proporsi Alpha (\u03B1)", min = 0, max = 1, value = 0.5, step = 0.1),
         hr(),
+        
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
+        
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run_final"),
@@ -591,6 +618,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     # ── Step 4: Final calculation ────────────────────────────
     observeEvent(input$btn_run_final, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$adjacent_economy_map, input$rtrw_priority_file, input$rzwp3k_priority_file)
       
       rv$final_result <- NULL

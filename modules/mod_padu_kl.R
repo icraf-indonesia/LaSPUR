@@ -166,6 +166,17 @@ padu_kl_server <- function(id, output_dir) {
     
     # ── Run analysis ──────────────────────────────────────────
     observeEvent(input$btn_run, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(input$idx_serasi_file, input$protected_area_file)
       
       # Reset previous results

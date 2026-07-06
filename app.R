@@ -227,7 +227,7 @@ ui <- page_sidebar(
   ),
   
   tags$style(HTML("
-    /* Cards – soft shadows & no harsh borders */
+    /* Cards */
     .card {
       border: none !important;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
@@ -239,10 +239,9 @@ ui <- page_sidebar(
       color: #1a2a3a;
     }
   
-    /* Buttons – subtle shadows & bright white text */
+    /* Buttons */
     .btn {
       color: #ffffff !important;       
-      
       border: none !important;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
     }
@@ -251,43 +250,33 @@ ui <- page_sidebar(
       transform: translateY(-1px);
     }
   
-    .btn-outline-primary {
-      color: #2ba6cb !important; 
-    }
-    .btn-outline-secondary {
-      color: #6c7a8a !important;
-    }
-  
-    /* Sidebar – light border */
+    /* Sidebar – scoped to sidebar class */
     .sidebar {
       border-right: 1px solid #e5edf2 !important;
       background-color: #f8fafc !important;
     }
   
-    /* Tabs – clean underline */
-    .nav-tabs .nav-link {
+    #tabs .nav-tabs .nav-link {
       border: none !important;
       color: #4a5a6a !important;
       padding: 8px 16px;
       border-bottom: 3px solid transparent !important;
     }
     
-    /* Active tab font color set to white */
-    .nav-tabs .nav-link.active {
+    #tabs .nav-tabs .nav-link.active {
       border-bottom: 3px solid #2ba6cb !important;
       background-color: #2ba6cb !important;
       color: #ffffff !important;       
     }
   
-    /* Accordion – light borders */
+    /* Hide Home tab title only in the main #tabs navigation */
+    #tabs .nav-tabs li:first-child a {
+      display: none !important;
+    }
+  
     .accordion-item {
       border: 1px solid #e5edf2 !important;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-    }
-    
-    /* Hide Home tab title in main navigation for a cleaner look */
-    .nav-tabs li:first-child a {
-      display: none !important;
     }
   ")),
   
@@ -497,15 +486,17 @@ server <- function(input, output, session) {
                  session = session)
   
   output_dir <- reactive({
-    req(input$btn_browse_output)
-    if (is.integer(input$btn_browse_output)) return("output")
+    if (is.null(input$btn_browse_output) || is.integer(input$btn_browse_output)) {
+      return("")
+    }
     path <- parseDirPath(roots, input$btn_browse_output)
-    if (length(path) == 0 || path == "") return("output")
+    if (length(path) == 0 || path == "") return("")
     as.character(path)
   })
   
   observeEvent(output_dir(), {
     path <- output_dir()
+    if (!nzchar(path)) return() 
     if (!dir.exists(path)) {
       tryCatch({
         dir.create(path, recursive = TRUE)
@@ -567,7 +558,7 @@ server <- function(input, output, session) {
         }
       ),
       
-      # RIGHT SIDE: Close Tab Button
+      # Close Tab Button
       div(
         actionButton(
           paste0("close_", tab_id),
@@ -584,7 +575,7 @@ server <- function(input, output, session) {
         value = tab_id,
         div(
           style = "padding: 20px;",
-          nav_buttons, # Top Navigation bar injected here
+          nav_buttons, 
           cfg$ui_fn(tab_id)
         )
       ),

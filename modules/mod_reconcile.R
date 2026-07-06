@@ -301,6 +301,17 @@ reconcile_server <- function(id, output_dir) {
     
     # Template Generation Worker
     observeEvent(input$btn_make_template, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$recon_map, rv$detected_step, input$rtrw_priority_file, input$rzwp3k_priority_file)
       rv$template_path <- NULL
       
@@ -366,6 +377,14 @@ reconcile_server <- function(id, output_dir) {
       if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("recon_table_filled_file"), "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)", accept = ".xlsx"),
+        
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
+        
         div(
           style = "margin-top: 10px;",
           actionButton(ns("btn_run_reconcile"),
@@ -380,6 +399,17 @@ reconcile_server <- function(id, output_dir) {
     
     # Core Reconciliation Execution Engine
     observeEvent(input$btn_run_reconcile, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(input$recon_table_filled_file, input$rtrw_file, input$rzwp3k_file)
       
       rv$resolved_rtrw <- NULL

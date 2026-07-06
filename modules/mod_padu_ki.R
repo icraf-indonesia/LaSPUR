@@ -73,6 +73,9 @@ padu_ki_ui <- function(id) {
           
           hr(),
           
+          # Output directory warning (rendered server-side, see output$output_dir_warning)
+          uiOutput(ns("output_dir_warning")),
+          
           div(
             style = "display: flex; gap: 8px; flex-wrap: wrap;",
             actionButton(ns("btn_run"),
@@ -168,8 +171,28 @@ padu_ki_server <- function(id, output_dir) {
       rv$log_messages <- paste0(rv$log_messages, format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
     }
     
+    # ── Output directory warning ────────────────────────────────
+    output$output_dir_warning <- renderUI({
+      if (is.null(output_dir()) || !nzchar(output_dir())) {
+        div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+            tags$i(class = "bi bi-exclamation-triangle me-1"),
+            "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+      }
+    })
+    
     # ── Run analysis ──────────────────────────────────────────
     observeEvent(input$btn_run, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(input$idx_serasi_file, input$disaster_risk_file)
       
       # Reset previous results

@@ -412,6 +412,13 @@ padu_kh_server <- function(id, output_dir) {
         
         hr(),
         
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
+        
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run"),
@@ -430,6 +437,17 @@ padu_kh_server <- function(id, output_dir) {
     
     # ── Run analysis (with progress) ──────────────────────────
     observeEvent(input$btn_run, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$idx_serasi_map)
       
       rv$analysis_result <- NULL

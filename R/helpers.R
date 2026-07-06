@@ -472,3 +472,23 @@ generate_report <- function(output, dir, output_format = c("html", "pdf")) {
     knit_root_dir = getwd() 
   )
 }
+
+#' Validate and create output directory if missing
+#'
+#' @param dir_path Character string: path to the output directory.
+#' @return Logical: TRUE if directory is valid/exists/created, FALSE otherwise.
+#' @export
+validate_output_dir <- function(dir_path) {
+  if (is.null(dir_path) || dir_path == "") {
+    return(FALSE)
+  }
+  if (!dir.exists(dir_path)) {
+    tryCatch({
+      dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
+      return(TRUE)
+    }, error = function(e) {
+      return(FALSE)
+    })
+  }
+  return(TRUE)
+}

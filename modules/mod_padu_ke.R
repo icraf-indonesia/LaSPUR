@@ -234,6 +234,17 @@ padu_ke_server <- function(id, output_dir) {
     matrix_template_path <- reactiveVal(NULL)
     
     observeEvent(input$btn_generate_matrix, {
+      
+      # Check output directory 
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$lulc_ref)
       tryCatch({
         template <- generate_matrix_padu_ke(rv$lulc_ref)
@@ -266,6 +277,7 @@ padu_ke_server <- function(id, output_dir) {
     
     # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
+      
       if (is.null(rv$idx_serasi_map) || is.null(rv$lulc_vect)) {
         showNotification("Harap unggah peta SERASI dan peta tutupan lahan sebelum melanjutkan.",
                          type = "warning", duration = 8)
@@ -302,6 +314,13 @@ padu_ke_server <- function(id, output_dir) {
         ),
         
         hr(),
+        
+        # Check output directory
+        if (is.null(output_dir()) || !nzchar(output_dir())) {
+          div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+              tags$i(class = "bi bi-exclamation-triangle me-1"),
+              "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+        },
         
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
@@ -402,7 +421,7 @@ padu_ke_server <- function(id, output_dir) {
             normalize         = TRUE
           )
           
-          idx_padu_ke <- padu_ke$idx_padu_ke %>% dplyr::select(-idx_padu_ke_abs)
+          idx_padu_ke <- padu_ke$idx_padu_ke %>% dplyr::select(-abs_idx_padu_ke)
           idx_padu_ke_map <- padu_ke$idx_padu_ke_map
           
           # Step 4: Save results (progress 90%)
