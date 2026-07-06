@@ -223,7 +223,7 @@ ui <- page_sidebar(
     bg = "#f8fafc",
     fg = "#1a2a3a",
     primary = "#2ba6cb",
-    base_font = font_google("Nunito")
+    base_font = "Helvetica" 
   ),
   
   tags$style(HTML("
