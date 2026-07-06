@@ -133,8 +133,15 @@ padu_combine_server <- function(id, output_dir) {
     )
     
     # ── Folder Selection Logic ────────────────────────────────
-    roots <- c(Home = path.expand("~"), Project = normalizePath(".."), C = "C:/")
-    shinyDirChoose(input, "btn_browse_padu", roots = roots, session = session)
+    roots <- c(
+      Home    = path.expand("~"),
+      Project = normalizePath(".."),
+      shinyFiles::getVolumes()()  
+    )
+    
+    shinyDirChoose(input, "btn_browse_padu",
+                   roots   = roots,
+                   session = session)
     
     padu_folder_path <- reactive({
       req(input$btn_browse_padu)
