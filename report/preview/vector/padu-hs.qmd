@@ -1,0 +1,92 @@
+---
+title: "PADU-HS"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Dataset PADU-HS merupakan data vektor yang digunakan sebagai masukan pada analisis PADU-HS di LaSPUR. Dataset ini merepresentasikan kawasan estuari yang menjadi salah satu parameter dalam penilaian kesesuaian spasial dan rekonsiliasi tata ruang darat dan laut.
+
+---
+
+# 1. Data yang Digunakan
+
+## Vektor
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| ST_Estuari_PT | Shapefile | Sebaran kawasan estuari. |
+
+---
+
+# 2. Visualisasi
+
+## Kawasan Estuari
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```
+
+---
+
+# 3. Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Kawasan Estuari | Pemerintah Daerah | - | - |
+
+---
+
+# 4. Spesifikasi Teknis
+
+## Kawasan Estuari
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```
+
+---
+
+# 5. Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-HS | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# 6. Pemeriksaan Data
+
+## Kawasan Estuari
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```

@@ -1,0 +1,92 @@
+---
+title: "PADU-KE"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Dataset PADU-KE menggunakan data vektor ekosistem pesisir berupa terumbu karang dan padang lamun sebagai salah satu masukan dalam analisis kesesuaian ekologi. Dataset ini digunakan untuk mengidentifikasi area yang memiliki nilai ekologis tinggi sehingga menjadi pertimbangan dalam proses rekonsiliasi tata ruang.
+
+---
+
+# 1. Data yang Digunakan
+
+## Vektor
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| PL2024_Coral Seagrass Union | Shapefile | Data gabungan terumbu karang dan padang lamun. |
+
+---
+
+# 2. Visualisasi
+
+## Coral & Seagrass
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_ke",
+    "PL2024_Coral_Seagrass_training.shp"
+  )
+)
+```
+
+---
+
+# 3. Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Coral & Seagrass | Pemerintah Daerah / KLHK | - | - |
+
+---
+
+# 4. Spesifikasi Teknis
+
+## Coral & Seagrass
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_ke",
+    "PL2024_Coral_Seagrass_training.shp"
+  )
+)
+```
+
+---
+
+# 5. Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-KE | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# 6. Pemeriksaan Data
+
+## Coral & Seagrass
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_ke",
+    "PL2024_Coral_Seagrass_training.shp"
+  )
+)
+```

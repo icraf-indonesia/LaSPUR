@@ -1,0 +1,130 @@
+---
+title: "PADU-HS"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Dataset PADU-HS merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-HS di LaSPUR. Raster digunakan untuk menghitung indeks yang berkaitan dengan habitat sensitif dan karakteristik lingkungan pesisir.
+
+---
+
+# 1. Data yang Digunakan
+
+### Raster
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| EuDist_Estuari_Palu-Parigi | GeoTIFF | Raster Euclidean Distance terhadap kawasan estuari. |
+| TSS_Palu-Parigi | GeoTIFF | Raster Total Suspended Solid (TSS). |
+
+---
+
+# 2. Visualisasi
+
+## Euclidean Distance Estuari
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+## Total Suspended Solid (TSS)
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```
+
+---
+
+# 3. Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| PADU-HS | CIFOR-ICRAF | - | - |
+
+---
+
+# 4. Spesifikasi Teknis
+
+## Euclidean Distance Estuari
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+## Total Suspended Solid (TSS)
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```
+
+---
+
+# 5. Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI | ✖ |
+| PADU-HS | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# 6. Pemeriksaan Data
+
+## Euclidean Distance Estuari
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+## Total Suspended Solid (TSS)
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```

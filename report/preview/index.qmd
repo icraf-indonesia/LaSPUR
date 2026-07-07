@@ -1,0 +1,118 @@
+---
+title: "Beranda"
+execute:
+  echo: false
+---
+
+# Referensi Data Masukan LaSPUR
+
+## Selamat Datang
+
+Website ini menyediakan dokumentasi seluruh data masukan (input data) yang digunakan dalam proses analisis pada aplikasi **LaSPUR (Land & Sea Planning Unit Reconcilliation)**.
+
+Dokumentasi ini bertujuan untuk membantu pengguna memahami sumber data, spesifikasi teknis, struktur atribut, serta tahapan penggunaan setiap dataset sehingga proses analisis dapat dilakukan secara konsisten dan terdokumentasi dengan baik.
+
+---
+
+## Area Data
+
+Dataset yang tersedia pada website ini merupakan **data potongan (clipping)** yang berasal dari wilayah **Provinsi Sulawesi Tengah**.
+
+Data tersebut digunakan sebagai contoh (sample dataset) dalam proses pengembangan, pengujian, maupun demonstrasi seluruh modul LaSPUR.
+
+### Cakupan Wilayah
+
+| Informasi | Keterangan |
+|------------|------------|
+| Provinsi | Sulawesi Tengah |
+| Jenis Data | Data hasil clipping |
+| Format | Raster, Vektor, dan Tabel Acuan |
+| Sistem Koordinat | WGS 84 (EPSG:4326) |
+| Tujuan | Dataset contoh untuk seluruh modul LaSPUR |
+
+---
+
+## Dataset yang Tersedia
+
+Website ini mendokumentasikan beberapa kelompok data sebagai berikut.
+
+### 🗺️ Data Vektor
+
+- SERASI
+- PADU-KE
+- PADU-HS
+- PADU-KH
+- PADU-KI
+- PADU-KL
+- PADU-RTP
+
+---
+
+### 🌍 Data Raster
+
+- Land Cover
+- DEM
+- Slope
+- Curah Hujan
+- dan raster pendukung lainnya
+
+---
+
+### 📊 Tabel Acuan
+
+- Matriks SERASI
+- Prioritas RTRW
+- Prioritas RZWP3K
+- Lookup Table lainnya
+
+---
+
+## Penggunaan Data
+
+Dataset ini digunakan sebagai data masukan pada berbagai tahapan analisis di LaSPUR, antara lain:
+
+- Persiapan Data
+- Rekonsiliasi RTRW dan RZWP3K (SERASI)
+- PADU
+- Perhitungan Emisi Karbon
+- Perhitungan Cadangan Karbon
+- Analisis Perubahan Tutupan Lahan
+- Penyusunan Output Analisis
+
+---
+
+## Unduh Dataset
+
+Seluruh dataset contoh dapat diunduh melalui tautan berikut.
+
+> **📥 Download Data Potongan Sulawesi Tengah**  
+> *(Tambahkan tautan Google Drive, OneDrive, GitHub Release, atau server internal di sini.)*
+
+Contoh:
+
+- **Data Vektor (.zip)**
+- **Data Raster (.zip)**
+- **Lookup Table (.xlsx)**
+
+---
+
+## Struktur Dokumentasi
+
+Website ini dibagi menjadi beberapa bagian.
+
+| Menu | Deskripsi |
+|-------|-----------|
+| Beranda | Informasi umum dataset |
+| Tabel Acuan | Dokumentasi lookup table |
+| Data Raster | Dokumentasi seluruh raster |
+| Data Vektor | Dokumentasi seluruh shapefile |
+| Validasi | Pemeriksaan kualitas data |
+| Glosarium | Penjelasan istilah yang digunakan |
+
+---
+
+## Catatan
+
+Seluruh dataset yang didokumentasikan pada website ini merupakan **data contoh hasil pemotongan (subset)** dari wilayah Sulawesi Tengah yang digunakan untuk kebutuhan pengembangan dan demonstrasi aplikasi LaSPUR.
+
+Apabila diperlukan penggunaan pada wilayah lain, struktur data, atribut, sistem koordinat, serta format file harus mengikuti spesifikasi yang dijelaskan pada masing-masing halaman dokumentasi.

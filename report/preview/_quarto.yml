@@ -1,0 +1,64 @@
+project:
+  type: website
+  execute-dir: project
+
+website:
+  title: "Referensi Data Masukan LaSPUR"
+
+  navbar:
+    left:
+
+      - text: "🏠 Beranda"
+        href: index.qmd
+
+      - text: "📊 Tabel Acuan"
+        href: tables.qmd
+
+      - text: "🗺️ Data Raster"
+        menu:
+          - text: "PADU-KE"
+            href: raster/padu-ke.qmd
+
+          - text: "PADU-HS"
+            href: raster/padu-hs.qmd
+
+          - text: "PADU-RTP"
+            href: raster/padu-rtp.qmd
+
+      - text: "📍 Data Vektor"
+        menu:
+
+          - text: "SERASI"
+            href: vector/serasi.qmd
+
+          - text: "PADU-KE"
+            href: vector/padu-ke.qmd
+
+          - text: "PADU-HS"
+            href: vector/padu-hs.qmd
+
+          - text: "PADU-KH"
+            href: vector/padu-kh.qmd
+
+          - text: "PADU-KI"
+            href: vector/padu-ki.qmd
+
+          - text: "PADU-KL"
+            href: vector/padu-kl.qmd
+
+          - text: "PADU-RTP"
+            href: vector/padu-rtp.qmd
+
+      - text: "✔️ Validasi"
+        href: validation.qmd
+
+      - text: "📖 Glosarium"
+        href: glossary.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    page-layout: article

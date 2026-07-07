@@ -1,0 +1,130 @@
+---
+title: "PADU-RTP"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Dataset PADU-RTP merupakan kumpulan data vektor yang digunakan sebagai parameter pada analisis PADU-RTP di LaSPUR. Dataset ini terdiri atas kawasan industri dan alur pelayaran yang digunakan untuk mengidentifikasi aktivitas pemanfaatan ruang yang berpotensi memengaruhi proses rekonsiliasi tata ruang darat dan laut.
+
+---
+
+# 1. Data yang Digunakan
+
+## Vektor
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| ST_Industri | Shapefile | Lokasi kawasan industri. |
+| ST_AlurPelayaran | Shapefile | Jalur/alur pelayaran. |
+
+---
+
+# 2. Visualisasi
+
+## Kawasan Industri
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_Industri_training.shp"
+  )
+)
+```
+
+## Alur Pelayaran
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_AlurPelayaran_training.shp"
+  )
+)
+```
+
+---
+
+# 3. Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Kawasan Industri | Pemerintah Daerah | - | - |
+| Alur Pelayaran | Pemerintah Daerah | - | - |
+
+---
+
+# 4. Spesifikasi Teknis
+
+## Kawasan Industri
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_Industri_training.shp"
+  )
+)
+```
+
+## Alur Pelayaran
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_AlurPelayaran_training.shp"
+  )
+)
+```
+
+---
+
+# 5. Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-RTP | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# 6. Pemeriksaan Data
+
+## Kawasan Industri
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_Industri_training.shp"
+  )
+)
+```
+
+## Alur Pelayaran
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_rtp",
+    "ST_AlurPelayaran_training.shp"
+  )
+)
+```

@@ -1,0 +1,89 @@
+---
+title: "PADU-KE"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Dataset PADU-KE merupakan data raster yang digunakan sebagai masukan pada proses analisis PADU-KE di LaSPUR. Raster ini digunakan sebagai dasar analisis spasial dan perhitungan pada tahapan identifikasi kesesuaian penggunaan lahan.
+
+---
+
+## 1. Data yang Digunakan
+
+### Raster
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| Tutupan Lahan KLHK | GeoTIFF | Raster masukan untuk analisis PADU-KE. |
+
+---
+
+## 2. Visualisasi
+
+### Raster PADU-KE
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_ke",
+    "LC_KLHK_training.tif"
+  )
+)
+```
+
+---
+
+## 3. Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| PADU-KE | CIFOR-ICRAF | - | - |
+
+---
+
+## 4. Spesifikasi Teknis
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_ke",
+    "LC_KLHK_training.tif"
+  )
+)
+```
+
+---
+
+## 5. Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI | ✖ |
+| PADU-KE | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+## 6. Pemeriksaan Data
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_ke",
+    "LC_KLHK_training.tif"
+  )
+)
+```
