@@ -61,6 +61,10 @@ industry_euc_dist_path <- "data/raster/padu_rtp/EuDist_Industri_Palu-Parigi.tif"
 pelayaran_vect_path <- "data/vector/padu_rtp/ST_AlurPelayaran_Palu-Parigi.shp"
 pelayaran_euc_dist_path <- "data/raster/padu_rtp/EUDist_AlurPl_Palu-Parigi.tif"
 
+# PADU-SE input data
+ntl_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/NTL_2023_100m_VIIRS.tif"
+popdens_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/Popdens_2025_100m_Worldpop.tif"
+
 # PADU-KI input data
 disaster_risk_vect_path <- "data/vector/padu_ki/ST_KRB_climate_Palu-Parigi.shp"
 
@@ -447,6 +451,62 @@ plot(idx_padu_rtp_map["idx_padu_rtp"], border = 1)
 
 ## Tahap 3.6. Analisis indeks PADU-SE
 
+```{r extract-data-padu-se}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Read input
+ntl_map <- load_and_validate_raster(ntl_map_path)
+popdens_map <- load_and_validate_raster(popdens_map_path)
+id_col = "id_pu"
+
+# Extract raster to pu
+ntl_extracted <- extract_raster_to_sf(
+  pu = idx_serasi_map,
+  rast = ntl_map,
+  id_col = id_col,
+  new_col = "ntl"
+)
+
+popdens_extracted <- extract_raster_to_sf(
+  pu = idx_serasi_map,
+  rast = popdens_map,
+  id_col = id_col,
+  new_col = "popdens"
+)
+```
+
+```{r calculate-padu-se}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Normalize
+ntl_norm <- ntl_extracted %>%
+  mutate(ntl_norm = (ntl - min(ntl)) / (max(ntl) - min(ntl)))
+
+popdens_norm <- popdens_extracted %>%
+  mutate(popdens_norm = (popdens - min(popdens)) / (max(popdens) - min(popdens)))
+
+# Join the data
+popdens_subset <- popdens_norm %>%
+  dplyr::select(id_pu, popdens, popdens_norm) %>% 
+  sf::st_drop_geometry()
+
+idx_padu_se_map <- ntl_norm %>% 
+  dplyr::left_join(popdens_subset, by = "id_pu") %>% 
+  dplyr::mutate(
+    idx_padu_se = (ntl_norm + popdens_norm) / 2
+  )
+
+idx_padu_se <- as_tibble(idx_padu_se_map %>% st_drop_geometry())
+
+plot(idx_padu_se_map["idx_padu_se"], border = 1)
+```
+
 ## Tahap 3.7. Analisis indeks PADU-KI
 
 Indeks PADU-KI (Ketahanan Iklim) menunjukkan daya tahan ruang terhadap dampak perubahan iklim (rob, abrasi, kenaikan muka laut).
@@ -501,7 +561,7 @@ if (weight_sum == 1){
     idx_padu_kl,
     idx_padu_kh,
     idx_padu_rtp,
-    # idx_padu_se,
+    idx_padu_se,
     idx_padu_ki
   )
   

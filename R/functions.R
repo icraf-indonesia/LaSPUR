@@ -391,8 +391,10 @@ identify_adjacent <- function(rtrw,
                               nama_field_rtrw = "RTRW",
                               nama_field_rzwp = "RZWP3K",
                               batch_progress_interval = 250,
-                              show_detailed_progress = TRUE) {
-  
+                              show_detailed_progress = TRUE,
+                              n_precision = 1000
+                              ) {
+
   # Input validation
   if (!inherits(rtrw, "sf")) stop("rtrw harus berupa objek sf")
   if (!inherits(rzwp, "sf")) stop("rzwp harus berupa objek sf")
@@ -423,9 +425,13 @@ identify_adjacent <- function(rtrw,
     stop("Tidak ada pasangan yang mungkin karena salah satu layer kosong setelah filter area.")
   }
   
+  # Set precision
+  rtrw_fixed <- sf::st_set_precision(rtrw_filter, n_precision) |> sf::st_make_valid() 
+  rzwp_fixed <- sf::st_set_precision(rzwp_filter, n_precision) |> sf::st_make_valid()  
+  
   # Identify touches
   message("Identifikasi area RTRW dan RZWP3K yang berdampingan.")
-  pairs_idx <- sf::st_touches(rtrw_filter, rzwp_filter)
+  pairs_idx <- sf::st_touches(rtrw_fixed, rzwp_fixed)
   total_pairs <- sum(lengths(pairs_idx))
   message("Total pasangan ditemukan: ", total_pairs)
   
@@ -521,58 +527,84 @@ identify_adjacent <- function(rtrw,
   return(invisible(pu_sf))
 }
 
-#' Process adjacent sf object
+#' Process adjacent polygons by computing shared boundary lengths and buffer areas
 #'
-#' This function processes adjacent polygons by calculating the shared boundary length
-#' between RTRW and RZWP3K pairs, then computes buffer areas based on the specified
-#' buffer distance.
+#' This function takes a set of paired RTRW and RZWP3K polygons (as returned by
+#' `identify_adjacent()`) and calculates the length of the shared boundary between
+#' each pair. It then computes a buffer area by multiplying that length by a
+#' user‑supplied distance. The result is appended to the original data.
 #'
-#' @param pu_sf The `sf` object returned by `identify_adjacent`. Must contain columns:
-#'   `id_pu`, `RTRW`, `RZWP3K`, `area_ha`, and geometry.
-#' @param buffer_m Numeric: The buffer distance in meters for the formula. This value
-#'   is multiplied by the shared boundary length to calculate the buffer area.
+#' @param pu_sf An `sf` object produced by `identify_adjacent()`. It must contain
+#'   at least the columns `id`, `id_pu`, `RTRW`, `RZWP3K`, `area_ha`, and the
+#'   geometry. Rows with missing `RTRW` or `RZWP3K` are treated as separate groups.
+#' @param buffer_m Numeric. The buffer width in metres. The buffer area (in hectares)
+#'   is computed as `(length * buffer_m) / 10000`.
+#' @param n_precision Numeric. The geometric precision to apply with
+#'   [sf::st_set_precision()] after making the polygons valid. Default `1e-9`.
+#'   Increase if you encounter topological errors.
+#' @param snap_tolerance Numeric. Tolerance (in the units of the metric CRS) used
+#'   to snap the RZWP3K boundary to the RTRW boundary before intersection. This
+#'   helps to avoid missing shared segments due to slight misalignments. Default `0.001`.
 #'
-#' @return An `sf` object with the original columns plus two additional columns:
-#'   \item{length}{The length of the shared boundary between RTRW and RZWP3K polygons (in meters)}
-#'   \item{area_buffer_ha}{The calculated buffer area in hectares, computed as 
-#'     (length * buffer_m) / 10000}
+#' @return An `sf` object with the same geometry and CRS as the input `pu_sf`,
+#'   augmented with two new columns:
+#'   \item{length}{The length of the shared boundary between the RTRW and RZWP3K
+#'     polygons for each `id_pu` (in metres).}
+#'   \item{area_buffer_ha}{The buffer area in hectares, calculated as
+#'     `(length * buffer_m) / 10000`.}
+#'   The original columns (`id`, `id_pu`, `RTRW`, `RZWP3K`, `area_ha`) are preserved.
 #'
-#' @details The function performs the following steps:
+#' @details The function proceeds as follows:
 #'   \enumerate{
-#'     \item Transforms the input to a metric CRS (UTM) for accurate distance calculations
-#'     \item Validates that RTRW and RZWP3K pairs have matching structure
-#'     \item Extracts polygon boundaries
-#'     \item Calculates shared boundary lengths between adjacent pairs
-#'     \item Computes buffer areas based on the specified buffer distance
+#'     \item If the input is in a geographic CRS (longlat), it is transformed to
+#'       a suitable UTM zone (based on the centroid of the bounding box) for metric
+#'       calculations. Otherwise the existing CRS is used.
+#'     \item The geometry is made valid with [sf::st_make_valid()] and its precision
+#'       is set with `n_precision`.
+#'     \item The data are split into RTRW and RZWP3K subsets (ordered by `id_pu`).
+#'       An error is thrown if the numbers of rows do not match.
+#'     \item Boundaries are extracted with [sf::st_boundary()].
+#'     \item For each pair, the RZWP3K boundary is snapped to the RTRW boundary
+#'       using `snap_tolerance` to handle minor gaps, then the intersection is
+#'       computed. The length of the intersection (or 0 if empty) is recorded.
+#'     \item The lengths are joined back to the original `pu_sf` (preserving its
+#'       original CRS) and the buffer area is calculated.
 #'   }
 #'
-#' @note This function uses sequential processing. For large datasets, consider
-#'   parallelizing manually using `future` and `furrr` packages if needed.
+#' @note The function processes pairs sequentially. For very large datasets,
+#'   consider manual parallelisation (e.g., with `future` and `furrr`) to speed
+#'   up boundary intersection steps.
+#'
+#' @seealso [identify_adjacent()] for creating the required input object.
 #'
 #' @examples
 #' \dontrun{
-#'   result <- process_adjacent(adjacent_polygons, buffer_m = 50)
+#'   adj <- identify_adjacent(pu, rtrw, rzwp3k)
+#'   result <- process_adjacent(adj, buffer_m = 50)
 #' }
 #'
-#' @importFrom sf st_crs st_transform st_geometry st_boundary st_intersection st_length
+#' @importFrom sf st_crs st_transform st_geometry st_boundary st_intersection
+#'   st_length st_make_valid st_set_precision st_snap st_is_empty st_is_longlat
+#'   st_bbox
 #' @importFrom dplyr filter arrange left_join mutate select
 #' @export
-process_adjacent <- function(pu_sf, buffer_m) {
-  
-  # Automatically identify CRS
-  current_crs <- sf::st_crs(pu_sf)
-  if (current_crs$IsGeographic) {
+process_adjacent <- function(pu_sf, buffer_m, n_precision = 1000, snap_tolerance = 0.5) {
+  # CRS handling
+  if (sf::st_is_longlat(pu_sf)) {
     bbox <- sf::st_bbox(pu_sf)
     mean_lon <- (bbox[["xmin"]] + bbox[["xmax"]]) / 2
     mean_lat <- (bbox[["ymin"]] + bbox[["ymax"]]) / 2
     utm_zone <- floor((mean_lon + 180) / 6) + 1
     epsg_metric <- if (mean_lat >= 0) 32600 + utm_zone else 32700 + utm_zone
   } else {
-    epsg_metric <- current_crs
+    epsg_metric <- sf::st_crs(pu_sf)
   }
-  pu_sf_metric <- sf::st_transform(pu_sf, epsg_metric)
   
-  # Check id_pu structure 
+  pu_sf_metric <- sf::st_transform(pu_sf, epsg_metric)
+  pu_sf_metric <- sf::st_make_valid(pu_sf_metric)  
+  pu_sf_metric <- sf::st_set_precision(pu_sf_metric, n_precision)
+  
+  # Filter pairs
   rtrw_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RTRW)) %>% dplyr::arrange(id_pu)
   rzwp_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RZWP3K)) %>% dplyr::arrange(id_pu)
   
@@ -580,29 +612,33 @@ process_adjacent <- function(pu_sf, buffer_m) {
     stop("Ketidaksesuaian struktur pasangan data id_pu antara RTRW dan RZWP3K.")
   }
   
-  # Extract edge geometry (wireframe)
   rtrw_boundaries <- sf::st_boundary(sf::st_geometry(rtrw_parts))
   rzwp_boundaries <- sf::st_boundary(sf::st_geometry(rzwp_parts))
   
-  # Calculate length sequentially
   message("Menghitung irisan dan panjang garis setiap pasangan area berdampingan")
   calculated_lengths <- vapply(
     seq_along(rtrw_boundaries),
     function(i) {
-      shared_line <- sf::st_intersection(rtrw_boundaries[i], rzwp_boundaries[i])
-      return(as.numeric(sf::st_length(shared_line)))
+      rtrw_i <- rtrw_boundaries[i]
+      rzwp_i <- rzwp_boundaries[i]
+      rzwp_i_snapped <- sf::st_snap(rzwp_i, rtrw_i, tolerance = snap_tolerance)
+      shared_line <- sf::st_intersection(rtrw_i, rzwp_i_snapped)
+      if (length(shared_line) == 0 || sf::st_is_empty(shared_line)) {
+        return(0)
+      } else {
+        return(as.numeric(sf::st_length(shared_line)))
+      }
     },
     numeric(1)
   )
   
-  # Combine calculation result
+  # Continue with join and area calculation 
   lengths_lookup <- data.frame(
     id_pu = rtrw_parts$id_pu,
     length = calculated_lengths,
     stringsAsFactors = FALSE
   )
   
-  # Calculate buffer area
   message("Menghitung area buffer dalam hektar")
   pu_sf <- pu_sf %>% 
     dplyr::left_join(lengths_lookup, by = "id_pu") %>% 
