@@ -63,7 +63,7 @@ padu_kl_ui <- function(id) {
               icon = icon("gear"),
               open = FALSE,
               checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
-              numericInput(ns("workers"), "Jumlah pekerja (cores)", value = 2, min = 1, step = 1)
+              numericInput(ns("workers"), "Jumlah kanal komputasi (cores)", value = 2, min = 1, step = 1)
             )
           ),
           

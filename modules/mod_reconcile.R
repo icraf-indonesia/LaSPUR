@@ -7,7 +7,7 @@ source("R/functions.R")
 source("R/helpers.R")
 
 # ── Small UI Helpers ────────────────────────────────────────────
-.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+.locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
     tags$i(class = "bi bi-lock-fill me-2"), msg
@@ -149,14 +149,14 @@ reconcile_ui <- function(id) {
             multiple = FALSE,
             
             accordion_panel(
-              title = "Tahap 1 — Menyiapkan Keputusan Rekonsiliasi",
+              title = "Langkah 1 — Menyiapkan Keputusan Rekonsiliasi",
               value = "step1",
               icon = tags$i(class = "bi bi-file-earmark-spreadsheet-fill"),
               uiOutput(ns("step1_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 2 — Menentukan Keputusan Rekonsiliasi",
+              title = "Langkah 2 — Menentukan Keputusan Rekonsiliasi",
               value = "step2",
               icon = tags$i(class = "bi bi-check2-circle"),
               uiOutput(ns("step2_ui"))
@@ -265,7 +265,7 @@ reconcile_server <- function(id, output_dir) {
           downloadButton(ns("dl_template"), "Unduh Templat", class = "btn-outline-success btn-sm")
         ),
         uiOutput(ns("template_status_ui")),
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Tahap 2")
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     

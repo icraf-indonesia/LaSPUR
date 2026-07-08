@@ -32,16 +32,16 @@ Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam forma
 #| include: true
 
 # Main input data for SERASI index calculation
-rtrw_path <- "data/vector/serasi/step2/Step2_RTRW_Palu-Parigi.shp"
-rzwp3k_path <- "data/vector/serasi/step2/Step2_RZWP3K_Palu-Parigi.shp"
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/serasi/step2/Step2_RTRW_training_dis_explode.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/serasi/step2/Step2_RZWP3K_training.shp"
 
 # Output directory
-output_dir <- "output/"
+output_dir <- "D:/step2_sulteng/"
 
 # Input analisis SERASI
 rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
-rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
-matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
+rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_prioritas_RZWP3K_Integrasi.xlsx"
+matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/matriks_serasi_integrasi.xlsx"
 
 # PADU_KE input data
 lulc_vect_path <- "data/vector/padu_ke/PL2024_Coral_Seagrass_Union_Palu-Parigi.shp"
@@ -106,13 +106,18 @@ rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
 adjacent_map_raw <- identify_adjacent(
   rtrw = rtrw_vect,
   rzwp = rzwp3k_vect,
-  min_area_ha = 0
+  min_area_ha = 0,
+  m_precision = 1
 )
 
 # Process adjacent map
 adjacent_map <- process_adjacent(
   pu_sf = adjacent_map_raw,
-  buffer_m = 100
+  buffer_m = 100,
+  m_precision = 1,
+  snap_tolerance = 0.5,
+  parallel = TRUE, 
+  workers = 4
 )
 ```
 

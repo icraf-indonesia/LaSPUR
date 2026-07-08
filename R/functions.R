@@ -392,7 +392,7 @@ identify_adjacent <- function(rtrw,
                               nama_field_rzwp = "RZWP3K",
                               batch_progress_interval = 250,
                               show_detailed_progress = TRUE,
-                              n_precision = 1000
+                              m_precision = 1
                               ) {
 
   # Input validation
@@ -425,9 +425,12 @@ identify_adjacent <- function(rtrw,
     stop("Tidak ada pasangan yang mungkin karena salah satu layer kosong setelah filter area.")
   }
   
+  # Convert n_precision (in meters) to acceptable value for sf_set_precision
+  n_precision <- st_get_precision_for_meters(rtrw_filter, m_precision, silent = FALSE)
+  
   # Set precision
-  rtrw_fixed <- sf::st_set_precision(rtrw_filter, n_precision) |> sf::st_make_valid() 
-  rzwp_fixed <- sf::st_set_precision(rzwp_filter, n_precision) |> sf::st_make_valid()  
+  rtrw_fixed <- sf::st_set_precision(rtrw_filter, n_precision) |> sf::st_make_valid()
+  rzwp_fixed <- sf::st_set_precision(rzwp_filter, n_precision) |> sf::st_make_valid() 
   
   # Identify touches
   message("Identifikasi area RTRW dan RZWP3K yang berdampingan.")
@@ -515,12 +518,11 @@ identify_adjacent <- function(rtrw,
   
   message("\n      - Total pasangan diproses: ", pairs_processed)
   
-  # Convert dataframe to sf object – id kolom sudah berisi id_SRC
+  # Convert dataframe to sf object
   message("Menggabungkan data frames dan mengkonversi ke objek sf.")
   combined_df <- dplyr::bind_rows(df_list)
   pu_sf <- sf::st_as_sf(combined_df, crs = sf::st_crs(rtrw_filter))
   
-  # Urutkan kolom, tanpa menambah id baru
   pu_sf <- pu_sf %>%
     dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, geometry)
   
@@ -539,12 +541,19 @@ identify_adjacent <- function(rtrw,
 #'   geometry. Rows with missing `RTRW` or `RZWP3K` are treated as separate groups.
 #' @param buffer_m Numeric. The buffer width in metres. The buffer area (in hectares)
 #'   is computed as `(length * buffer_m) / 10000`.
-#' @param n_precision Numeric. The geometric precision to apply with
-#'   [sf::st_set_precision()] after making the polygons valid. Default `1e-9`.
-#'   Increase if you encounter topological errors.
-#' @param snap_tolerance Numeric. Tolerance (in the units of the metric CRS) used
-#'   to snap the RZWP3K boundary to the RTRW boundary before intersection. This
-#'   helps to avoid missing shared segments due to slight misalignments. Default `0.001`.
+#' @param m_precision Numeric. Desired geometric precision in meters for
+#'   `sf::st_set_precision()`. Default = 1 (one metre grid). Increase if you
+#'   encounter topological errors.
+#' @param snap_tolerance Numeric. Tolerance (in metres) used to snap the RZWP3K
+#'   boundary to the RTRW boundary before intersection. This helps to avoid
+#'   missing shared segments due to slight misalignments. Default = 0.5.
+#' @param parallel Logical. If `TRUE`, the boundary length calculations for each
+#'   pair are run in parallel. Default `FALSE`.
+#' @param workers Number of parallel workers (default = `future::availableCores()`).
+#' @param plan_strategy The `future` plan to use: `"multisession"` (all platforms)
+#'   or `"multicore"` (Unix only).
+#' @param progress Logical. Show a progress bar? Default `TRUE` (only used when
+#'   `parallel = TRUE`; the sequential loop prints its own progress message).
 #'
 #' @return An `sf` object with the same geometry and CRS as the input `pu_sf`,
 #'   augmented with two new columns:
@@ -559,36 +568,55 @@ identify_adjacent <- function(rtrw,
 #'     \item If the input is in a geographic CRS (longlat), it is transformed to
 #'       a suitable UTM zone (based on the centroid of the bounding box) for metric
 #'       calculations. Otherwise the existing CRS is used.
-#'     \item The geometry is made valid with [sf::st_make_valid()] and its precision
-#'       is set with `n_precision`.
+#'     \item The geometry is made valid with `st_make_valid()` and its precision
+#'       is set using `st_set_precision()` with the converted value from
+#'       `st_get_precision_for_meters()`.
 #'     \item The data are split into RTRW and RZWP3K subsets (ordered by `id_pu`).
 #'       An error is thrown if the numbers of rows do not match.
-#'     \item Boundaries are extracted with [sf::st_boundary()].
+#'     \item Boundaries are extracted with `st_boundary()`.
 #'     \item For each pair, the RZWP3K boundary is snapped to the RTRW boundary
 #'       using `snap_tolerance` to handle minor gaps, then the intersection is
 #'       computed. The length of the intersection (or 0 if empty) is recorded.
+#'       This step can be run in parallel when `parallel = TRUE`.
 #'     \item The lengths are joined back to the original `pu_sf` (preserving its
 #'       original CRS) and the buffer area is calculated.
 #'   }
 #'
-#' @note The function processes pairs sequentially. For very large datasets,
-#'   consider manual parallelisation (e.g., with `future` and `furrr`) to speed
-#'   up boundary intersection steps.
+#' @note The function processes pairs sequentially by default. For large datasets,
+#'   set `parallel = TRUE` to speed up the boundary intersection steps.
 #'
 #' @seealso [identify_adjacent()] for creating the required input object.
 #'
 #' @examples
 #' \dontrun{
-#'   adj <- identify_adjacent(pu, rtrw, rzwp3k)
-#'   result <- process_adjacent(adj, buffer_m = 50)
+#'   adj <- identify_adjacent(rtrw, rzwp, m_precision = 1)
+#'   result <- process_adjacent(adj, buffer_m = 50, m_precision = 1, parallel = TRUE)
 #' }
 #'
 #' @importFrom sf st_crs st_transform st_geometry st_boundary st_intersection
 #'   st_length st_make_valid st_set_precision st_snap st_is_empty st_is_longlat
 #'   st_bbox
 #' @importFrom dplyr filter arrange left_join mutate select
+#' @importFrom furrr future_map_dbl furrr_options
+#' @importFrom future plan availableCores multisession multicore
 #' @export
-process_adjacent <- function(pu_sf, buffer_m, n_precision = 1000, snap_tolerance = 0.5) {
+process_adjacent <- function(pu_sf,
+                             buffer_m,
+                             m_precision = 1,
+                             snap_tolerance = 0.5,
+                             parallel = FALSE,
+                             workers = NULL,
+                             plan_strategy = c("multisession", "multicore"),
+                             progress = TRUE) {
+  
+  # Input validation
+  if (!inherits(pu_sf, "sf")) stop("pu_sf harus berupa objek sf")
+  if (!is.numeric(buffer_m) || buffer_m <= 0) stop("buffer_m harus berupa angka positif")
+  if (!is.numeric(m_precision) || m_precision <= 0) stop("m_precision harus berupa angka positif")
+  if (!is.numeric(snap_tolerance) || snap_tolerance < 0) stop("snap_tolerance harus berupa angka non-negatif")
+  
+  plan_strategy <- match.arg(plan_strategy)
+  
   # CRS handling
   if (sf::st_is_longlat(pu_sf)) {
     bbox <- sf::st_bbox(pu_sf)
@@ -596,59 +624,123 @@ process_adjacent <- function(pu_sf, buffer_m, n_precision = 1000, snap_tolerance
     mean_lat <- (bbox[["ymin"]] + bbox[["ymax"]]) / 2
     utm_zone <- floor((mean_lon + 180) / 6) + 1
     epsg_metric <- if (mean_lat >= 0) 32600 + utm_zone else 32700 + utm_zone
+    message("Transformasi dari CRS geografis ke UTM zone ", utm_zone, " (EPSG:", epsg_metric, ")")
+    pu_sf_metric <- sf::st_transform(pu_sf, epsg_metric)
   } else {
-    epsg_metric <- sf::st_crs(pu_sf)
+    message("Menggunakan CRS yang sudah dalam satuan meter.")
+    pu_sf_metric <- pu_sf
   }
+  pu_sf_metric <- sf::st_make_valid(pu_sf_metric)
   
-  pu_sf_metric <- sf::st_transform(pu_sf, epsg_metric)
-  pu_sf_metric <- sf::st_make_valid(pu_sf_metric)  
+  # Convert m_precision to appropriate precision value for st_set_precision
+  n_precision <- st_get_precision_for_meters(pu_sf_metric, m_precision, silent = FALSE)
   pu_sf_metric <- sf::st_set_precision(pu_sf_metric, n_precision)
   
-  # Filter pairs
+  # Split into RTRW and RZWP3K parts (ordered by id_pu)
   rtrw_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RTRW)) %>% dplyr::arrange(id_pu)
   rzwp_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RZWP3K)) %>% dplyr::arrange(id_pu)
   
   if (nrow(rtrw_parts) != nrow(rzwp_parts)) {
-    stop("Ketidaksesuaian struktur pasangan data id_pu antara RTRW dan RZWP3K.")
+    stop("Jumlah baris RTRW dan RZWP3K tidak sama. Pastikan data berasal dari identify_adjacent() yang benar.")
   }
   
+  # Extract boundaries
   rtrw_boundaries <- sf::st_boundary(sf::st_geometry(rtrw_parts))
   rzwp_boundaries <- sf::st_boundary(sf::st_geometry(rzwp_parts))
   
-  message("Menghitung irisan dan panjang garis setiap pasangan area berdampingan")
-  calculated_lengths <- vapply(
-    seq_along(rtrw_boundaries),
-    function(i) {
-      rtrw_i <- rtrw_boundaries[i]
-      rzwp_i <- rzwp_boundaries[i]
-      rzwp_i_snapped <- sf::st_snap(rzwp_i, rtrw_i, tolerance = snap_tolerance)
-      shared_line <- sf::st_intersection(rtrw_i, rzwp_i_snapped)
-      if (length(shared_line) == 0 || sf::st_is_empty(shared_line)) {
-        return(0)
-      } else {
-        return(as.numeric(sf::st_length(shared_line)))
-      }
-    },
-    numeric(1)
-  )
+  # Define the function that computes shared length for a single pair
+  # (used both sequentially and in parallel)
+  calc_single_length <- function(i) {
+    rtrw_i <- rtrw_boundaries[i]
+    rzwp_i <- rzwp_boundaries[i]
+    rzwp_i_snapped <- sf::st_snap(rzwp_i, rtrw_i, tolerance = snap_tolerance)
+    shared_line <- sf::st_intersection(rtrw_i, rzwp_i_snapped)
+    if (length(shared_line) == 0 || sf::st_is_empty(shared_line)) {
+      return(0)
+    } else {
+      return(as.numeric(sf::st_length(shared_line)))
+    }
+  }
   
-  # Continue with join and area calculation 
+  # Compute lengths
+  if (!parallel) {
+    message("Menghitung panjang garis irisan untuk setiap pasangan (sekuensial)...")
+    calculated_lengths <- vapply(
+      seq_along(rtrw_boundaries),
+      calc_single_length,
+      numeric(1)
+    )
+  } else {
+    # Parallel execution
+    old_plan <- future::plan("list")
+    on.exit(future::plan(old_plan), add = TRUE)
+    if (is.null(workers)) workers <- future::availableCores()
+    if (plan_strategy == "multisession") {
+      future::plan(future::multisession, workers = workers)
+    } else {
+      future::plan(future::multicore, workers = workers)
+    }
+    
+    message("Menghitung panjang garis irisan untuk setiap pasangan (paralel, ", workers, " worker)...")
+    calculated_lengths <- furrr::future_map_dbl(
+      .x = seq_along(rtrw_boundaries),
+      .f = calc_single_length,
+      .progress = progress,
+      .options = furrr::furrr_options(packages = "sf")
+    )
+  }
+  
+  # Join lengths back to original sf
   lengths_lookup <- data.frame(
     id_pu = rtrw_parts$id_pu,
     length = calculated_lengths,
     stringsAsFactors = FALSE
   )
   
-  message("Menghitung area buffer dalam hektar")
-  pu_sf <- pu_sf %>% 
-    dplyr::left_join(lengths_lookup, by = "id_pu") %>% 
+  message("Menambahkan kolom length dan menghitung area buffer...")
+  pu_sf_result <- pu_sf %>%
+    dplyr::left_join(lengths_lookup, by = "id_pu") %>%
     dplyr::mutate(
       area_buffer_ha = (length * buffer_m) / 10000
-    )
-  pu_sf <- pu_sf %>% 
+    ) %>%
     dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, length, area_buffer_ha, geometry)
   
-  return(pu_sf)
+  return(pu_sf_result)
+}
+
+#' Convert meter precision to CRS-native precision for st_set_precision
+#'
+#' @param x sf object (used to determine CRS and bounding box)
+#' @param m_precision Numeric: desired grid size in meters. Default = 1.
+#' @param silent Logical: if FALSE, print conversion details. Default = FALSE.
+#' @return Numeric: grid size in CRS units (meters for projected, degrees for geographic)
+st_get_precision_for_meters <- function(x, m_precision = 1, silent = FALSE) {
+  if (sf::st_is_longlat(x)) {
+    bbox <- sf::st_bbox(x)
+    mean_lat <- mean(c(bbox["ymin"], bbox["ymax"]))
+    
+    meters_per_deg_lat <- 111132
+    meters_per_deg_lon <- 111320 * cos(mean_lat * pi / 180)
+    min_meters_per_deg <- min(meters_per_deg_lat, meters_per_deg_lon)
+    
+    precision_deg <- m_precision / min_meters_per_deg
+    
+    if (!silent) {
+      message(sprintf(
+        "CRS Geografis: 1° ≈ %.0f m → precision = %.8f° (≈ %.2f m grid)",
+        min_meters_per_deg, precision_deg, m_precision
+      ))
+    }
+    return(precision_deg)
+  } else {
+    if (!silent) {
+      message(sprintf(
+        "CRS Terproyeksi: precision = %.3f (satuan CRS = meter, grid = %.2f m)",
+        m_precision, m_precision
+      ))
+    }
+    return(m_precision)
+  }
 }
 
 # Perhitungan Indeks PADU-KE ----------------------------------------------

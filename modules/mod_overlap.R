@@ -7,7 +7,7 @@ source("R/functions.R")
 source("R/helpers.R")
 
 # ── small UI helpers ────────────────────────────────────────────
-.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+.locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
     tags$i(class = "bi bi-lock-fill me-2"), msg
@@ -55,14 +55,14 @@ overlap_ui <- function(id) {
             multiple = FALSE,
             
             accordion_panel(
-              title = "Tahap 1 — Menyiapkan Data Utama",
+              title = "Langkah 1 — Menyiapkan Data Utama",
               value = "step1",
               icon = tags$i(class = "bi bi-folder-fill"),
               uiOutput(ns("step1_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 2 — Menentukan Kompabilitas",
+              title = "Langkah 2 — Menentukan Kompabilitas",
               value = "step2",
               icon = tags$i(class = "bi bi-diagram-3-fill"),
               uiOutput(ns("step2_ui"))
@@ -90,7 +90,7 @@ overlap_ui <- function(id) {
               "Tabel",
               div(
                 style = "height: 500px; overflow: auto;",
-                DT::DTOutput(ns("result_table"))   # <-- FIXED: use DTOutput
+                DT::DTOutput(ns("result_table"))  
               )
             ),
             nav_panel(
@@ -179,11 +179,11 @@ overlap_server <- function(id, output_dir) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RTRW (.xlsx)",
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acuan Pola RTRW (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         fileInput(ns("rtrw_prioritas_file"), label = NULL, accept = ".xlsx"),
         
-        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RZWP3K (.xlsx)",
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acuan Pola RZWP3K (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         fileInput(ns("rzwp3k_prioritas_file"), label = NULL, accept = ".xlsx"),
         
@@ -200,7 +200,7 @@ overlap_server <- function(id, output_dir) {
         ),
         uiOutput(ns("matrix_template_status")),
         
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Tahap 2")
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     
@@ -435,8 +435,8 @@ overlap_server <- function(id, output_dir) {
             idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            gpkg_path <- file.path(output_dir(), "idx_serasi.gpkg")
-            xlsx_path <- file.path(output_dir(), "idx_serasi.xlsx")
+            gpkg_path <- file.path(output_dir(), "idx_serasi_overlaps.gpkg")
+            xlsx_path <- file.path(output_dir(), "idx_serasi_overlaps.xlsx")
             dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
             
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
@@ -492,7 +492,7 @@ overlap_server <- function(id, output_dir) {
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Lengkapi tahap sebelumnya.")
+            "Lengkapi langkah sebelumnya.")
       }
     })
     

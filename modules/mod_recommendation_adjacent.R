@@ -9,7 +9,7 @@ source("R/functions.R")
 source("R/helpers.R")
 
 # ── small UI helpers ────────────────────────────────────────
-.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+.locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
     tags$i(class = "bi bi-lock-fill me-2"), msg
@@ -109,28 +109,28 @@ recommendation_adjacent_ui <- function(id) {
             multiple = FALSE,
             
             accordion_panel(
-              title = "Tahap 1 — Menyaring Kasus",
+              title = "Langkah 1 — Menyaring Kasus",
               value = "step1",
               icon = tags$i(class = "bi bi-funnel-fill"),
               uiOutput(ns("step1_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 2 — Menentukan Kawasan Alternatif",
+              title = "Langkah 2 — Menentukan Kawasan Alternatif",
               value = "step2",
               icon = tags$i(class = "bi bi-signpost-split-fill"),
               uiOutput(ns("step2_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 3 — Menghitung Nilai Ekonomi (Opsional)",
+              title = "Langkah 3 — Menghitung Nilai Ekonomi (Opsional)",
               value = "step3",
               icon = tags$i(class = "bi bi-cash-coin"),
               uiOutput(ns("step3_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 4 — Menentukan Rekomendasi",
+              title = "Langkah 4 — Menentukan Rekomendasi",
               value = "step4",
               icon = tags$i(class = "bi bi-check2-circle"),
               uiOutput(ns("step4_ui"))
@@ -802,7 +802,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       if (!is.null(rv$final_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
-            "Selesai. Silakan lanjut ke ", tags$strong("Tahap Rekonsiliasi"), ".")
+            "Selesai. Silakan lanjut ke ", tags$strong("Langkah Rekonsiliasi"), ".")
       } else if (!is.null(rv$final_log) && grepl("^Error", rv$final_log)) {
         div(class = "alert alert-danger mb-0",
             tags$i(class = "bi bi-exclamation-triangle-fill me-2"),

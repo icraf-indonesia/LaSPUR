@@ -7,7 +7,7 @@ source("R/functions.R")
 source("R/helpers.R")
 
 # ── small UI helpers ────────────────────────────────────────────
-.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+.locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
     tags$i(class = "bi bi-lock-fill me-2"), msg
@@ -55,14 +55,14 @@ adjacent_ui <- function(id) {
             multiple = FALSE,
             
             accordion_panel(
-              title = "Tahap 1 — Menyiapkan Data Utama",
+              title = "Langkah 1 — Menyiapkan Data Utama",
               value = "step1",
               icon = tags$i(class = "bi bi-folder-fill"),
               uiOutput(ns("step1_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 2 — Menentukan Kompabilitas",
+              title = "Langkah 2 — Menentukan Kompabilitas",
               value = "step2",
               icon = tags$i(class = "bi bi-diagram-3-fill"),
               uiOutput(ns("step2_ui"))
@@ -130,7 +130,7 @@ adjacent_server <- function(id, output_dir) {
       
       # step2 data
       matriks_serasi = NULL,
-      threshold_ha = 156.25,
+      threshold_ha = 0,
       
       # analysis results
       analysis_result = NULL,
@@ -179,11 +179,11 @@ adjacent_server <- function(id, output_dir) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RTRW (.xlsx)",
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acuan Pola RTRW (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         fileInput(ns("rtrw_prioritas_file"), label = NULL, accept = ".xlsx"),
         
-        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Prioritas RZWP3K (.xlsx)",
+        tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acual Pola RZWP3K (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         fileInput(ns("rzwp3k_prioritas_file"), label = NULL, accept = ".xlsx"),
         
@@ -200,7 +200,7 @@ adjacent_server <- function(id, output_dir) {
         ),
         uiOutput(ns("matrix_template_status")),
         
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Tahap 2")
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     
@@ -319,11 +319,47 @@ adjacent_server <- function(id, output_dir) {
         
         hr(),
         
-        tags$p(tags$i(class = "bi bi-sliders me-1"), "Parameter",
-               style = "font-weight: 600; margin-bottom: 4px;"),
-        numericInput(ns("threshold_ha"),
-                     "Ambang Batas Luas Minimum (ha)",
-                     value = 156.25, min = 0),
+        # ── Pengaturan Lanjutan (accordion) ──────────────────────
+        accordion_panel(
+          title = "Pengaturan Lanjutan",
+          icon = icon("gear"),
+          open = FALSE,
+          
+          # Input presisi numerik
+          numericInput(
+            ns("m_precision"),
+            "Presisi Geometri (meter)",
+            value = 1, min = 0.001, step = 1
+          ),
+          tags$small(
+                  "Menentukan ukuran grid terkecil untuk pembulatan koordinat. 
+          Semakin kecil nilainya (misal 0.1), semakin presisi bentuk geometri, 
+          tetapi bisa memunculkan celah kecil atau tumpang tindih yang tidak diinginkan. 
+          Semakin besar (misal 10), koordinat akan lebih kasar, 
+          yang dapat menyederhanakan data tetapi berisiko menghilangkan segmen batas bersama 
+          yang seharusnya terdeteksi. Nilai 1 meter umumnya aman untuk sebagian besar kasus.",
+            style = "color: #6c757d; display: block; margin-top: -5px; margin-bottom: 12px; font-size: 0.85em;"
+          ),
+          
+          # Input toleransi snap
+          numericInput(
+            ns("snap_tolerance"),
+            "Jarak Penjepretan Batas (meter)",
+            value = 0.5, min = 0, step = 0.1
+          ),
+          tags$small(
+                  "Mengoreksi celah kecil antara batas RZWP3K dan RTRW dengan 'menjepret' 
+          (menarik) garis batas RZWP3K mendekati RTRW sebelum menghitung panjang segmen bersama. 
+          Nilai 0.5 meter cukup untuk mengatasi kesalahan digitasi umum. 
+          Naikkan (misal 1–2 meter) jika sering muncul hasil panjang = 0 meskipun secara visual 
+          kedua poligon bersentuhan. Jangan terlalu besar agar tidak menjepret batas yang sebenarnya tidak bersentuhan.",
+            style = "color: #6c757d; display: block; margin-top: -5px; margin-bottom: 0; font-size: 0.85em;"
+          ),
+          
+          # Input parallel processing
+          checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
+          numericInput(ns("workers"), "Jumlah kanal komputasi (cores)", value = 2, min = 1, step = 1)
+        ),
         
         hr(),
         
@@ -400,7 +436,8 @@ adjacent_server <- function(id, output_dir) {
           adjacent_map_raw <- identify_adjacent(
             rtrw = rv$rtrw_vect,
             rzwp = rv$rzwp3k_vect,
-            min_area_ha = 0
+            min_area_ha = 0,
+            m_precision = input$m_precision 
           )
           append_log("   Area bertetangga berhasil diidentifikasi.")
           
@@ -409,7 +446,11 @@ adjacent_server <- function(id, output_dir) {
           append_log(">> Memproses area bertetangga dengan buffer 100 m...")
           adjacent_map <- process_adjacent(
             pu_sf = adjacent_map_raw,
-            buffer_m = 100
+            buffer_m = 100,
+            m_precision = input$m_precision,   
+            snap_tolerance = input$snap_tolerance,
+            parallel = input$parallel, 
+            workers = input$workers
           )
           append_log("   Pemrosesan selesai.")
           
@@ -484,7 +525,7 @@ adjacent_server <- function(id, output_dir) {
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Lengkapi tahap sebelumnya.")
+            "Lengkapi langkah sebelumnya.")
       }
     })
     

@@ -7,7 +7,7 @@ source("R/functions.R")
 source("R/helpers.R")
 
 # ── small UI helpers ────────────────────────────────────────────
-.locked_panel <- function(msg = "Selesaikan tahap sebelumnya terlebih dahulu.") {
+.locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
     tags$i(class = "bi bi-lock-fill me-2"), msg
@@ -55,14 +55,14 @@ padu_kh_ui <- function(id) {
             multiple = FALSE,
             
             accordion_panel(
-              title = "Tahap 1 — Menyiapkan Data Utama",
+              title = "Langkah 1 — Menyiapkan Data Utama",
               value = "step1",
               icon = tags$i(class = "bi bi-folder-fill"),
               uiOutput(ns("step1_ui"))
             ),
             
             accordion_panel(
-              title = "Tahap 2 — Menganalisis Komposisi Habitat",
+              title = "Langkah 2 — Menganalisis Komposisi Habitat",
               value = "step2",
               icon = tags$i(class = "bi bi-pie-chart-fill"),
               uiOutput(ns("step2_ui"))
@@ -242,7 +242,7 @@ padu_kh_server <- function(id, output_dir) {
           uiOutput(ns("habitat_status"))
         ),
         
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Tahap 2")
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     
@@ -406,7 +406,7 @@ padu_kh_server <- function(id, output_dir) {
             icon = icon("gear"),
             open = FALSE,
             checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
-            numericInput(ns("workers"), "Jumlah pekerja (cores)", value = 2, min = 1, step = 1)
+            numericInput(ns("workers"), "Jumlah kanal komputasi (cores)", value = 2, min = 1, step = 1)
           )
         ),
         
@@ -562,7 +562,7 @@ padu_kh_server <- function(id, output_dir) {
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Lengkapi tahap sebelumnya.")
+            "Lengkapi langkah sebelumnya.")
       }
     })
     
