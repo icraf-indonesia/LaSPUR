@@ -166,7 +166,7 @@ padu_se_server <- function(id, output_dir) {
     # ── Run analysis ──────────────────────────────────────────
     observeEvent(input$btn_run, {
       
-      # Ensure output_dir is a single path (defensive fix for vector input)
+      # Ensure output_dir is a single path 
       out_dir <- output_dir()
       if (length(out_dir) > 1) {
         out_dir <- out_dir[1]
@@ -197,9 +197,16 @@ padu_se_server <- function(id, output_dir) {
         tryCatch({
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          pu <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          pu_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          pu_raw <- ensure_geometry_name(pu_raw)  
           
-          # FIX: pass only the datapath, not the whole file input object
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(pu_raw)) {
+            pu <- dissolve_id_pu(pu_raw)
+          } else {
+            pu <- pu_raw  
+          }
+          
           ntl_map <- load_and_validate_raster(input$ntl_area_file$datapath)
           popdens_map <- load_and_validate_raster(input$popdens_area_file$datapath)
           

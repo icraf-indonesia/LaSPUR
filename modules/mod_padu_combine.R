@@ -279,7 +279,7 @@ padu_combine_server <- function(id, output_dir) {
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
-          append_log("Analisis PADU-Combine berhasil diselesaikan.")
+          append_log("Analisis PADU-Kombinasi berhasil diselesaikan.")
           
           incProgress(0.05, detail = "Selesai!")
           showNotification(paste("Analisis selesai. Hasil disimpan ke", gpkg_path),

@@ -12,6 +12,9 @@ plan(multisession)
 
 options(shiny.maxRequestSize = 2000 * 1024^2)
 
+# ── small utility ─────────────────────────────────────────────
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 # ── safe_source ──────────────────────────────────────────────
 safe_source <- function(file, ui_fn_name, srv_fn_name) {
   if (file.exists(file)) {
@@ -409,6 +412,21 @@ server <- function(input, output, session) {
   
   active_path   <- reactiveVal("overlap") 
   
+  # ── Per-tab instance bookkeeping ─────────────────────────────
+  tab_state <- new.env(parent = emptyenv())
+  tab_state$gen       <- list()
+  tab_state$observers <- list()
+  
+  destroy_tab_observers <- function(tab_id) {
+    obs_list <- tab_state$observers[[tab_id]]
+    if (!is.null(obs_list)) {
+      for (o in obs_list) {
+        if (!is.null(o)) o$destroy()
+      }
+    }
+    tab_state$observers[[tab_id]] <- NULL
+  }
+  
   seq_overlap <- c("overlap", "padu_ke", "padu_hs", "padu_kl", "padu_kh", "padu_rtp", "padu_se", "padu_ki", "padu_combine", "padan", "recommendation_overlaps", "reconcile")
   seq_adjacent <- c("adjacent", "padu_ke", "padu_hs", "padu_kl", "padu_kh", "padu_rtp", "padu_se", "padu_ki", "padu_combine", "padan", "recommendation_adjacent", "reconcile")
   
@@ -419,6 +437,7 @@ server <- function(input, output, session) {
     for (t in tabs_to_disable) {
       if (t %in% current_open) {
         removeTab(inputId = "tabs", target = t)
+        destroy_tab_observers(t)
         current_open <- current_open[current_open != t]
         closed_any <- TRUE
       }
@@ -537,22 +556,25 @@ server <- function(input, output, session) {
       return()
     }
     
+    destroy_tab_observers(tab_id)
+    gen <- (tab_state$gen[[tab_id]] %||% 0L) + 1L
+    tab_state$gen[[tab_id]] <- gen
+    instance_id <- paste0(tab_id, "__g", gen)
+    
     # ── Top Navigation Bar Layout ──────────────────────────────────
     nav_buttons <- div(
       style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5edf2; padding-bottom: 15px;",
       
-      # LEFT SIDE: Home/Back & Next Buttons
+      # Home/Back & Next Buttons
       div(
         style = "display: flex; gap: 10px;",
         
-        # Home (Beranda) if on the first module, else Back (Sebelumnya)
         if (tab_id %in% c("overlap", "adjacent")) {
           actionButton(paste0("btn_back_", tab_id), "Beranda", icon = icon("home"), class = "btn-outline-secondary btn-sm")
         } else {
           actionButton(paste0("btn_back_", tab_id), "Sebelumnya", icon = icon("arrow-left"), class = "btn-outline-secondary btn-sm")
         },
         
-        # Next (hidden on the last module 'reconcile')
         if (tab_id != "reconcile") {
           actionButton(paste0("btn_next_", tab_id), "Selanjutnya", icon = icon("arrow-right"), class = "btn-primary btn-sm")
         }
@@ -576,17 +598,16 @@ server <- function(input, output, session) {
         div(
           style = "padding: 20px;",
           nav_buttons, 
-          cfg$ui_fn(tab_id)
+          cfg$ui_fn(instance_id)
         )
       ),
       select = TRUE
     )
     
     open_tabs(c(open_tabs(), tab_id))
-    cfg$srv_fn(tab_id, session$userData$output_dir)
+    cfg$srv_fn(instance_id, session$userData$output_dir)
     
-    # Listeners
-    observeEvent(input[[paste0("btn_back_", tab_id)]], {
+    obs_back <- observeEvent(input[[paste0("btn_back_", tab_id)]], {
       if (tab_id %in% c("overlap", "adjacent")) {
         updateTabsetPanel(session, "tabs", selected = "home")
       } else {
@@ -599,8 +620,9 @@ server <- function(input, output, session) {
       }
     }, ignoreInit = TRUE)
     
+    obs_next <- NULL
     if (tab_id != "reconcile") {
-      observeEvent(input[[paste0("btn_next_", tab_id)]], {
+      obs_next <- observeEvent(input[[paste0("btn_next_", tab_id)]], {
         seq <- if (active_path() == "adjacent") seq_adjacent else seq_overlap
         idx <- match(tab_id, seq)
         if (!is.na(idx) && idx < length(seq)) {
@@ -610,11 +632,13 @@ server <- function(input, output, session) {
       }, ignoreInit = TRUE)
     }
     
-    observeEvent(input[[paste0("close_", tab_id)]], {
+    obs_close <- observeEvent(input[[paste0("close_", tab_id)]], {
       pending_close(tab_id)
       session$sendCustomMessage("update_modal_label", list(label = cfg$label))
       session$sendCustomMessage("show_close_modal", list())
     }, once = FALSE, ignoreInit = TRUE)
+    
+    tab_state$observers[[tab_id]] <- list(obs_back, obs_next, obs_close)
   }
   
   observeEvent(input$confirm_close_yes, {
@@ -622,6 +646,7 @@ server <- function(input, output, session) {
     req(!is.null(tab_id))
     session$sendCustomMessage("hide_close_modal", list())
     removeTab(inputId = "tabs", target = tab_id)
+    destroy_tab_observers(tab_id)
     open_tabs(open_tabs()[open_tabs() != tab_id])
     pending_close(NULL)
   })

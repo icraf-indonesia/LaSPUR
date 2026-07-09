@@ -205,7 +205,8 @@ padu_ke_server <- function(id, output_dir) {
       req(input$idx_serasi_file)
       tryCatch({
         path <- extract_vector_path(input$idx_serasi_file)
-        rv$idx_serasi_map <- load_and_validate_shapefile(path)
+        sf_obj <- load_and_validate_shapefile(path)
+        rv$idx_serasi_map <- ensure_geometry_name(sf_obj)  
         showNotification("Peta Indeks SERASI berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$idx_serasi_map <- NULL
@@ -216,7 +217,8 @@ padu_ke_server <- function(id, output_dir) {
     observeEvent(input$lulc_file, {
       req(input$lulc_file)
       tryCatch({
-        rv$lulc_vect <- load_and_validate_shapefile(extract_shp_path(input$lulc_file))
+        sf_obj <- load_and_validate_shapefile(extract_shp_path(input$lulc_file))
+        rv$lulc_vect <- ensure_geometry_name(sf_obj)  
         # Extract LULC reference table
         rv$lulc_ref <- rv$lulc_vect %>%
           sf::st_drop_geometry() %>%
@@ -384,8 +386,14 @@ padu_ke_server <- function(id, output_dir) {
           incProgress(0.1, detail = "Memulai analisis...")
           append_log(">> Memulai analisis PADU-KE...")
           
-          # Step 1: Prepare data (already loaded)
-          idx_map <- rv$idx_serasi_map
+          # Step 1: Prepare data
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(rv$idx_serasi_map)) {
+            idx_map <- dissolve_id_pu(rv$idx_serasi_map)
+          } else {
+            idx_map <- rv$idx_serasi_map  
+          }
+          
           lulc_vect_data <- rv$lulc_vect
           class_col <- intersect(c("ID", "Class", "class", "LULC", "Kelas"), names(lulc_vect_data))[1]
           append_log(paste0("   Kolom kelas: ", class_col))

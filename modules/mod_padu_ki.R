@@ -208,9 +208,21 @@ padu_ki_server <- function(id, output_dir) {
         tryCatch({
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          idx_map <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          idx_map_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          idx_map_raw <- ensure_geometry_name(idx_map_raw) 
+          
           dr_vect <- load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
+          dr_vect <- ensure_geometry_name(dr_vect)       
+          
           risk_col <- input$risk_col_name
+          
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(idx_map_raw)) {
+            idx_map <- dissolve_id_pu(idx_map_raw)
+          } else {
+            idx_map <- idx_map_raw  
+          }
+          
           append_log("Data berhasil dimuat.")
           append_log(paste("Kolom risiko yang digunakan:", risk_col))
           

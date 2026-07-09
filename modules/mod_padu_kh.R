@@ -135,7 +135,7 @@ padu_kh_server <- function(id, output_dir) {
       max_entries = 10,
       entry_names = rep("", 10),
       entry_paths = vector("list", 10),
-      entry_last_datapath = vector("list", 10),   # to avoid reprocessing
+      entry_last_datapath = vector("list", 10), 
       
       # analysis results
       analysis_result = NULL,
@@ -251,7 +251,17 @@ padu_kh_server <- function(id, output_dir) {
       req(input$idx_serasi_file)
       tryCatch({
         path <- extract_vector_path(input$idx_serasi_file)
-        rv$idx_serasi_map <- load_and_validate_shapefile(path)
+        sf_obj <- load_and_validate_shapefile(path)
+        sf_obj <- ensure_geometry_name(sf_obj) 
+        rv$idx_serasi <- sf_obj
+        
+        # Conditional dissolve idx_serasi_map
+        if ("length" %in% colnames(rv$idx_serasi)) {
+          rv$idx_serasi_map <- dissolve_id_pu(rv$idx_serasi)
+        } else {
+          rv$idx_serasi_map <- rv$idx_serasi  
+        }
+        
         showNotification("Peta Indeks SERASI berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$idx_serasi_map <- NULL
@@ -263,7 +273,8 @@ padu_kh_server <- function(id, output_dir) {
     observeEvent(input$lulc_file, {
       req(input$habitat_source == "lulc", input$lulc_file)
       tryCatch({
-        rv$lulc_vect <- sf::st_read(extract_shp_path(input$lulc_file), quiet = TRUE)
+        lulc <- sf::st_read(extract_shp_path(input$lulc_file), quiet = TRUE)
+        rv$lulc_vect <- ensure_geometry_name(lulc)  
         showNotification("Peta LULC berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$lulc_vect <- NULL
@@ -317,7 +328,7 @@ padu_kh_server <- function(id, output_dir) {
       observeEvent(input[[paste0("habitat_file_", i)]], {
         file_input <- input[[paste0("habitat_file_", i)]]
         if (is.null(file_input) || nrow(file_input) == 0) return()
-        if (i > rv$active_count) return()  # ignore inactive slots
+        if (i > rv$active_count) return() 
         
         # Avoid reprocessing if datapath hasn't changed
         current_datapath <- file_input$datapath[1]
@@ -484,6 +495,7 @@ padu_kh_server <- function(id, output_dir) {
               name <- rv$entry_names[i]
               path <- rv$entry_paths[[i]]
               shp <- load_and_validate_shapefile(path)
+              shp <- ensure_geometry_name(shp)  
               shp <- sf::st_transform(shp, sf::st_crs(pu))
               habitat_list[[name]] <- shp
               append_log(paste("  Dimuat:", name))

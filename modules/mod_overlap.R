@@ -128,6 +128,10 @@ overlap_server <- function(id, output_dir) {
       rtrw_prioritas = NULL,
       rzwp3k_prioritas = NULL,
       
+      # NEW: administrative data
+      admin_vect = NULL,
+      admin_col = NULL,
+      
       # step2 data
       matriks_serasi = NULL,
       threshold_ha = 156.25,
@@ -177,6 +181,18 @@ overlap_server <- function(id, output_dir) {
                   accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
         
+        # NEW: Administrative map input (optional)
+        tags$p(tags$i(class = "bi bi-map me-1"), "Peta Administratif (.shp) (Opsional)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                   "Unggah shapefile batas administratif untuk menggabungkan hasil analisis per wilayah. (Kosongkan jika tidak diperlukan)"),
+        fileInput(ns("admin_file"), label = NULL,
+                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                  multiple = TRUE),
+        
+        # Dynamic dropdown for admin column
+        uiOutput(ns("admin_field_ui")),
+        
         hr(),
         
         tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acuan Pola RTRW (.xlsx)",
@@ -225,6 +241,43 @@ overlap_server <- function(id, output_dir) {
         rv$rzwp3k_vect <- NULL
         showNotification(paste("Gagal memuat RZWP3K:", e$message), type = "error")
       })
+    })
+    
+    # Load administrative shapefile and populate field dropdown
+    observeEvent(input$admin_file, {
+      req(input$admin_file)
+      tryCatch({
+        shp_path <- extract_shp_path(input$admin_file)
+        admin_sf <- load_and_validate_shapefile(shp_path)
+        admin_sf <- ensure_geometry_name(admin_sf)   
+        rv$admin_vect <- admin_sf
+        
+        # Extract column names (drop geometry)
+        col_names <- names(admin_sf)
+        col_names <- col_names[!col_names %in% c("geometry", "geom")]
+        
+        # Render the dropdown for admin field selection
+        output$admin_field_ui <- renderUI({
+          req(rv$admin_vect)
+          selectInput(
+            ns("admin_field"),
+            label = "Pilih kolom identitas wilayah administratif",
+            choices = col_names,
+            selected = if (!is.null(rv$admin_col) && rv$admin_col %in% col_names) rv$admin_col else col_names[1]
+          )
+        })
+        
+        showNotification("Peta Administratif berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$admin_vect <- NULL
+        output$admin_field_ui <- renderUI(NULL)
+        showNotification(paste("Gagal memuat Peta Administratif:", e$message), type = "error")
+      })
+    })
+    
+    # Store selected admin column
+    observeEvent(input$admin_field, {
+      rv$admin_col <- input$admin_field
     })
     
     observeEvent(input$rtrw_prioritas_file, {
@@ -433,6 +486,32 @@ overlap_server <- function(id, output_dir) {
             
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
             idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
+            
+            # Merge with administrative map if provided ──
+            if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
+              append_log(">> Menggabungkan hasil dengan peta administratif...")
+              
+              admin_sf <- rv$admin_vect
+              # Ensure both layers are in the same CRS
+              if (sf::st_crs(admin_sf) != sf::st_crs(idx_serasi_map)) {
+                admin_sf <- sf::st_transform(admin_sf, sf::st_crs(idx_serasi_map))
+              }
+              
+              # Spatial join: assign each polygon to the admin unit it intersects most
+              idx_serasi_map <- sf::st_join(
+                idx_serasi_map,
+                admin_sf[, rv$admin_col, drop = FALSE],
+                join = sf::st_intersects,
+                largest = TRUE
+              )
+              
+              # Rename the admin column to a standard name ("admin")
+              names(idx_serasi_map)[names(idx_serasi_map) == rv$admin_col] <- "admin"
+              
+              append_log("   Penggabungan administratif selesai.")
+            }
+            
+            # Prepare table and save
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
             gpkg_path <- file.path(output_dir(), "idx_serasi_overlaps.gpkg")
@@ -573,7 +652,7 @@ overlap_server <- function(id, output_dir) {
     
     # ── Download handlers ──────────────────────────────────────
     output$dl_gpkg <- downloadHandler(
-      filename = function() "idx_serasi.gpkg",
+      filename = function() "idx_serasi_overlaps.gpkg",
       content = function(file) {
         req(rv$gpkg_path)
         file.copy(rv$gpkg_path, file, overwrite = TRUE)
@@ -581,7 +660,7 @@ overlap_server <- function(id, output_dir) {
     )
     
     output$dl_xlsx <- downloadHandler(
-      filename = function() "idx_serasi.xlsx",
+      filename = function() "idx_serasi_overlaps.xlsx",
       content = function(file) {
         req(rv$xlsx_path)
         file.copy(rv$xlsx_path, file, overwrite = TRUE)

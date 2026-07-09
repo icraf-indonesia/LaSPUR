@@ -665,13 +665,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
         # Split RTRW / RZWP3K sides and re-join
         rtrw_rows <- adjacent_economy_map %>%
           dplyr::filter(!is.na(RTRW)) %>%
-          dplyr::select(id_pu, RTRW, alt_RTRW, idx_padu_rtrw, econ_rtrw_delta) %>%
+          dplyr::select(id_pu, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
           sf::st_drop_geometry() %>%
           dplyr::as_tibble()
         
         rz_rows <- adjacent_economy_map %>%
           dplyr::filter(!is.na(RZWP3K)) %>%
-          dplyr::select(id_pu, RZWP3K, alt_RZWP3K, idx_padu_rzwp3k, econ_rzwp3k_delta) %>%
+          dplyr::select(id_pu, RZWP3K, alt_RZWP3K, econ_rzwp3k_delta) %>%
           sf::st_drop_geometry() %>%
           dplyr::as_tibble()
         
@@ -688,14 +688,14 @@ recommendation_adjacent_server <- function(id, output_dir) {
         
         prep_recomendation <- split_rtrw_rzwp3k %>%
           dplyr::mutate(
-            idx_padu_final = if ("idx_padu_final" %in% names(split_rtrw_rzwp3k)) {
-              idx_padu_final
-            } else {
-              dplyr::case_when(
-                idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0 ~ 0,
-                TRUE ~ 2 * idx_padu_rtrw * idx_padu_rzwp3k / (idx_padu_rtrw + idx_padu_rzwp3k)
-              )
-            },
+            # idx_padu_final = if ("idx_padu_final" %in% names(split_rtrw_rzwp3k)) {
+            #   idx_padu_final
+            # } else {
+            #   dplyr::case_when(
+            #     idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0 ~ 0,
+            #     TRUE ~ 2 * idx_padu_rtrw * idx_padu_rzwp3k / (idx_padu_rtrw + idx_padu_rzwp3k)
+            #   )
+            # },
             priority_class = dplyr::case_when(
               RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ "Both",
               RTRW %in% priority_rtrw ~ "Yes",

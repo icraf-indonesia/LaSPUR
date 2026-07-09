@@ -2273,7 +2273,6 @@ calculate_padu_ki <- function(idx_serasi_map,
 #'
 #' @export
 calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
-  
   idx_padu_map <- purrr::reduce(
     padu_list,
     .init = idx_padu_map,
@@ -3577,4 +3576,115 @@ reconcile_map <- function(step,
   } else {
     stop("step must be 1 or 2")
   }
+}
+
+#' Dissolve paired RTRW and RZWP3K polygons by `id_pu`
+#'
+#' This function takes an `sf` object where each `id_pu` groups exactly two 
+#' features: one with a non-`NA` value in the `RTRW` column and one with a 
+#' non-`NA` value in the `RZWP3K` column. It dissolves (unions) the geometries 
+#' for each `id_pu`, creates a new identifier by concatenating the original 
+#' `id` values from the RTRW and RZWP3K rows (separated by an underscore), 
+#' sums the `area_ha` fields, concatenates the `admin` values, and retains 
+#' the other attributes (assuming they are identical within the pair).
+#'
+#' @param sf_obj An `sf` object (simple feature collection) that must contain 
+#'   the following columns: `id`, `id_pu`, `RTRW`, `RZWP3K`, `area_ha`, 
+#'   `length`, `area_buffer_ha`, `idx_serasi`, and `admin`. Each `id_pu` should 
+#'   have exactly two rows: one with a non-`NA` `RTRW` and the other with a 
+#'   non-`NA` `RZWP3K`.
+#'
+#' @return An `sf` object with one feature per unique `id_pu`. The output 
+#'   includes the following columns:
+#'   \itemize{
+#'     \item `id`: new identifier in the format `"<RTRW_id>_<RZWP3K_id>"`.
+#'     \item `id_pu`: original grouping identifier.
+#'     \item `RTRW`: the non-`NA` value from the RTRW row.
+#'     \item `RZWP3K`: the non-`NA` value from the RZWP3K row.
+#'     \item `area_ha`: numeric sum of the two areas.
+#'     \item `admin`: concatenated admin values in the format 
+#'       `"<RTRW_admin>_<RZWP3K_admin>"`.
+#'     \item `length`: first value (assumed identical).
+#'     \item `area_buffer_ha`: first value (assumed identical).
+#'     \item `idx_serasi`: first value (assumed identical).
+#'     \item `geometry`: unioned (dissolved) geometry.
+#'   }
+#'   The CRS is preserved from the input object.
+#'
+#' @details The function performs the following steps:
+#' \enumerate{
+#'   \item Splits the data into RTRW and RZWP3K subsets.
+#'   \item Validates that the number of rows and `id_pu` values match between 
+#'         the two subsets.
+#'   \item Joins the attribute tables to combine `id`, `area_ha`, and `admin` 
+#'         from both rows, then computes the new `id`, sums `area_ha`, and 
+#'         concatenates `admin`.
+#'   \item Unions the geometries for each `id_pu`.
+#'   \item Merges the attributes with the unioned geometries and restores the CRS.
+#' }
+#'
+#' @importFrom dplyr filter st_drop_geometry select inner_join mutate 
+#'   group_by summarise rename st_as_sf
+#' @importFrom sf st_union st_crs
+#' @importFrom rlang .data
+#'
+#' @examples
+#' \dontrun{
+#' # Assuming `idx_serasi_map` is your sf object with the required columns
+#' dissolved <- dissolve_id_pu(idx_serasi_map)
+#' plot(dissolved["area_ha"])
+#' }
+#'
+#' @export
+dissolve_id_pu <- function(sf_obj) {
+  # Required columns (added "admin")
+  required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", 
+                     "length", "area_buffer_ha", "idx_serasi", "admin")
+  stopifnot(all(required_cols %in% colnames(sf_obj)))
+  
+  # Split into RTRW and RZWP3K rows
+  rtrw <- sf_obj %>% filter(!is.na(RTRW))
+  rzwp3k <- sf_obj %>% filter(!is.na(RZWP3K))
+  
+  # Basic validation
+  if (nrow(rtrw) != nrow(rzwp3k)) {
+    stop("Unequal number of RTRW and RZWP3K rows.")
+  }
+  if (!all(rtrw$id_pu == rzwp3k$id_pu)) {
+    stop("Mismatched id_pu between RTRW and RZWP3K rows.")
+  }
+  
+  # Join attributes (without geometry)
+  combined <- rtrw %>%
+    st_drop_geometry() %>%
+    select(id_pu, id_rtrw = id, RTRW, area_ha_rtrw = area_ha,
+           admin_rtrw = admin, length, area_buffer_ha, idx_serasi) %>%
+    inner_join(
+      rzwp3k %>%
+        st_drop_geometry() %>%
+        select(id_pu, id_rzwp3k = id, RZWP3K, area_ha_rzwp3k = area_ha,
+               admin_rzwp3k = admin),
+      by = "id_pu"
+    ) %>%
+    mutate(
+      new_id = paste0(id_rtrw, "_", id_rzwp3k),
+      area_ha = area_ha_rtrw + area_ha_rzwp3k,
+      admin = paste0(admin_rtrw, "_", admin_rzwp3k)
+    ) %>%
+    select(id_pu, new_id, RTRW, RZWP3K, area_ha, admin, length, area_buffer_ha, idx_serasi)
+  
+  # Union geometries per id_pu
+  geom_union <- sf_obj %>%
+    group_by(id_pu) %>%
+    summarise(geometry = st_union(geometry), .groups = "drop")
+  
+  # Merge attributes with unioned geometries
+  result <- geom_union %>%
+    inner_join(combined, by = "id_pu") %>%
+    rename(id = new_id) %>%
+    select(id, id_pu, RTRW, RZWP3K, area_ha, admin, length, area_buffer_ha, idx_serasi, geometry) %>%
+    st_as_sf()
+  
+  st_crs(result) <- st_crs(sf_obj)
+  return(result)
 }

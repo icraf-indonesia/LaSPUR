@@ -39,53 +39,49 @@ rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/ve
 output_dir <- "D:/step2_sulteng/"
 
 # Input analisis SERASI
-rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
+rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_prioritas_RZWP3K_Integrasi.xlsx"
 matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/matriks_serasi_integrasi.xlsx"
+admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/serasi/admin/gadm41_IDN_3_kecamatan.shp"
 
 # PADU_KE input data
-lulc_vect_path <- "data/vector/padu_ke/PL2024_Coral_Seagrass_Union_Palu-Parigi.shp"
-lulc_ref_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
-matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_klhk.xlsx"
+lulc_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_ke/PL2024_Coral_Seagrass_training.shp"
+lulc_ref_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
+matriks_padu_ke_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/matriks_padu_ke_klhk.xlsx"
 
 # PADU-HS input data
-estuari_vect_path <- "data/vector/padu_hs/ST_Estuari_PT_Palu-Parigi.shp"
-tss_rast_path <- "data/raster/padu_hs/TSS_Palu-Parigi.tif"
+estuari_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_hs/ST_Estuari_PT_training.shp"
+tss_rast_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_hs/TSS_training.tif"
+estuari_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_hs/EucD_Estuari_training.tif"
 
 # PADU-KL input data
-protected_area_vect_path <- "data/vector/padu_kl/ST_Kawasan_Lindung_Palu-Parigi.shp"
+protected_area_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_kl/ST_Kawasan_Lindung_training.shp"
 
 # PADU-KH input data
-coral_vect_path <- "data/vector/padu_kh/AC_Coral_Palu-Parigi.shp"
-seagrass_vect_path <- "data/vector/padu_kh/AC_Seagrass_Palu-Parigi.shp"
-mangrove_vect_path <- "data/vector/padu_kh/Mangrove_Palu-Parigi.shp"
+coral_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_kh/AC_Coral_training.shp"
+seagrass_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_kh/AC_Seagrass_training.shp"
+mangrove_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_kh/Mangrove_training.shp"
 
 # PADU-RTp input data
-industry_vect_path <- "data/vector/padu_rtp/ST_Industri_Palu-Parigi.shp"
-industry_euc_dist_path <- "data/raster/padu_rtp/EuDist_Industri_Palu-Parigi.tif"
-pelayaran_vect_path <- "data/vector/padu_rtp/ST_AlurPelayaran_Palu-Parigi.shp"
-pelayaran_euc_dist_path <- "data/raster/padu_rtp/EUDist_AlurPl_Palu-Parigi.tif"
+industry_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_rtp/ST_Industri_training.shp"
+industry_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_rtp/EucD_Industri_training.tif"
+pelayaran_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_rtp/ST_AlurPelayaran_training.shp"
+pelayaran_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_rtp/EucD_AlurPl_training.tif"
 
 # PADU-SE input data
 ntl_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/NTL_2023_100m_VIIRS.tif"
 popdens_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/Popdens_2025_100m_Worldpop.tif"
 
 # PADU-KI input data
-disaster_risk_vect_path <- "data/vector/padu_ki/ST_KRB_climate_Palu-Parigi.shp"
+disaster_risk_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/padu_ki/ST_KRB_climate_training.shp"
 
 # Parameterization
-padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
+padu_idx_weight_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_bobot_PADU.xlsx"
 
 # Economics input data
-npv_lulc_path <- "data/tabular/tabel_acuan_npv_penutupan_lahan.xlsx"
-matriks_land_distribution_rtrw_path <- "data/tabular/matriks_land_distribution_rtrw.xlsx"
-matriks_land_distribution_rzwp3k_path <- "data/tabular/matriks_land_distribution_rzwp3k.xlsx"
-
-# Recommendation input data
-rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
-rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
-best_rtrw_path <- "data/tabular/tabel_acuan_RTRW_terbaik_untuk_RZWP3K.xlsx"
-best_rzwp3k_path <- "data/tabular/tabel_acuan_RZWP3K_terbaik_untuk_RTRW.xlsx"
+npv_lulc_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/tabel_acuan_npv_penutupan_lahan.xlsx"
+matriks_land_distribution_rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/matriks_land_distribution_rtrw.xlsx"
+matriks_land_distribution_rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/tabular/matriks_land_distribution_rzwp3k.xlsx"
 ```
 
 # Tahap 1. Identifikasi area berdampingan
@@ -165,7 +161,7 @@ if (length(valid_class$mismatch_col3) == 0 &&
     length(valid_class$mismatch_col4) == 0) {
   idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) 
   idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
-  write_sf(idx_serasi_map, "output/step2/idx_serasi_adjacent.gpkg", overwrite = TRUE)
+  write_sf(idx_serasi_map, paste0(output_dir, "idx_serasi_adjacent.gpkg"), overwrite = TRUE)
   # plot(idx_serasi_map["idx_serasi"])
   print(idx_serasi_table)
   
@@ -177,16 +173,33 @@ if (length(valid_class$mismatch_col3) == 0 &&
 
 # Tahap 3. Analisis indeks PADU RTRW & RZWP3K
 
-```{r prepare-rtrw-rzwp3k-serasi-map-adjacent}
-# Define adjacent RTRW features only
-adjacent_map_rtrw <- idx_serasi_map %>% 
-  select(id, id_pu, RTRW, area_ha, length, area_buffer_ha, idx_serasi) %>% 
-  drop_na(RTRW)
+```{r merge-rtrw-&-rzwp3k}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
 
-# Define adjacent RZWP3K features only
-adjacent_map_rzwp3k <- idx_serasi_map %>% 
-  select(id, id_pu, RZWP3K, area_ha, length, area_buffer_ha, idx_serasi) %>% 
-  drop_na(RZWP3K)
+# Merge adjacent map into single area
+admin <- load_and_validate_shapefile(admin_path)
+
+# Merge with administrative map
+admin_col_name <- "NAME_3"
+new_col_name <- "admin" 
+
+adjacent_map_admin <- st_join(
+  idx_serasi_map, 
+  admin[, admin_col_name],  
+  join = st_intersects, 
+  largest = TRUE
+) %>%
+  rename(!!new_col_name := !!sym(admin_col_name))
+
+# Autodetect step 2
+if ("length" %in% colnames(adjacent_map_admin)) {
+  adjacent_map_combine <- dissolve_id_pu(adjacent_map_admin)
+} else {
+  adjacent_map_combine <- adjacent_map_admin
+}
 ```
 
 ## Tahap 3.1. Analisis PADU-KE
@@ -227,7 +240,7 @@ matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
 write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke_klhk.xlsx", overwrite = TRUE)
 ```
 
-### Tahap 3.1.2. Perhitungan PADU-KE RTRW
+### Tahap 3.1.2. Perhitungan PADU-KE
 
 Pada tahap ini, untuk setiap unit area berdampingan, akan dihitung jumlah sisi setiap unit kelas LULC (pixel/feature) yang berbatasan (*edge count*) secara berpasangan dengan kelas LULC yang bertetangga di sekitarnya. Perhitungan meliputi persentase jumlah *edge count* dalam setiap unit. Setiap pasangan kelas yang unik hanya dihitung satu kali (misalnya, pasangan Hutan–Semak dan Semak–Hutan diperlakukan sebagai kasus ketetanggaan yang sama, *edge count* = 1).
 
@@ -235,16 +248,16 @@ Dalam hal ini, modul akan menyediakan 2 opsi format peta LULC yang dapat dihitun
 
 Indeks PADU-KE dihitung sebagai rerata bobot perhitungan *adjacency* antar pasangan kelas LULC yang berdampingan. Nilai PADU-KE yang dihasilkan merupakan hasil normalisasi dengan rentang indeks 0-1.
 
-```{r calculate-padu-ke-rtrw}
+```{r calculate-padu-ke}
 #| error: true
 #| warning: false
 #| message: true
 #| include: true
 
 # Calculate adjacency for LULC vector input
-lulc_adjacencies_rtrw <- calculate_lulc_adjacency(
+lulc_adjacencies <- calculate_lulc_adjacency(
   lulc_vect,
-  adjacent_map_rtrw,
+  adjacent_map_combine,
   id_col = "id_pu",
   class_col = "ID", 
   parallel = TRUE, 
@@ -252,51 +265,18 @@ lulc_adjacencies_rtrw <- calculate_lulc_adjacency(
 )
 
 # Calculate padu_ke
-padu_ke_rtrw <- calculate_padu_ke(
+padu_ke <- calculate_padu_ke(
   matriks_padu_ke   = matriks_padu_ke,
   lulc_ref          = lulc_ref,
-  lulc_adjacencies  = lulc_adjacencies_rtrw,
-  idx_serasi_map    = adjacent_map_rtrw,
+  lulc_adjacencies  = lulc_adjacencies,
+  idx_serasi_map    = adjacent_map_combine,
   normalize         = TRUE
 )
 
-idx_padu_ke_rtrw <- padu_ke_rtrw$idx_padu_ke %>% select(-idx_padu_ke_abs)
-idx_padu_ke_map_rtrw <- padu_ke_rtrw$idx_padu_ke_map
+idx_padu_ke <- padu_ke$idx_padu_ke %>% select(-abs_idx_padu_ke)
+idx_padu_ke_map <- padu_ke$idx_padu_ke_map
 
-plot(idx_padu_ke_map_rtrw["idx_padu_ke"], border = 1)
-```
-
-### Tahap 3.1.3. Perhitungan PADU-KE RZWP3K
-
-```{r calculate-padu-ke-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Calculate adjacency for LULC vector input
-lulc_adjacencies_rzwp3k <- calculate_lulc_adjacency(
-  lulc_vect,
-  adjacent_map_rzwp3k,
-  id_col = "id_pu",
-  class_col = "ID",
-  parallel = TRUE, 
-  workers = 4
-)
-
-# Calculate padu_ke
-padu_ke_rzwp3k <- calculate_padu_ke(
-  matriks_padu_ke   = matriks_padu_ke,
-  lulc_ref          = lulc_ref,
-  lulc_adjacencies  = lulc_adjacencies_rzwp3k,
-  idx_serasi_map    = adjacent_map_rzwp3k,
-  normalize         = TRUE
-)
-
-idx_padu_ke_rzwp3k     <- padu_ke_rzwp3k$idx_padu_ke %>% select(-idx_padu_ke_abs)
-idx_padu_ke_map_rzwp3k <- padu_ke_rzwp3k$idx_padu_ke_map
-
-plot(idx_padu_ke_map_rzwp3k["idx_padu_ke"], border = 1)
+plot(idx_padu_ke_map["idx_padu_ke"], border = 1)
 ```
 
 ## Tahap 3.2. Analisis indeks PADU-HS
@@ -320,51 +300,29 @@ tss_rast <- load_and_validate_raster(tss_rast_path)
 
 # Calculate euclidean distance
 #estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
-estuari_euc_dist <- rast("data/raster/padu_hs/EUDist_Estuati_Palu-Parigi.tif")
+estuari_euc_dist <- load_and_validate_raster(estuari_euc_dist_path)
 ```
 
-### Tahap 3.2.2. Perhitungan PADU-HS RTRW
+### Tahap 3.2.2. Perhitungan PADU-HS
 
-```{r calculate-padu-hs-rtrw}
+```{r calculate-padu-hs}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-# Calculate padu-hs rtrw
-padu_hs_rtrw <- calculate_padu_hs(
-  idx_serasi_map    = adjacent_map_rtrw,
+# Calculate padu-hs 
+padu_hs <- calculate_padu_hs(
+  idx_serasi_map    = adjacent_map_combine,
   estuari_euc_dist  = estuari_euc_dist,
   tss_rast          = tss_rast,
   max_dist          = NA
 )
 
-idx_padu_hs_rtrw <- padu_hs_rtrw$idx_padu_hs
-idx_padu_hs_map_rtrw <- padu_hs_rtrw$idx_padu_hs_map  
+idx_padu_hs <- padu_hs$idx_padu_hs
+idx_padu_hs_map <- padu_hs$idx_padu_hs_map  
 
-plot(idx_padu_hs_map_rtrw["idx_padu_hs"], border = 1)
-```
-
-### Tahap 3.2.3. Perhitungan PADU-HS RZWP3K
-
-```{r calculate-padu-hs-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Calculate padu-hs rzwp3k
-padu_hs_rzwp3k <- calculate_padu_hs(
-  idx_serasi_map    = adjacent_map_rzwp3k,
-  estuari_euc_dist  = estuari_euc_dist,
-  tss_rast          = tss_rast,
-  max_dist          = NA
-)
-
-idx_padu_hs_rzwp3k <- padu_hs_rzwp3k$idx_padu_hs
-idx_padu_hs_map_rzwp3k <- padu_hs_rzwp3k$idx_padu_hs_map  
-
-plot(idx_padu_hs_map_rzwp3k["idx_padu_hs"], border = 1)
+plot(idx_padu_hs_map["idx_padu_hs"], border = 1)
 ```
 
 ## Tahap 3.3. Analisis indeks PADU-KL
@@ -381,17 +339,17 @@ Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian
 protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path) %>% st_make_valid()
 ```
 
-### Tahap 3.3.2. Perhitungan PADU-KL RTRW
+### Tahap 3.3.2. Perhitungan PADU-KL
 
-```{r calculate-padu-kl-rtrw}
+```{r calculate-padu-kl}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-# Calculate padu kl rtrw
-idx_padu_kl_map_rtrw <- calculate_overlay_pct(
-  adjacent_map_rtrw, 
+# Calculate padu kl 
+idx_padu_kl_map <- calculate_overlay_pct(
+  adjacent_map_combine, 
   protected_area_vect, 
   title = "protected",
   parallel = TRUE,
@@ -401,34 +359,9 @@ idx_padu_kl_map_rtrw <- calculate_overlay_pct(
     idx_padu_kl = protected_pct/100
   )
 
-idx_padu_kl_rtrw <- as_tibble(idx_padu_kl_map_rtrw %>% st_drop_geometry())
+idx_padu_kl <- as_tibble(idx_padu_kl_map %>% st_drop_geometry())
 
-plot(idx_padu_kl_map_rtrw["idx_padu_kl"], border = 1)
-```
-
-### Tahap 3.3.3. Perhitungan PADU-KL RZWP3K
-
-```{r calculate-padu-kl-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Calculate padu kl rzwp3k
-idx_padu_kl_map_rzwp3k <- calculate_overlay_pct(
-  adjacent_map_rzwp3k, 
-  protected_area_vect, 
-  title = "protected",
-  parallel = TRUE,
-  workers = 5
-) %>%
-  mutate(
-    idx_padu_kl = protected_pct/100
-  )
-
-idx_padu_kl_rzwp3k <- as_tibble(idx_padu_kl_map_rzwp3k %>% st_drop_geometry())
-
-plot(idx_padu_kl_map_rzwp3k["idx_padu_kl"], border = 1)
+plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
 ```
 
 ## Tahap 3.4. Analisis indeks PADU-KH
@@ -496,60 +429,32 @@ if (habitat_from_lulc == "Yes") {
 }
 ```
 
-### Tahap 3.4.2. Perhitungan PADU-KH RTRW
+### Tahap 3.4.2. Perhitungan PADU-KH
 
-```{r calculate-padu-kh-rtrw}
+```{r calculate-padu-kh}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
 # Calculate overlay
-coastal_habitat_map_rtrw <- calculate_overlay_pct(
-  adjacent_map_rtrw, 
+coastal_habitat_map <- calculate_overlay_pct(
+  adjacent_map_combine, 
   coastal_habitat, 
   title = "coastal_habitat",
   parallel = TRUE,
-  workers = 6
+  workers = 5
   )
 
 # Calculate idx padu kh
-idx_padu_kh_map_rtrw <- coastal_habitat_map_rtrw %>%
+idx_padu_kh_map <- coastal_habitat_map %>%
   mutate(
     idx_padu_kh = coastal_habitat_pct/100
   )
 
-idx_padu_kh_rtrw <- as_tibble(idx_padu_kh_map_rtrw %>% st_drop_geometry())
+idx_padu_kh <- as_tibble(idx_padu_kh_map %>% st_drop_geometry())
 
-plot(idx_padu_kh_map_rtrw["idx_padu_kh"], border = 1)
-```
-
-### Tahap 3.4.3. Perhitungan PADU-KH RZWP3K
-
-```{r calculate-padu-kh-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Calculate overlay
-coastal_habitat_map_rzwp3k <- calculate_overlay_pct(
-  adjacent_map_rzwp3k, 
-  coastal_habitat, 
-  title = "coastal_habitat",
-  parallel = TRUE,
-  workers = 6
-)
-
-# Calculate idx padu kh
-idx_padu_kh_map_rzwp3k <- coastal_habitat_map_rzwp3k %>%
-  mutate(
-    idx_padu_kh = coastal_habitat_pct/100
-  )
-
-idx_padu_kh_rzwp3k <- as_tibble(idx_padu_kh_map_rzwp3k %>% st_drop_geometry())
-
-plot(idx_padu_kh_map_rzwp3k["idx_padu_kh"], border = 1)
+plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
 ```
 
 ## Tahap 3.5. Analisis indeks PADU-RTp
@@ -576,44 +481,24 @@ industry_euc_dist <- rast(industry_euc_dist_path)
 pelayaran_euc_dist <- rast(pelayaran_euc_dist_path)
 ```
 
-### Tahap 3.5.2. Perhitungan PADU-RTp RTRW
+### Tahap 3.5.2. Perhitungan PADU-RTp
 
-```{r calculate-padu-rtp-rtrw}
+```{r calculate-padu-rtp}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-padu_rtp_rtrw <- calculate_padu_rtp(
-  idx_serasi_map      = adjacent_map_rtrw,
+padu_rtp <- calculate_padu_rtp(
+  idx_serasi_map      = adjacent_map_combine,
   industry_euc_dist   = industry_euc_dist,
   pelayaran_euc_dist  = pelayaran_euc_dist
 )
 
-idx_padu_rtp_map_rtrw <- padu_rtp_rtrw$idx_padu_rtp_map 
-idx_padu_rtp_rtrw <- padu_rtp_rtrw$idx_padu_rtp   
+idx_padu_rtp_map <- padu_rtp$idx_padu_rtp_map 
+idx_padu_rtp <- padu_rtp$idx_padu_rtp   
 
-plot(idx_padu_rtp_map_rtrw["idx_padu_rtp"], border = 1)
-```
-
-### Tahap 3.5.3. Perhitungan PADU-RTp RZWP3K
-
-```{r calculate-padu-rtp-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-padu_rtp_rzwp3k <- calculate_padu_rtp(
-  idx_serasi_map      = adjacent_map_rzwp3k,
-  industry_euc_dist   = industry_euc_dist,
-  pelayaran_euc_dist  = pelayaran_euc_dist
-)
-
-idx_padu_rtp_map_rzwp3k <- padu_rtp_rzwp3k$idx_padu_rtp_map 
-idx_padu_rtp_rzwp3k <- padu_rtp_rzwp3k$idx_padu_rtp   
-
-plot(idx_padu_rtp_map_rzwp3k["idx_padu_rtp"], border = 1)
+plot(idx_padu_rtp_map["idx_padu_rtp"], border = 1)
 ```
 
 ## Tahap 3.6. Analisis indeks PADU-SE
@@ -631,14 +516,14 @@ id_col = "id_pu"
 
 # Extract raster to pu
 ntl_extracted <- extract_raster_to_sf(
-  pu = idx_serasi_map,
+  pu = adjacent_map_combine,
   rast = ntl_map,
   id_col = id_col,
   new_col = "ntl"
 )
 
 popdens_extracted <- extract_raster_to_sf(
-  pu = idx_serasi_map,
+  pu = adjacent_map_combine,
   rast = popdens_map,
   id_col = id_col,
   new_col = "popdens"
@@ -690,48 +575,26 @@ Indeks PADU-KI (Ketahanan Iklim) menunjukkan daya tahan ruang terhadap dampak pe
 disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path) %>% st_make_valid()
 ```
 
-### Tahap 3.7.2. Perhitungan PADU-KI RTRW
+### Tahap 3.7.2. Perhitungan PADU-KI
 
-```{r calculate-padu-ki-rtrw}
+```{r calculate-padu-ki}
 #| error: true
 #| warning: false
 #| message: false
 #| include: true
 
-padu_ki_rtrw <- calculate_padu_ki(
-  idx_serasi_map      = adjacent_map_rtrw,
+padu_ki <- calculate_padu_ki(
+  idx_serasi_map      = adjacent_map_combine,
   disaster_risk_vect  = disaster_risk_vect,
   value_col           = "Kerawanan",
   parallel            = TRUE,
-  workers             = 6
+  workers             = 5
 )
 
-idx_padu_ki_map_rtrw <- padu_ki_rtrw$idx_padu_ki_map
-idx_padu_ki_rtrw <- padu_ki_rtrw$idx_padu_ki       
+idx_padu_ki_map <- padu_ki$idx_padu_ki_map
+idx_padu_ki <- padu_ki$idx_padu_ki       
 
-plot(idx_padu_ki_map_rtrw["idx_padu_ki"], border = 1)
-```
-
-### Tahap 3.7.3. Perhitungan PADU-KI RZWP3K
-
-```{r calculate-padu-ki-rzwp3k}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-padu_ki_rzwp3k <- calculate_padu_ki(
-  idx_serasi_map      = adjacent_map_rzwp3k,
-  disaster_risk_vect  = disaster_risk_vect,
-  value_col           = "Kerawanan",
-  parallel            = TRUE,
-  workers             = 6
-)
-
-idx_padu_ki_map_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki_map
-idx_padu_ki_rzwp3k <- padu_ki_rzwp3k$idx_padu_ki       
-
-plot(idx_padu_ki_map_rzwp3k["idx_padu_ki"], border = 1)
+plot(idx_padu_ki_map["idx_padu_ki"], border = 1)
 ```
 
 # Tahap 4. Perhitungan indeks PADU pasangan/gabungan
@@ -739,33 +602,6 @@ plot(idx_padu_ki_map_rzwp3k["idx_padu_ki"], border = 1)
 Tahapan ini menghitung nilai indeks PADU dari sejumlah analisi PADU yang dilakukan. Perhitungan rerata bobot (nilai bobot didefinisikan oleh pengguna) digunakan untuk menghasilkan index PADU gabungan dari 7 analisis PADU yang dilakukan.
 
 Jika terdapat komponen analisis PADU yang hilang, maka kalkulasi PADU dilakukan melalui perhitungan rata-rata nilai keseluruhan analisis yang tersedia.
-
-```{r shortcut-to-padu-final}
-#| error: false
-#| warning: false
-#| message: false
-#| include: false
-
-# rtrw padu
-idx_padu_ke_rtrw <- st_read("output/step2/idx_padu_ke_map_rtrw.gpkg") %>% st_drop_geometry() %>% select(-idx_padu_abs)
-idx_padu_hs_rtrw <- st_read("output/step2/idx_padu_hs_map_rtrw.gpkg") %>% st_drop_geometry()
-idx_padu_kl_rtrw <- st_read("output/step2/idx_padu_kl_map_rtrw.gpkg") %>% st_drop_geometry()
-idx_padu_kh_rtrw <- st_read("output/step2/idx_padu_kh_map_rtrw.gpkg") %>% st_drop_geometry()
-idx_padu_rtp_rtrw <- st_read("output/step2/idx_padu_rtp_map_rtrw.gpkg") %>% st_drop_geometry()
-# idx_padu_se_rtrw <- st_read("output/step2/idx_padu_se_rtrw") %>% st_drop_geometry()
-idx_padu_ki_rtrw <- st_read("output/step2/idx_padu_ki_map_rtrw.gpkg") %>% st_drop_geometry()
-
-# rzwp3k padu
-idx_padu_ke_rzwp3k <- st_read("output/step2/idx_padu_ke_map_rzwp3k.gpkg") %>% st_drop_geometry() %>% select(-idx_padu_abs)
-idx_padu_hs_rzwp3k <- st_read("output/step2/idx_padu_hs_map_rzwp3k.gpkg") %>% st_drop_geometry()
-idx_padu_kl_rzwp3k <- st_read("output/step2/idx_padu_kl_map_rzwp3k.gpkg") %>% st_drop_geometry()
-idx_padu_kh_rzwp3k <- st_read("output/step2/idx_padu_kh_map_rzwp3k.gpkg") %>% st_drop_geometry()
-idx_padu_rtp_rzwp3k <- st_read("output/step2/idx_padu_rtp_map_rzwp3k.gpkg") %>% st_drop_geometry()
-# idx_padu_se_rzwp3k <- st_read("output/step2/idx_padu_se_rzwp3k") %>% st_drop_geometry()
-idx_padu_ki_rzwp3k <- st_read("output/step2/idx_padu_ki_map_rzwp3k.gpkg") %>% st_drop_geometry()
-```
-
-## Tahap 4.1. Perhitungan indeks PADU untuk masing-masing RTRW dan RZWP3K
 
 ```{r calculate-padu-final}
 #| error: true
@@ -778,91 +614,32 @@ padu_idx_weight <- load_and_validate_table(padu_idx_weight_path)
 weight_sum <- sum(padu_idx_weight[2])
 
 if (weight_sum == 1){
-  idx_padu_map_rtrw <- adjacent_map_rtrw
-  idx_padu_map_rzwp3k <- adjacent_map_rzwp3k
+  # Remove unecessary fields
+  idx_padu_map <- adjacent_map_admin
   
   # List all PADU analysis
-  padu_rtrw_list <- list(
-    idx_padu_ke_rtrw,
-    idx_padu_hs_rtrw,
-    idx_padu_kl_rtrw,
-    idx_padu_kh_rtrw,
-    idx_padu_rtp_rtrw,
-    # idx_padu_se_rtrw,
-    idx_padu_ki_rtrw
-  )
-  
-  padu_rzwp3k_list <- list(
-    idx_padu_ke_rzwp3k,
-    idx_padu_hs_rzwp3k,
-    idx_padu_kl_rzwp3k,
-    idx_padu_kh_rzwp3k,
-    idx_padu_rtp_rzwp3k,
-    # idx_padu_se_rzwp3k,
-    idx_padu_ki_rzwp3k
+  padu_list <- list(
+    idx_padu_ke,
+    idx_padu_hs,
+    idx_padu_kl,
+    idx_padu_kh,
+    idx_padu_rtp,
+    idx_padu_se,
+    idx_padu_ki
   )
   
   # Calculate PADU index
-  idx_padu_map_rtrw <- calculate_padu_index(
-    padu_list = padu_rtrw_list,
-    idx_padu_map = idx_padu_map_rtrw,
+  idx_padu_map <- calculate_padu_index(
+    padu_list = padu_list,
+    idx_padu_map = idx_padu_map,
     padu_idx_weight = padu_idx_weight
   )
   
-  idx_padu_map_rzwp3k <- calculate_padu_index(
-    padu_list = padu_rzwp3k_list,
-    idx_padu_map = idx_padu_map_rzwp3k,
-    padu_idx_weight = padu_idx_weight
-  )
-  
-  # st_write(idx_padu_map_rtrw, "output/idx_padu_map_rtrw.gpkg", append=FALSE)
-  # st_write(idx_padu_map_rzwp3k, "output/idx_padu_map_rzwp3k.gpkp", append=FALSE)
-  # plot(idx_padu_map_rtrw["idx_padu_final"], border = 1)
+  st_write(idx_padu_map, paste0(output_dir, "idx_padu_adjacent.gpkg"), append=FALSE)
+  plot(idx_padu_map["idx_padu_final"], border = 1)
 } else {
   stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
 }
-```
-
-## Tahap 4.2. Perhitungan indeks PADU gabungan pasangan RTRW dan RZWP3K
-
-```{r calculate-padu-combine-pair}
-#| error: true
-#| warning: false
-#| message: false
-#| include: true
-
-# Calculate idx_padu_pair
-idx_pair <- idx_padu_map_rtrw %>%
-  st_drop_geometry() %>%
-  select(
-    id_pu,
-    idx_serasi,
-    idx_padu_rtrw = idx_padu_final
-  ) %>%
-  left_join(
-    idx_padu_map_rzwp3k %>%
-      st_drop_geometry() %>%
-      select(
-        id_pu,
-        idx_padu_rzwp3k = idx_padu_final
-      ),
-    by = "id_pu"
-  ) %>%
-  mutate(
-    idx_padu_final = if_else(
-      idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0,
-      0,
-      2 * idx_padu_rtrw * idx_padu_rzwp3k /
-        (idx_padu_rtrw + idx_padu_rzwp3k)
-    )
-  )
-
-# Merge adjacent map with idx_pair
-idx_padu_map <- adjacent_map %>%
-  left_join(
-    idx_pair,
-    by = "id_pu"
-  )
 ```
 
 # Tahap 5. Perhitungan indeks PADAN
@@ -899,7 +676,7 @@ Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap 
 apply_length <- TRUE  
 apply_idx    <- TRUE  
 length_filter <- 1500
-idx_filter    <- 0.75
+idx_filter    <- 0.25
 
 # Compute filter
 keep <- rep(TRUE, nrow(idx_padan_map))
@@ -929,7 +706,7 @@ alternative_zones <- determine_alternative_zones(
   serasi_matrix = matriks_serasi,
   n_alt = 5,
   step = "step2",
-  output_dir = "output/step2/AOI_Palu-Parigi"
+  output_dir = output_dir
 )
 
 # Read alternative table

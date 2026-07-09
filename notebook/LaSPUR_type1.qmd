@@ -37,6 +37,7 @@ rzwp3k_path <- "data/vector/serasi/step1/Step1_RZWP3K_Palu-Parigi_Explode.shp"
 rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
 rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
 matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
+admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/serasi/admin/gadm41_IDN_3_kecamatan.shp"
 
 # PADU_KE input data
 lulc_vect_path <- "data/vector/padu_ke/PL2024_Coral_Seagrass_Union_Palu-Parigi.shp"
@@ -147,10 +148,10 @@ Tahap ini mengintegrasikan nilai indeks SERASI yang diperoleh dari matriks kompa
 # Merge serasi index to adjacent area just if the zone class name is matched
 if (length(valid_class$mismatch_col3) == 0 &&
     length(valid_class$mismatch_col4) == 0) {
-  idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) 
-  idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
-  write_sf(idx_serasi_map, "output/step1/idx_serasi_overlap.gpkg", overwrite = TRUE)
-  plot(idx_serasi_map["idx_serasi"])
+  idx_serasi_map_raw <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) 
+  idx_serasi_table <- as_tibble(idx_serasi_map_raw %>% sf::st_drop_geometry())
+  write_sf(idx_serasi_map_raw, "output/step1/idx_serasi_overlap.gpkg", overwrite = TRUE)
+  plot(idx_serasi_map_raw["idx_serasi"])
   print(idx_serasi_table)
   
   message("All class names matched. Compatibility values merged successfully.")
@@ -160,6 +161,28 @@ if (length(valid_class$mismatch_col3) == 0 &&
 ```
 
 # Tahap 3. Analisis Indeks PADU
+
+```{r prepare-idx-serasi-for-padu}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Merge adjacent map into single area
+admin <- load_and_validate_shapefile(admin_path)
+
+# Merge with administrative map
+admin_col_name <- "NAME_3"
+new_col_name <- "admin" 
+
+idx_serasi_map <- st_join(
+  idx_serasi_map_raw, 
+  admin[, admin_col_name],  
+  join = st_intersects, 
+  largest = TRUE
+) %>%
+  rename(!!new_col_name := !!sym(admin_col_name))
+```
 
 ## Tahap 3.1. Analisis indeks PADU-KE
 
@@ -572,7 +595,7 @@ if (weight_sum == 1){
     padu_idx_weight = padu_idx_weight
   )
   
-  st_write(idx_padu_map, "output/idx_padu.gpkg", append=FALSE)
+  st_write(idx_padu_map, "output/idx_padu_overlaps.gpkg", append=FALSE)
   plot(idx_padu_map["idx_padu_final"], border = 1)
 } else {
   stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")

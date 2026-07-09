@@ -492,3 +492,13 @@ validate_output_dir <- function(dir_path) {
   }
   return(TRUE)
 }
+
+# Ensure geometry column is named "geometry"
+ensure_geometry_name <- function(sf_obj) {
+  geom_col <- attr(sf_obj, "sf_column")
+  if (!is.null(geom_col) && geom_col != "geometry") {
+    names(sf_obj)[names(sf_obj) == geom_col] <- "geometry"
+    sf_obj <- sf::st_set_geometry(sf_obj, "geometry")
+  }
+  return(sf_obj)
+}

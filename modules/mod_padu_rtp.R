@@ -238,7 +238,17 @@ padu_rtp_server <- function(id, output_dir) {
       req(input$idx_serasi_file)
       tryCatch({
         path <- extract_vector_path(input$idx_serasi_file)
-        rv$idx_serasi_map <- load_and_validate_shapefile(path)
+        sf_obj <- load_and_validate_shapefile(path)
+        sf_obj <- ensure_geometry_name(sf_obj)  
+        rv$idx_serasi <- sf_obj
+        
+        # Conditional dissolve idx_serasi_map
+        if ("length" %in% colnames(rv$idx_serasi)) {
+          rv$idx_serasi_map <- dissolve_id_pu(rv$idx_serasi)
+        } else {
+          rv$idx_serasi_map <- rv$idx_serasi 
+        }
+        
         showNotification("Peta Indeks SERASI berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$idx_serasi_map <- NULL
@@ -251,6 +261,7 @@ padu_rtp_server <- function(id, output_dir) {
       req(input$ind_input_type == "vector", input$ind_file_vect, rv$idx_serasi_map)
       tryCatch({
         ind_vect <- load_and_validate_shapefile(extract_shp_path(input$ind_file_vect))
+        ind_vect <- ensure_geometry_name(ind_vect)  
         append_log("Menghitung jarak Euclidean dari vektor industri...")
         rv$industry_euc_dist <- calculate_euclidean_dist(
           ind_vect,
@@ -280,6 +291,7 @@ padu_rtp_server <- function(id, output_dir) {
       req(input$pel_input_type == "vector", input$pel_file_vect, rv$idx_serasi_map)
       tryCatch({
         pel_vect <- load_and_validate_shapefile(extract_shp_path(input$pel_file_vect))
+        pel_vect <- ensure_geometry_name(pel_vect)  
         append_log("Menghitung jarak Euclidean dari vektor alur pelayaran...")
         rv$pelayaran_euc_dist <- calculate_euclidean_dist(
           pel_vect,
@@ -415,7 +427,6 @@ padu_rtp_server <- function(id, output_dir) {
           incProgress(0.1, detail = "Mempersiapkan perhitungan...")
           append_log("Menghitung indeks PADU-RTp...")
           
-          # FIXED: Removed extra arguments that were causing the error.
           padu_rtp <- calculate_padu_rtp(
             idx_serasi_map      = idx_map,
             industry_euc_dist   = rv$industry_euc_dist,

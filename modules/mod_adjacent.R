@@ -128,6 +128,10 @@ adjacent_server <- function(id, output_dir) {
       rtrw_prioritas = NULL,
       rzwp3k_prioritas = NULL,
       
+      # administrative data (NEW)
+      admin_vect = NULL,
+      admin_col = NULL,        
+      
       # step2 data
       matriks_serasi = NULL,
       threshold_ha = 0,
@@ -179,6 +183,20 @@ adjacent_server <- function(id, output_dir) {
         
         hr(),
         
+        # ── NEW: Administrative map input ──────────────────────
+        tags$p(tags$i(class = "bi bi-map me-1"), "Peta Administratif (.shp) (Opsional)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                   "Unggah shapefile batas administratif untuk menggabungkan hasil analisis per wilayah. (Kosongkan jika tidak diperlukan)"),
+        fileInput(ns("admin_file"), label = NULL,
+                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
+                  multiple = TRUE),
+        
+        # Dynamic dropdown for admin column
+        uiOutput(ns("admin_field_ui")),
+        
+        hr(),
+        
         tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Acuan Pola RTRW (.xlsx)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         fileInput(ns("rtrw_prioritas_file"), label = NULL, accept = ".xlsx"),
@@ -204,11 +222,49 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
-    # ── Load shapefiles and tables ─────────────────────────────
+    # ── Admin shapefile and field selection ────────────────────
+    observeEvent(input$admin_file, {
+      req(input$admin_file)
+      tryCatch({
+        shp_path <- extract_shp_path(input$admin_file)
+        admin_sf <- load_and_validate_shapefile(shp_path)
+        admin_sf <- ensure_geometry_name(admin_sf)  
+        rv$admin_vect <- admin_sf
+        
+        # Extract column names (drop geometry and maybe others)
+        col_names <- names(admin_sf)
+        col_names <- col_names[!col_names %in% c("geometry", "geom")]
+        
+        # Update select input choices via UI output
+        output$admin_field_ui <- renderUI({
+          req(rv$admin_vect)
+          selectInput(
+            ns("admin_field"),
+            label = "Pilih kolom identitas wilayah administratif",
+            choices = col_names,
+            selected = if (!is.null(rv$admin_col) && rv$admin_col %in% col_names) rv$admin_col else col_names[1]
+          )
+        })
+        
+        showNotification("Peta Administratif berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$admin_vect <- NULL
+        output$admin_field_ui <- renderUI(NULL)
+        showNotification(paste("Gagal memuat Peta Administratif:", e$message), type = "error")
+      })
+    })
+    
+    # Store selected admin column
+    observeEvent(input$admin_field, {
+      rv$admin_col <- input$admin_field
+    })
+    
+    # ── Load other shapefiles and tables ──────────────────────
     observeEvent(input$rtrw_file, {
       req(input$rtrw_file)
       tryCatch({
-        rv$rtrw_vect <- load_and_validate_shapefile(extract_shp_path(input$rtrw_file))
+        sf <- load_and_validate_shapefile(extract_shp_path(input$rtrw_file))
+        rv$rtrw_vect <- ensure_geometry_name(sf)   
         showNotification("Peta RTRW berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$rtrw_vect <- NULL
@@ -219,7 +275,8 @@ adjacent_server <- function(id, output_dir) {
     observeEvent(input$rzwp3k_file, {
       req(input$rzwp3k_file)
       tryCatch({
-        rv$rzwp3k_vect <- load_and_validate_shapefile(extract_shp_path(input$rzwp3k_file))
+        sf <- load_and_validate_shapefile(extract_shp_path(input$rzwp3k_file))
+        rv$rzwp3k_vect <- ensure_geometry_name(sf)  
         showNotification("Peta RZWP3K berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$rzwp3k_vect <- NULL
@@ -332,7 +389,7 @@ adjacent_server <- function(id, output_dir) {
             value = 1, min = 0.001, step = 1
           ),
           tags$small(
-                  "Menentukan ukuran grid terkecil untuk pembulatan koordinat. 
+            "Menentukan ukuran grid terkecil untuk pembulatan koordinat. 
           Semakin kecil nilainya (misal 0.1), semakin presisi bentuk geometri, 
           tetapi bisa memunculkan celah kecil atau tumpang tindih yang tidak diinginkan. 
           Semakin besar (misal 10), koordinat akan lebih kasar, 
@@ -348,7 +405,7 @@ adjacent_server <- function(id, output_dir) {
             value = 0.5, min = 0, step = 0.1
           ),
           tags$small(
-                  "Mengoreksi celah kecil antara batas RZWP3K dan RTRW dengan 'menjepret' 
+            "Mengoreksi celah kecil antara batas RZWP3K dan RTRW dengan 'menjepret' 
           (menarik) garis batas RZWP3K mendekati RTRW sebelum menghitung panjang segmen bersama. 
           Nilai 0.5 meter cukup untuk mengatasi kesalahan digitasi umum. 
           Naikkan (misal 1–2 meter) jika sering muncul hasil panjang = 0 meskipun secara visual 
@@ -468,16 +525,41 @@ adjacent_server <- function(id, output_dir) {
             idx_serasi_map <- merge_attributes_to_map(adjacent_map, rv$matriks_serasi)
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
+            # ── Merge with administrative map (if provided) ──
+            if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
+              append_log(">> Menggabungkan hasil dengan peta administratif...")
+              
+              # Ensure both are in the same CRS (transform admin to match idx_serasi_map)
+              admin_sf <- rv$admin_vect
+              if (sf::st_crs(admin_sf) != sf::st_crs(idx_serasi_map)) {
+                admin_sf <- sf::st_transform(admin_sf, sf::st_crs(idx_serasi_map))
+              }
+              
+              # Spatial join: assign each polygon to the admin unit it intersects most
+              idx_serasi_map <- sf::st_join(
+                idx_serasi_map,
+                admin_sf[, rv$admin_col, drop = FALSE],
+                join = sf::st_intersects,
+                largest = TRUE
+              )
+              
+              # Rename the admin column to a standard name ("admin")
+              names(idx_serasi_map)[names(idx_serasi_map) == rv$admin_col] <- "admin"
+              
+              append_log("   Penggabungan administratif selesai.")
+            }
+            
+            # Save outputs
             gpkg_path <- file.path(output_dir(), "idx_serasi_adjacent.gpkg")
             xlsx_path <- file.path(output_dir(), "idx_serasi_adjacent.xlsx")
             dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
             
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-            openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
+            openxlsx::write.xlsx(as_tibble(sf::st_drop_geometry(idx_serasi_map)), xlsx_path)
             
             rv$gpkg_path <- gpkg_path
             rv$xlsx_path <- xlsx_path
-            rv$analysis_result <- list(map = idx_serasi_map, table = idx_serasi_table)
+            rv$analysis_result <- list(map = idx_serasi_map, table = as_tibble(sf::st_drop_geometry(idx_serasi_map)))
             
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis bertetangga berhasil diselesaikan.")

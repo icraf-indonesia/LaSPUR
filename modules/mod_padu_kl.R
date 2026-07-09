@@ -192,8 +192,19 @@ padu_kl_server <- function(id, output_dir) {
         tryCatch({
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          pu <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          pu_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
+          pu_raw <- ensure_geometry_name(pu_raw)  
+          
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(pu_raw)) {
+            pu <- dissolve_id_pu(pu_raw)
+          } else {
+            pu <- pu_raw  
+          }
+          
           overlay <- load_and_validate_shapefile(extract_shp_path(input$protected_area_file))
+          overlay <- ensure_geometry_name(overlay)  
+          
           append_log("Data berhasil dimuat.")
           
           # Step 2: Calculate overlay percentage (progress 20% → 80%)

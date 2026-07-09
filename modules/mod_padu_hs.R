@@ -229,7 +229,8 @@ padu_hs_server <- function(id, output_dir) {
       req(input$idx_serasi_file)
       tryCatch({
         path <- extract_vector_path(input$idx_serasi_file)
-        rv$idx_serasi_map <- load_and_validate_shapefile(path)
+        sf_obj <- load_and_validate_shapefile(path)
+        rv$idx_serasi_map <- ensure_geometry_name(sf_obj) 
         showNotification("Peta Indeks SERASI berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$idx_serasi_map <- NULL
@@ -266,6 +267,7 @@ padu_hs_server <- function(id, output_dir) {
       tryCatch({
         showNotification("Menghitung jarak Euclidean dari shapefile estuari...", type = "message")
         estuari <- load_and_validate_shapefile(extract_shp_path(input$estuari_file))
+        estuari <- ensure_geometry_name(estuari)  
         euc <- calculate_euclidean_dist(
           estuari,
           rv$idx_serasi_map,
@@ -369,9 +371,16 @@ padu_hs_server <- function(id, output_dir) {
           incProgress(0.1, detail = "Mempersiapkan perhitungan...")
           append_log("Menghitung indeks PADU-HS...")
           
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(rv$idx_serasi_map)) {
+            idx_serasi_map <- dissolve_id_pu(rv$idx_serasi_map)
+          } else {
+            idx_serasi_map <- rv$idx_serasi_map  
+          }
+          
           incProgress(0.2, detail = "Memproses jarak estuari dan TSS...")
           padu_hs <- calculate_padu_hs(
-            idx_serasi_map    = rv$idx_serasi_map,
+            idx_serasi_map    = idx_serasi_map,
             estuari_euc_dist  = rv$euc_dist_rast,
             tss_rast          = rv$tss_rast,
             max_dist          = input$estuari_dist_max
