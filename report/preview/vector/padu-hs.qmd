@@ -10,15 +10,13 @@ execute:
 source("R/utils.R")
 ```
 
-## Deskripsi
+# Deskripsi
 
 Dataset PADU-HS merupakan data vektor yang digunakan sebagai masukan pada analisis PADU-HS di LaSPUR. Dataset ini merepresentasikan kawasan estuari yang menjadi salah satu parameter dalam penilaian kesesuaian spasial dan rekonsiliasi tata ruang darat dan laut.
 
 ---
 
-# 1. Data yang Digunakan
-
-## Vektor
+# Data yang Digunakan
 
 | Nama Data | Format | Keterangan |
 |-----------|--------|------------|
@@ -26,9 +24,7 @@ Dataset PADU-HS merupakan data vektor yang digunakan sebagai masukan pada analis
 
 ---
 
-# 2. Visualisasi
-
-## Kawasan Estuari
+# Visualisasi
 
 ```{r}
 create_vector_map(
@@ -42,7 +38,7 @@ create_vector_map(
 
 ---
 
-# 3. Sumber Data
+# Sumber Data
 
 | Dataset | Instansi | Tahun | URL |
 |----------|----------|-------|-----|
@@ -50,9 +46,7 @@ create_vector_map(
 
 ---
 
-# 4. Spesifikasi Teknis
-
-## Kawasan Estuari
+# Spesifikasi Teknis
 
 ```{r}
 get_vector_metadata(
@@ -66,7 +60,7 @@ get_vector_metadata(
 
 ---
 
-# 5. Digunakan pada Tahapan
+# Digunakan pada Tahapan
 
 | Tahapan | Digunakan |
 |----------|:---------:|
@@ -77,9 +71,7 @@ get_vector_metadata(
 
 ---
 
-# 6. Pemeriksaan Data
-
-## Kawasan Estuari
+# Pemeriksaan Data
 
 ```{r}
 check_vector(

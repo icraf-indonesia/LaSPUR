@@ -3,62 +3,79 @@ project:
   execute-dir: project
 
 website:
-  title: "Referensi Data Masukan LaSPUR"
+  title: "LaSPUR (Land & Sea Planning Unit Reconcilliation)"
 
-  navbar:
-    left:
+  sidebar:
+    style: docked
+    search: true
 
-      - text: "🏠 Beranda"
+    contents:
+
+      # =====================================================
+      # ALAT BANTU LASPUR
+      # =====================================================
+      - text: "Alat Bantu LaSPUR"
         href: index.qmd
 
-      - text: "📊 Tabel Acuan"
-        href: tables.qmd
+      # =====================================================
+      # DATA INPUT
+      # =====================================================
+      - section: "Data Input"
+        contents:
 
-      - text: "🗺️ Data Raster"
-        menu:
-          - text: "PADU-KE"
-            href: raster/padu-ke.qmd
+          - section: "Tabular"
+            contents:
+              - text: "Step 1"
+                href: step1-tables.qmd
+              - text: "Step 2"
+                href: step2-tables.qmd
+              - text: "Step 3"
 
-          - text: "PADU-HS"
-            href: raster/padu-hs.qmd
+          - section: "Raster"
+            contents:
+              - text: "PADU-KE"
+                href: raster/padu-ke.qmd
+              - text: "PADU-HS"
+                href: raster/padu-hs.qmd
+              - text: "PADU-RTP"
+                href: raster/padu-rtp.qmd
+              - text: "PADU-SE"
+                href: raster/padu-se.qmd  
 
-          - text: "PADU-RTP"
-            href: raster/padu-rtp.qmd
+          - section: "Vektor"
+            contents:
+              - text: "Administrasi"
+                href: vector/administrasi.qmd
+              - text: "SERASI"
+                href: vector/serasi.qmd
+              - text: "PADU-KE"
+                href: vector/padu-ke.qmd
+              - text: "PADU-HS"
+                href: vector/padu-hs.qmd
+              - text: "PADU-KL"
+                href: vector/padu-kl.qmd
+              - text: "PADU-KH"
+                href: vector/padu-kh.qmd
+              - text: "PADU-RTP"
+                href: vector/padu-rtp.qmd
+              - text: "PADU-KI"
+                href: vector/padu-ki.qmd
 
-      - text: "📍 Data Vektor"
-        menu:
-
-          - text: "SERASI"
-            href: vector/serasi.qmd
-
-          - text: "PADU-KE"
-            href: vector/padu-ke.qmd
-
-          - text: "PADU-HS"
-            href: vector/padu-hs.qmd
-
-          - text: "PADU-KH"
-            href: vector/padu-kh.qmd
-
-          - text: "PADU-KI"
-            href: vector/padu-ki.qmd
-
-          - text: "PADU-KL"
-            href: vector/padu-kl.qmd
-
-          - text: "PADU-RTP"
-            href: vector/padu-rtp.qmd
-
-      - text: "✔️ Validasi"
-        href: validation.qmd
-
-      - text: "📖 Glosarium"
-        href: glossary.qmd
+      # =====================================================
+      # PANDUAN PENGGUNAAN
+      # =====================================================
+      - text: "Panduan Penggunaan"
+        href: guide.qmd
 
 format:
   html:
     theme: cosmo
     toc: true
     toc-depth: 3
-    code-fold: false
-    page-layout: article
+    code-copy: true
+    smooth-scroll: true
+    number-sections: true
+    link-external-newwindow: true
+    link-external-icon: true
+    include-after-body: footer.html
+    css: styles.css

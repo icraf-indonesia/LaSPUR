@@ -10,15 +10,13 @@ execute:
 source("R/utils.R")
 ```
 
-## Deskripsi
+# Deskripsi
 
 Dataset PADU-KH merupakan kumpulan data vektor yang digunakan untuk mengidentifikasi kawasan habitat penting dalam analisis PADU-KH. Dataset ini terdiri atas ekosistem mangrove, terumbu karang, dan padang lamun yang menjadi dasar penilaian kesesuaian spasial pada proses rekonsiliasi tata ruang.
 
 ---
 
-# 1. Data yang Digunakan
-
-## Vektor
+# Data yang Digunakan
 
 | Nama Data | Format | Keterangan |
 |-----------|--------|------------|
@@ -28,7 +26,7 @@ Dataset PADU-KH merupakan kumpulan data vektor yang digunakan untuk mengidentifi
 
 ---
 
-# 2. Visualisasi
+# Visualisasi
 
 ## Mangrove
 
@@ -68,7 +66,7 @@ create_vector_map(
 
 ---
 
-# 3. Sumber Data
+# Sumber Data
 
 | Dataset | Instansi | Tahun | URL |
 |----------|----------|-------|-----|
@@ -78,7 +76,7 @@ create_vector_map(
 
 ---
 
-# 4. Spesifikasi Teknis
+# Spesifikasi Teknis
 
 ## Mangrove
 
@@ -118,7 +116,7 @@ get_vector_metadata(
 
 ---
 
-# 5. Digunakan pada Tahapan
+# Digunakan pada Tahapan
 
 | Tahapan | Digunakan |
 |----------|:---------:|
@@ -129,7 +127,7 @@ get_vector_metadata(
 
 ---
 
-# 6. Pemeriksaan Data
+# Pemeriksaan Data
 
 ## Mangrove
 

@@ -1,118 +1,192 @@
 ---
-title: "Beranda"
+title: "Alat Bantu LaSPUR"
 execute:
   echo: false
+  warning: false
+  message: false
 ---
 
-# Referensi Data Masukan LaSPUR
+```{r setup}
+source("R/utils.R")
+```
 
-## Selamat Datang
+# Tentang
 
-Website ini menyediakan dokumentasi seluruh data masukan (input data) yang digunakan dalam proses analisis pada aplikasi **LaSPUR (Land & Sea Planning Unit Reconcilliation)**.
+## Definisi dan Tujuan Modul
 
-Dokumentasi ini bertujuan untuk membantu pengguna memahami sumber data, spesifikasi teknis, struktur atribut, serta tahapan penggunaan setiap dataset sehingga proses analisis dapat dilakukan secara konsisten dan terdokumentasi dengan baik.
+**Land and Seascape Planning Unit Reconciliation (LaSPUR)** merupakan alat bantu yang dikembangkan untuk mendukung proses rekonsiliasi antara tata ruang darat (**Rencana Tata Ruang Wilayah/RTRW**) dan tata ruang laut (**Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil/RZWP3K**). Modul ini membantu pengguna dalam mengidentifikasi potensi konflik pemanfaatan ruang, mengevaluasi tingkat keterpaduan sistem darat dan laut, serta menghasilkan rekomendasi rekonsiliasi berdasarkan analisis spasial dan berbagai indikator lingkungan.
 
----
+LaSPUR mengevaluasi hubungan antara perencanaan ruang darat dan laut berdasarkan tiga kondisi spasial utama berikut.
 
-## Area Data
+### Tumpang Tindih (Overlap)
 
-Dataset yang tersedia pada website ini merupakan **data potongan (clipping)** yang berasal dari wilayah **Provinsi Sulawesi Tengah**.
+Mengidentifikasi dan memberikan rekomendasi penyelesaian terhadap alokasi ruang darat dan laut yang saling bertampalan secara spasial, baik sebagian maupun seluruhnya.
 
-Data tersebut digunakan sebagai contoh (sample dataset) dalam proses pengembangan, pengujian, maupun demonstrasi seluruh modul LaSPUR.
+### Bertetangga (Adjacent)
 
-### Cakupan Wilayah
+Mengidentifikasi dan memberikan rekomendasi area darat dan laut yang saling berbatasan langsung sehingga memerlukan pengelolaan yang terintegrasi untuk mengurangi potensi konflik pemanfaatan ruang.
 
-| Informasi | Keterangan |
-|------------|------------|
-| Provinsi | Sulawesi Tengah |
-| Jenis Data | Data hasil clipping |
-| Format | Raster, Vektor, dan Tabel Acuan |
-| Sistem Koordinat | WGS 84 (EPSG:4326) |
-| Tujuan | Dataset contoh untuk seluruh modul LaSPUR |
+### Berpengaruh (Influenced)
 
----
-
-## Dataset yang Tersedia
-
-Website ini mendokumentasikan beberapa kelompok data sebagai berikut.
-
-### 🗺️ Data Vektor
-
-- SERASI
-- PADU-KE
-- PADU-HS
-- PADU-KH
-- PADU-KI
-- PADU-KL
-- PADU-RTP
+Mengidentifikasi dan memberikan rekomendasi alokasi ruang darat maupun laut yang memberikan dampak ekologis, hidrologis, sosial, maupun ekonomi terhadap wilayah lainnya melalui keterhubungan sistem alami maupun fungsional.
 
 ---
 
-### 🌍 Data Raster
+Untuk mendukung proses rekonsiliasi tersebut, LaSPUR terdiri atas tiga tahapan analisis utama, yaitu **SERASI**, **PADU**, dan **PADAN**.
 
-- Land Cover
-- DEM
-- Slope
-- Curah Hujan
-- dan raster pendukung lainnya
+### Analisis SERASI
 
----
+Analisis **SERASI** menilai kompatibilitas berdasarkan **nomenklatur kawasan darat (RTRW)** yang disandingkan dengan **zonasi laut (RZWP3K)**. Penilaian dilakukan menggunakan matriks keserasian yang menghasilkan **Indeks SERASI** sebagai ukuran tingkat kompatibilitas antara kedua rencana tata ruang.
 
-### 📊 Tabel Acuan
+### Analisis PADU
 
-- Matriks SERASI
-- Prioritas RTRW
-- Prioritas RZWP3K
-- Lookup Table lainnya
+Analisis **PADU** bertujuan untuk meningkatkan keterpaduan setiap unit perencanaan melalui penilaian **indeks komposit** yang menggabungkan berbagai indikator biofisik, lingkungan, sosial, dan ekonomi. Semakin tinggi nilai indeks komposit menunjukkan keterpaduan darat-laut yang lebih baik dalam aspek biofisik, lingkungan, sosial, dan ekonomi.
 
----
+Indeks PADU disusun dari beberapa sub-indeks berikut.
 
-## Penggunaan Data
+| Sub-Indeks | Nama | Deskripsi |
+|------------|------|-----------|
+| **PADU-KE** | Keterpaduan Lahan dan Perairan | Menunjukkan keterpaduan berdasarkan peta penggunaan lahan darat dan zonasi perairan. |
+| **PADU-HS** | Hidrologi dan Sedimentasi | Menggabungkan informasi estuari dan Total Suspended Solid (TSS). |
+| **PADU-KL** | Kawasan Lindung Terintegrasi | Menggunakan peta kawasan lindung di darat maupun laut. |
+| **PADU-KH** | Komposisi Habitat | Menggabungkan peta mangrove, terumbu karang, dan lamun. |
+| **PADU-RTp** | Risiko dan Tekanan | Mengukur tekanan berdasarkan jarak terhadap industri dan alur pelayaran. |
+| **PADU-SE** | Sosial-Ekonomi | Mengidentifikasi tekanan sosial-ekonomi, seperti kepadatan penduduk dan Night-Time Light (NTL). |
+| **PADU-KI** | Ketahanan Iklim | Mengukur kerentanan wilayah pesisir berdasarkan topografi, geomorfologi, bencana, dan indikator perubahan iklim lainnya. |
 
-Dataset ini digunakan sebagai data masukan pada berbagai tahapan analisis di LaSPUR, antara lain:
+### Analisis PADAN
 
-- Persiapan Data
-- Rekonsiliasi RTRW dan RZWP3K (SERASI)
-- PADU
-- Perhitungan Emisi Karbon
-- Perhitungan Cadangan Karbon
-- Analisis Perubahan Tutupan Lahan
-- Penyusunan Output Analisis
+Analisis **PADAN** merupakan hasil penggabungan antara **Indeks SERASI** dan **Indeks PADU** yang digunakan sebagai dasar dalam menghasilkan rekomendasi akhir rekonsiliasi tata ruang darat dan laut.
 
----
+------------------------------------------------------------------------
 
-## Unduh Dataset
+## Modul Dibangun Menggunakan
 
-Seluruh dataset contoh dapat diunduh melalui tautan berikut.
+| Komponen           | Teknologi            |
+|--------------------|----------------------|
+| Bahasa Pemrograman | R                    |
+| Framework Aplikasi | Shiny                |
+| Analisis Spasial   | sf, terra            |
+| Visualisasi        | leaflet, ggplot2, DT |
+| Dokumentasi        | Quarto               |
 
-> **📥 Download Data Potongan Sulawesi Tengah**  
-> *(Tambahkan tautan Google Drive, OneDrive, GitHub Release, atau server internal di sini.)*
+------------------------------------------------------------------------
 
-Contoh:
+## Spesifikasi Minimum Laptop
 
-- **Data Vektor (.zip)**
-- **Data Raster (.zip)**
-- **Lookup Table (.xlsx)**
+| Komponen | Minimum | Rekomendasi |
+|-----------------------|---------------------|---------------------------|
+| Sistem Operasi | Windows 10/11 (64-bit) | Windows 11 |
+| Processor | Intel Core i5 Generasi ke-8 atau setara | Intel Core i7 / AMD Ryzen 7 |
+| RAM | 8 GB | 16 GB atau lebih |
+| Penyimpanan | Minimal 10 GB ruang kosong | SSD dengan minimal 20 GB ruang kosong |
+| Resolusi Layar | 1366 × 768 | Full HD (1920 × 1080) |
 
----
+------------------------------------------------------------------------
 
-## Struktur Dokumentasi
+# Unduh Portable Module
 
-Website ini dibagi menjadi beberapa bagian.
+::: callout-tip
+## Portable Module LaSPUR
 
-| Menu | Deskripsi |
-|-------|-----------|
-| Beranda | Informasi umum dataset |
-| Tabel Acuan | Dokumentasi lookup table |
-| Data Raster | Dokumentasi seluruh raster |
-| Data Vektor | Dokumentasi seluruh shapefile |
-| Validasi | Pemeriksaan kualitas data |
-| Glosarium | Penjelasan istilah yang digunakan |
+Portable Module telah dikemas sehingga dapat langsung dijalankan tanpa proses instalasi tambahan. Seluruh dependensi aplikasi telah disertakan sehingga pengguna cukup mengekstrak folder dan menjalankan aplikasi.
 
----
+**Link Unduh**
 
-## Catatan
+> [**Modul LaSPUR**](https://drive.google.com/uc?export=download&id=1cpqgslPtVN7w4gXL7fTo9ld3_0U6sXXJ)
+:::
 
-Seluruh dataset yang didokumentasikan pada website ini merupakan **data contoh hasil pemotongan (subset)** dari wilayah Sulawesi Tengah yang digunakan untuk kebutuhan pengembangan dan demonstrasi aplikasi LaSPUR.
+------------------------------------------------------------------------
 
-Apabila diperlukan penggunaan pada wilayah lain, struktur data, atribut, sistem koordinat, serta format file harus mengikuti spesifikasi yang dijelaskan pada masing-masing halaman dokumentasi.
+# Unduh Data Contoh
+
+::: callout-tip
+Contoh data disediakan agar pengguna dapat memahami struktur data yang digunakan oleh setiap modul sebelum menggunakan data miliknya sendiri.
+
+Seluruh dataset contoh pada dokumentasi ini menggunakan **wilayah potongan Provinsi Sulawesi Tengah** sebagai area studi.
+
+**Dataset yang Disediakan**
+
+| Jenis Data | Deskripsi                                                     |
+|-------------------------------------|----------------------------------|
+| Tabular    | Tabel referensi, matriks, tabel bobot, dan tabel intermediate |
+| Raster     | Data raster yang digunakan pada proses analisis PADU          |
+| Vektor     | Data RTRW, RZWP3K, dan layer pendukung analisis               |
+
+**Link Unduh**
+
+> Tambahkan tautan Google Drive, OneDrive, GitHub Release, atau media distribusi lainnya.
+:::
+
+------------------------------------------------------------------------
+
+## Preview Data Tabular
+
+Data yang disusun dalam bentuk baris dan kolom, seperti tabel atau spreadsheet. Data tabular yang tersedia antara lain: tabel referensi, matriks, tabel bobot, dan tabel intermediate.
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_pola_RTRW.xlsx"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+## Preview Data Raster
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_ke",
+    "LC_KLHK_training.tif"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+## Preview Data Vektor
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RTRW_explode_training.shp"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+:::: callout-note
+## Dokumentasi Data Input
+
+Dokumentasi lengkap mengenai seluruh data input yang digunakan pada LaSPUR, termasuk spesifikasi setiap dataset, metadata, definisi kolom, contoh data, dan validasi data dapat dilihat pada halaman berikut.
+
+::: {style="font-size: 20px;"}
+[**Data** **Input**](step1-tables.qmd)
+:::
+::::
+
+------------------------------------------------------------------------
+
+# Panduan Pemasangan Module
+
+Panduan ini menjelaskan tahapan pemasangan Portable Module LaSPUR, struktur folder aplikasi, persiapan data input, serta langkah menjalankan aplikasi hingga siap digunakan.
+
+:::: callout-important
+## Panduan Penggunaan
+
+Silakan mengikuti panduan pemasangan dan penggunaan sebelum menjalankan analisis menggunakan LaSPUR.
+
+::: {style="font-size: 20px;"}
+[**Panduan Penggunaan**](guide.qmd)
+:::
+::::

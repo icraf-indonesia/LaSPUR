@@ -1,0 +1,660 @@
+[
+  {
+    "objectID": "vector/serasi.html",
+    "href": "vector/serasi.html",
+    "title": "SERASI",
+    "section": "",
+    "text": "Dataset SERASI merupakan data spasial utama yang digunakan pada tahap rekonsiliasi tata ruang darat (RTRW) dan tata ruang laut (RZWP3K). Kedua dataset digunakan untuk mengidentifikasi area yang tumpang tindih maupun yang saling berbatasan sebagai dasar analisis pada modul LaSPUR."
+  },
+  {
+    "objectID": "vector/serasi.html#data-yang-digunakan",
+    "href": "vector/serasi.html#data-yang-digunakan",
+    "title": "SERASI",
+    "section": "2.1 Data yang Digunakan",
+    "text": "2.1 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nStep1_RTRW_Palu-Parigi_Explode\nShapefile\nPeta RTRW hasil pra-pemrosesan (explode polygon).\n\n\nStep1_RZWP3K_Palu-Parigi_Explode\nShapefile\nPeta RZWP3K hasil pra-pemrosesan (explode polygon)."
+  },
+  {
+    "objectID": "vector/serasi.html#visualisasi",
+    "href": "vector/serasi.html#visualisasi",
+    "title": "SERASI",
+    "section": "2.2 Visualisasi",
+    "text": "2.2 Visualisasi\n\n2.2.1 Peta RTRW\n\n\n\n\n\n\n\n\n2.2.2 Peta RZWP3K"
+  },
+  {
+    "objectID": "vector/serasi.html#sumber-data",
+    "href": "vector/serasi.html#sumber-data",
+    "title": "SERASI",
+    "section": "2.3 Sumber Data",
+    "text": "2.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nRTRW\nPemerintah Daerah\n-\n-\n\n\nRZWP3K\nPemerintah Daerah\n-\n-"
+  },
+  {
+    "objectID": "vector/serasi.html#spesifikasi-teknis",
+    "href": "vector/serasi.html#spesifikasi-teknis",
+    "title": "SERASI",
+    "section": "2.4 Spesifikasi Teknis",
+    "text": "2.4 Spesifikasi Teknis\n\n2.4.1 RTRW\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n1,141\n\n\nExtent\nxmin : 119339.84761ymin : 9887559.03807xmax : 167288.65812ymax : 10003275.98789\n\n\nFields\nRTRW\n\n\n\n\n\n\n2.4.2 RZWP3K\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n55\n\n\nExtent\nxmin : 119289.90780ymin : 9901908.78390xmax : 167252.63691ymax : 10003276.95498\n\n\nFields\nRZWP3K"
+  },
+  {
+    "objectID": "vector/serasi.html#digunakan-pada-tahapan",
+    "href": "vector/serasi.html#digunakan-pada-tahapan",
+    "title": "SERASI",
+    "section": "2.5 Digunakan pada Tahapan",
+    "text": "2.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖\n\n\nOutput\n✔"
+  },
+  {
+    "objectID": "vector/serasi.html#pemeriksaan-data",
+    "href": "vector/serasi.html#pemeriksaan-data",
+    "title": "SERASI",
+    "section": "2.6 Pemeriksaan Data",
+    "text": "2.6 Pemeriksaan Data\n\n2.6.1 RTRW\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n13 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat.\n\n\n\n\n\n\n\n2.6.2 RZWP3K\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/serasi.html#data-yang-digunakan-1",
+    "href": "vector/serasi.html#data-yang-digunakan-1",
+    "title": "SERASI",
+    "section": "3.1 Data yang Digunakan",
+    "text": "3.1 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nStep2_RTRW_training\nShapefile\nPeta RTRW hasil pra-pemrosesan (explode polygon).\n\n\nStep2_RZWP3K_training\nShapefile\nPeta RZWP3K hasil pra-pemrosesan (explode polygon)."
+  },
+  {
+    "objectID": "vector/serasi.html#visualisasi-1",
+    "href": "vector/serasi.html#visualisasi-1",
+    "title": "SERASI",
+    "section": "3.2 Visualisasi",
+    "text": "3.2 Visualisasi\n\n3.2.1 Peta RTRW\n\n\n\n\n\n\n\n\n3.2.2 Peta RZWP3K"
+  },
+  {
+    "objectID": "vector/serasi.html#sumber-data-1",
+    "href": "vector/serasi.html#sumber-data-1",
+    "title": "SERASI",
+    "section": "3.3 Sumber Data",
+    "text": "3.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nRTRW\nPemerintah Daerah\n-\n-\n\n\nRZWP3K\nPemerintah Daerah\n-\n-"
+  },
+  {
+    "objectID": "vector/serasi.html#spesifikasi-teknis-1",
+    "href": "vector/serasi.html#spesifikasi-teknis-1",
+    "title": "SERASI",
+    "section": "3.4 Spesifikasi Teknis",
+    "text": "3.4 Spesifikasi Teknis\n\n3.4.1 RTRW\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n330\n\n\nExtent\nxmin : 119339.85948ymin : 9887559.03807xmax : 167288.65812ymax : 10003275.98866\n\n\nFields\nRTRWORIG_FID\n\n\n\n\n\n\n3.4.2 RZWP3K\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n582\n\n\nExtent\nxmin : 119289.90780ymin : 9901908.78390xmax : 167252.63691ymax : 10003276.95498\n\n\nFields\nRZWP3KShape_LengSpatialORIG_FID"
+  },
+  {
+    "objectID": "vector/serasi.html#digunakan-pada-tahapan-1",
+    "href": "vector/serasi.html#digunakan-pada-tahapan-1",
+    "title": "SERASI",
+    "section": "3.5 Digunakan pada Tahapan",
+    "text": "3.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖\n\n\nOutput\n✔"
+  },
+  {
+    "objectID": "vector/serasi.html#pemeriksaan-data-1",
+    "href": "vector/serasi.html#pemeriksaan-data-1",
+    "title": "SERASI",
+    "section": "3.6 Pemeriksaan Data",
+    "text": "3.6 Pemeriksaan Data\n\n3.6.1 RTRW\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat.\n\n\n\n\n\n\n\n3.6.2 RZWP3K\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n14 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-kl.html",
+    "href": "vector/padu-kl.html",
+    "title": "PADU-KL",
+    "section": "",
+    "text": "1 Deskripsi\nDataset PADU-KL merupakan data vektor kawasan lindung yang digunakan sebagai salah satu parameter pada analisis PADU-KL. Dataset ini berfungsi untuk mengidentifikasi kawasan yang memiliki fungsi perlindungan sehingga menjadi pertimbangan dalam proses rekonsiliasi tata ruang.\n\n\n\n2 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nST_Kawasan_Lindung\nShapefile\nKawasan lindung yang digunakan pada analisis PADU-KL.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nKawasan Lindung\nPemerintah Daerah\n-\n-\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n2\n\n\nExtent\nxmin : 122001.88250ymin : 9887577.44854xmax : 167285.78937ymax : 10003275.90674\n\n\nFields\nOBJECTID_1Kode_ProvFungsiFungsi_KwsSK_KawasanTgl_KawasaLuas_KawasDPCLSKeteranganSHAPE_LengShape_Le_1Shape_Area\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nPADU-KL\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n4 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-kh.html",
+    "href": "vector/padu-kh.html",
+    "title": "PADU-KH",
+    "section": "",
+    "text": "Dataset PADU-KH merupakan kumpulan data vektor yang digunakan untuk mengidentifikasi kawasan habitat penting dalam analisis PADU-KH. Dataset ini terdiri atas ekosistem mangrove, terumbu karang, dan padang lamun yang menjadi dasar penilaian kesesuaian spasial pada proses rekonsiliasi tata ruang."
+  },
+  {
+    "objectID": "vector/padu-kh.html#mangrove",
+    "href": "vector/padu-kh.html#mangrove",
+    "title": "PADU-KH",
+    "section": "3.1 Mangrove",
+    "text": "3.1 Mangrove"
+  },
+  {
+    "objectID": "vector/padu-kh.html#coral",
+    "href": "vector/padu-kh.html#coral",
+    "title": "PADU-KH",
+    "section": "3.2 Coral",
+    "text": "3.2 Coral"
+  },
+  {
+    "objectID": "vector/padu-kh.html#seagrass",
+    "href": "vector/padu-kh.html#seagrass",
+    "title": "PADU-KH",
+    "section": "3.3 Seagrass",
+    "text": "3.3 Seagrass"
+  },
+  {
+    "objectID": "vector/padu-kh.html#mangrove-1",
+    "href": "vector/padu-kh.html#mangrove-1",
+    "title": "PADU-KH",
+    "section": "5.1 Mangrove",
+    "text": "5.1 Mangrove\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n6\n\n\nExtent\nxmin : 119339.84929ymin : 9903300.03498xmax : 167250.53398ymax : 9998458.00567\n\n\nFields\nPL2024_IDPL2023_ID_classclass_2IDLC"
+  },
+  {
+    "objectID": "vector/padu-kh.html#coral-1",
+    "href": "vector/padu-kh.html#coral-1",
+    "title": "PADU-KH",
+    "section": "5.2 Coral",
+    "text": "5.2 Coral\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n1\n\n\nExtent\nxmin : 119339.74759ymin : 9902000.95380xmax : 167252.59409ymax : 10003275.99281\n\n\nFields\nclassShape_LengShape_Le_1Shape_Area"
+  },
+  {
+    "objectID": "vector/padu-kh.html#seagrass-1",
+    "href": "vector/padu-kh.html#seagrass-1",
+    "title": "PADU-KH",
+    "section": "5.3 Seagrass",
+    "text": "5.3 Seagrass\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n1\n\n\nExtent\nxmin : 119339.78338ymin : 9902055.54470xmax : 167251.14021ymax : 10003266.57790\n\n\nFields\nclassShape_LengShape_Le_1Shape_Area"
+  },
+  {
+    "objectID": "vector/padu-kh.html#mangrove-2",
+    "href": "vector/padu-kh.html#mangrove-2",
+    "title": "PADU-KH",
+    "section": "7.1 Mangrove",
+    "text": "7.1 Mangrove\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n8 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-kh.html#coral-2",
+    "href": "vector/padu-kh.html#coral-2",
+    "title": "PADU-KH",
+    "section": "7.2 Coral",
+    "text": "7.2 Coral\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-kh.html#seagrass-2",
+    "href": "vector/padu-kh.html#seagrass-2",
+    "title": "PADU-KH",
+    "section": "7.3 Seagrass",
+    "text": "7.3 Seagrass\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-hs.html",
+    "href": "vector/padu-hs.html",
+    "title": "PADU-HS",
+    "section": "",
+    "text": "1 Deskripsi\nDataset PADU-HS merupakan data vektor yang digunakan sebagai masukan pada analisis PADU-HS di LaSPUR. Dataset ini merepresentasikan kawasan estuari yang menjadi salah satu parameter dalam penilaian kesesuaian spasial dan rekonsiliasi tata ruang darat dan laut.\n\n\n\n2 Data yang Digunakan\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nST_Estuari_PT\nShapefile\nSebaran kawasan estuari.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nKawasan Estuari\nPemerintah Daerah\n-\n-\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nPOINT\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n28\n\n\nExtent\nxmin : 123500.72960ymin : 9901812.10400xmax : 152357.56090ymax : 9987350.50680\n\n\nFields\nFID_SUNGAINAMOBJJNSSNGKLSSNGFCODEREMARKSRS_IDFID_ST_GarNAMOBJ_1SHAPE_LengORIG_FID\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nPADU-HS\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n56 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "validation.html",
+    "href": "validation.html",
+    "title": "Validasi Data",
+    "section": "",
+    "text": "Validasi merupakan tahapan pengendalian kualitas (Quality Control) untuk memastikan bahwa seluruh data masukan LaSPUR memenuhi spesifikasi teknis sebelum digunakan pada proses analisis. Pemeriksaan dilakukan terhadap struktur data, metadata, serta isi dataset sehingga kesalahan dapat dideteksi sejak awal dan tidak mempengaruhi hasil analisis."
+  },
+  {
+    "objectID": "validation.html#deskripsi",
+    "href": "validation.html#deskripsi",
+    "title": "Validasi Data",
+    "section": "",
+    "text": "Validasi merupakan tahapan pengendalian kualitas (Quality Control) untuk memastikan bahwa seluruh data masukan LaSPUR memenuhi spesifikasi teknis sebelum digunakan pada proses analisis. Pemeriksaan dilakukan terhadap struktur data, metadata, serta isi dataset sehingga kesalahan dapat dideteksi sejak awal dan tidak mempengaruhi hasil analisis."
+  },
+  {
+    "objectID": "validation.html#tingkatan-validasi",
+    "href": "validation.html#tingkatan-validasi",
+    "title": "Validasi Data",
+    "section": "2 1. Tingkatan Validasi",
+    "text": "2 1. Tingkatan Validasi\n\n2.1 Validasi Spesifikasi\nValidasi spesifikasi memastikan bahwa struktur dataset telah sesuai dengan spesifikasi teknis LaSPUR.\nPemeriksaan meliputi:\n\nFormat dataset\nStruktur file\nSistem koordinat\nTipe geometri\nKelengkapan metadata\n\nTahap ini tidak membaca seluruh isi data sehingga proses validasi berlangsung cepat.\n\n\n\n2.2 Validasi Metadata\nValidasi metadata memastikan bahwa karakteristik dataset sesuai dengan spesifikasi yang ditetapkan.\nPemeriksaan meliputi:\n\nNama layer atau tabel\nNama kolom\nTipe data\nJumlah kolom\nSistem koordinat (CRS)\n\nTahap ini hanya membaca metadata tanpa memeriksa seluruh isi data.\n\n\n\n2.3 Validasi Data\nValidasi data merupakan pemeriksaan terhadap isi dataset secara langsung.\nPemeriksaan meliputi:\n\nMissing Value\nValiditas geometri\nDuplikasi data\nKonsistensi atribut\nKesesuaian nilai terhadap tabel acuan\n\nTahap ini membutuhkan waktu lebih lama karena seluruh data dibaca selama proses validasi."
+  },
+  {
+    "objectID": "validation.html#hubungan-tingkatan-validasi",
+    "href": "validation.html#hubungan-tingkatan-validasi",
+    "title": "Validasi Data",
+    "section": "3 2. Hubungan Tingkatan Validasi",
+    "text": "3 2. Hubungan Tingkatan Validasi\n\n\n\nTahapan\nCakupan Pemeriksaan\n\n\n\n\nValidasi Spesifikasi\nStruktur dataset\n\n\nValidasi Metadata\nStruktur + Metadata\n\n\nValidasi Data\nStruktur + Metadata + Isi Data\n\n\n\nSetiap tingkatan validasi mencakup pemeriksaan pada tingkat sebelumnya. Oleh karena itu, validasi data hanya dilakukan apabila dataset telah memenuhi validasi spesifikasi dan metadata."
+  },
+  {
+    "objectID": "validation.html#status-validasi",
+    "href": "validation.html#status-validasi",
+    "title": "Validasi Data",
+    "section": "4 3. Status Validasi",
+    "text": "4 3. Status Validasi\n\n\n\n\n\n\n\nStatus\nKeterangan\n\n\n\n\n✔ Lulus\nDataset memenuhi persyaratan dan dapat digunakan pada proses berikutnya.\n\n\n⚠ Peringatan\nDataset masih dapat digunakan, namun terdapat kondisi yang sebaiknya diperbaiki.\n\n\n✖ Gagal\nDataset tidak memenuhi persyaratan sehingga harus diperbaiki sebelum digunakan pada analisis LaSPUR."
+  },
+  {
+    "objectID": "validation.html#pemeriksaan-data-vektor",
+    "href": "validation.html#pemeriksaan-data-vektor",
+    "title": "Validasi Data",
+    "section": "5 4. Pemeriksaan Data Vektor",
+    "text": "5 4. Pemeriksaan Data Vektor\n\n\n\n\n\n\n\nPemeriksaan\nTujuan\n\n\n\n\nCRS\nMemastikan sistem koordinat telah terdefinisi dengan benar.\n\n\nGeometry\nMemastikan seluruh geometri valid dan dapat diproses.\n\n\nMissing Value\nMemastikan atribut penting tidak memiliki nilai kosong.\n\n\nDuplikasi\nMemastikan tidak terdapat fitur yang terduplikasi.\n\n\nTipe Geometri\nMemastikan tipe geometri sesuai dengan kebutuhan proses.\n\n\nJumlah Feature\nMemastikan jumlah feature sesuai dengan data sumber."
+  },
+  {
+    "objectID": "validation.html#pemeriksaan-data-raster",
+    "href": "validation.html#pemeriksaan-data-raster",
+    "title": "Validasi Data",
+    "section": "6 5. Pemeriksaan Data Raster",
+    "text": "6 5. Pemeriksaan Data Raster\n\n\n\n\n\n\n\nPemeriksaan\nTujuan\n\n\n\n\nCRS\nMemastikan raster memiliki sistem koordinat yang valid.\n\n\nExtent\nMemastikan cakupan wilayah raster sesuai dengan area analisis.\n\n\nResolusi\nMemastikan ukuran piksel sesuai spesifikasi analisis.\n\n\nNilai NoData\nMemastikan nilai NoData telah didefinisikan dengan benar.\n\n\nDimensi Raster\nMemastikan jumlah baris dan kolom raster dapat diproses oleh LaSPUR."
+  },
+  {
+    "objectID": "validation.html#pemeriksaan-tabel-acuan",
+    "href": "validation.html#pemeriksaan-tabel-acuan",
+    "title": "Validasi Data",
+    "section": "7 6. Pemeriksaan Tabel Acuan",
+    "text": "7 6. Pemeriksaan Tabel Acuan\n\n\n\n\n\n\n\nPemeriksaan\nTujuan\n\n\n\n\nFormat File\nMemastikan tabel menggunakan format yang didukung (Excel atau CSV).\n\n\nNama Kolom\nMemastikan seluruh kolom wajib tersedia.\n\n\nTipe Data\nMemastikan tipe data sesuai spesifikasi.\n\n\nMissing Value\nMemastikan kolom penting tidak memiliki nilai kosong.\n\n\nNilai Unik\nMemastikan kolom kunci tidak memiliki duplikasi.\n\n\nKonsistensi Referensi\nMemastikan nilai pada tabel acuan sesuai dengan dataset spasial yang menggunakannya."
+  },
+  {
+    "objectID": "validation.html#prinsip-validasi",
+    "href": "validation.html#prinsip-validasi",
+    "title": "Validasi Data",
+    "section": "8 7. Prinsip Validasi",
+    "text": "8 7. Prinsip Validasi\nValidasi dilakukan sebagai bagian dari proses pengendalian kualitas data (Quality Control) pada LaSPUR. Dataset yang memenuhi seluruh pemeriksaan memiliki struktur, metadata, dan isi data yang konsisten sehingga dapat digunakan oleh seluruh modul analisis tanpa menghasilkan kesalahan selama proses maupun pada keluaran akhir."
+  },
+  {
+    "objectID": "step1-tables.html",
+    "href": "step1-tables.html",
+    "title": "Tabel Acuan",
+    "section": "",
+    "text": "Dokumen ini menjelaskan seluruh data tabular yang digunakan pada proses analisis LaSPUR.\nSeluruh data yang ditampilkan pada halaman ini merupakan contoh struktur tabel. Pengguna dapat menggunakan data sesuai wilayah analisis, namun struktur kolom dan tipe data harus tetap mengikuti spesifikasi yang dijelaskan pada masing-masing tabel."
+  },
+  {
+    "objectID": "step1-tables.html#tabel-acuan-prioritas-rtrw",
+    "href": "step1-tables.html#tabel-acuan-prioritas-rtrw",
+    "title": "Tabel Acuan",
+    "section": "1.1 Tabel Acuan Prioritas RTRW",
+    "text": "1.1 Tabel Acuan Prioritas RTRW\n\n1.1.1 Deskripsi\nTabel ini berisi prioritas masing-masing kelas RTRW yang digunakan pada proses rekonsiliasi tata ruang.\n\n1.1.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nID\nNumeric\nNomor unik setiap kelas RTRW. Nilai harus berupa bilangan bulat.\n\n\nRTRW\nCharacter\nNama kelas RTRW yang harus sesuai dengan atribut pada data vektor RTRW.\n\n\nPrioritas\nNumeric\nNilai prioritas kawasan. Hanya diperbolehkan bernilai 0 atau 1.\n\n\n\n\n\n\n1.1.1.2 Preview\n\n\n\n\n\n\n\n\n\n\n\n1.1.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nPrioritas RTRW\nPemerintah Daerah\n-\n\n\n\n\n\n\n1.1.3 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n22\n\n\nColumns\n3\n\n\nFields\nIDRTRWPrioritas\n\n\n\n\n\n\n\n1.1.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖"
+  },
+  {
+    "objectID": "step1-tables.html#tabel-acuan-prioritas-rzwp3k",
+    "href": "step1-tables.html#tabel-acuan-prioritas-rzwp3k",
+    "title": "Tabel Acuan",
+    "section": "1.2 Tabel Acuan Prioritas RZWP3K",
+    "text": "1.2 Tabel Acuan Prioritas RZWP3K\n\n1.2.1 Deskripsi\nTabel ini berisi prioritas masing-masing zona RZWP3K yang digunakan pada proses rekonsiliasi tata ruang darat dan laut.\n\n1.2.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nID\nNumeric\nNomor unik setiap kelas RZWP3K. Nilai harus berupa bilangan bulat.\n\n\nRZWP3K\nCharacter\nNama zona RZWP3K yang harus sesuai dengan atribut pada data vektor RZWP3K.\n\n\nPrioritas\nNumeric\nNilai prioritas kawasan. Hanya diperbolehkan bernilai 0 atau 1.\n\n\n\n\n\n\n1.2.1.2 Preview\n\n\n\n\n\n\n\n\n\n\n\n1.2.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nPrioritas RZWP3K\nPemerintah Daerah\n-\n\n\n\n\n\n\n1.2.3 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n23\n\n\nColumns\n3\n\n\nFields\nIDRZWP3KPrioritas\n\n\n\n\n\n\n\n1.2.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖"
+  },
+  {
+    "objectID": "step1-tables.html#matriks-serasi",
+    "href": "step1-tables.html#matriks-serasi",
+    "title": "Tabel Acuan",
+    "section": "2.1 Matriks SERASI",
+    "text": "2.1 Matriks SERASI\n\n2.1.1 Deskripsi\nMatriks SERASI merupakan tabel acuan yang digunakan untuk menentukan tingkat kesesuaian (compatibility) antara setiap kelas RTRW dan RZWP3K pada area yang saling tumpang tindih.\nSetiap sel pada matriks merepresentasikan nilai indeks kesesuaian antara satu kelas RTRW dengan satu zona RZWP3K. Nilai tersebut digunakan pada proses perhitungan Indeks SERASI.\n\nCatatan: Tabel yang ditampilkan di bawah merupakan contoh struktur data. Jumlah kolom dan kelas dapat berbeda sesuai wilayah analisis, namun format matriks harus tetap dipertahankan.\n\n\n\n\n2.1.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nRTRW_RZWP3K\nCharacter\nNama kelas RTRW yang digunakan sebagai baris pada matriks.\n\n\nKawasan Konservasi Maritim\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nSuaka\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nTaman\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nKawasan Konservasi Lainnya\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nZona Wilayah Kelola Masyarakat Hukum Adat\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nKolom zona lainnya\nNumeric\nSeluruh kolom setelah kolom pertama merupakan kelas RZWP3K dengan nilai indeks kesesuaian.\n\n\n\nNilai yang digunakan pada matriks umumnya berada pada rentang:\n\n\n\nNilai\nArti\n\n\n\n\n1\nSangat sesuai\n\n\n0.5\nCukup sesuai\n\n\n0\nTidak sesuai\n\n\n\n\n\n2.1.2.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.1.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nMatriks SERASI\nLaSPUR\n-\n\n\n\n\n\n\n2.1.4 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n22\n\n\nColumns\n24\n\n\nFields\nRTRW_RZWP3KKawasan Konservasi MaritimSuakaTamanKawasan Konservasi LainnyaZona Wilayah Kelola Masyarakat Hukum AdatZona Pertambangan Minyak dan Gas BumiZona Pertambangan Mineral dan Batu BaraZona Pengelolaan EnergiZona Pengelolaan Ekosistem PesisirZona Perikanan BudidayaZona Perikanan TangkapZona IndustriZona Perdagangan Barang Dan/Atau JasaZona PariwisataZona PermukimanZona Pertahanan KeamananZona PergaramanZona Bandar UdaraZona Pelabuhan LautZona Pelabuhan PerikananZona Pemanfaatan Air Laut selain Energi/Pengolahan AirZona PembuanganZona Pemanfaatan Lainnya\n\n\n\n\n\n\n\n2.1.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPerhitungan Indeks SERASI\n✔\n\n\nRekomendasi Rekonsiliasi\n✔"
+  },
+  {
+    "objectID": "step1-tables.html#matriks-padu-ke",
+    "href": "step1-tables.html#matriks-padu-ke",
+    "title": "Tabel Acuan",
+    "section": "2.2 Matriks PADU-KE",
+    "text": "2.2 Matriks PADU-KE\n\n2.2.1 Deskripsi\nMatriks PADU-KE merupakan matriks kedekatan (adjacency matrix) antar kelas penutupan lahan yang digunakan dalam perhitungan PADU-KE (Kedekatan Ekologi).\nNilai pada matriks menunjukkan tingkat hubungan spasial antar kelas penutupan lahan.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.2.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nclass\nCharacter\nNama kelas penutupan lahan yang menjadi baris matriks.\n\n\nHutan Lahan Kering Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Lahan Kering Sekunder\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Mangrove Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Rawa Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nKolom kelas lainnya\nNumeric\nNilai adjacency terhadap kelas penutupan lahan lainnya.\n\n\n\nSecara umum digunakan nilai:\n\n\n\nNilai\nArti\n\n\n\n\n3\nSangat berdekatan\n\n\n1\nBerdekatan\n\n\n\n\n\n2.2.2.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.2.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nMatriks PADU-KE\nLaSPUR\n-\n\n\n\n\n\n\n2.2.4 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n24\n\n\nColumns\n25\n\n\nFields\nclassHutan Lahan Kering PrimerHutan Lahan Kering SekunderHutan Mangrove PrimerHutan Rawa PrimerHutan Mangrove SekunderHutan Rawa SekunderHutan TanamanSemak BelukarPerkebunan/KebunPermukiman/Lahan TerbangunLahan TerbukaSavanna/Padang RumputTubuh AirSemak Belukar RawaPertanian Lahan KeringPertanian Lahan Kering Campur Semak/Kebun CampurSawahTambakBandara/PelabuhanTransmigrasiPertambanganRawaTerumbu KarangPadang Lamun\n\n\n\n\n\n\n\n2.2.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPADU-KE\n✔\n\n\nPADU Final\n✔"
+  },
+  {
+    "objectID": "step1-tables.html#tabel-bobot-padu",
+    "href": "step1-tables.html#tabel-bobot-padu",
+    "title": "Tabel Acuan",
+    "section": "2.3 Tabel Bobot PADU",
+    "text": "2.3 Tabel Bobot PADU\n\n2.3.1 Deskripsi\nTabel ini berisi bobot masing-masing indikator PADU yang digunakan dalam perhitungan Indeks PADU Final.\nBobot setiap indikator dapat disesuaikan dengan kebutuhan analisis. Apabila tabel ini tidak disediakan, sistem akan menggunakan bobot seragam (1/n) secara otomatis.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.3.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nKode\nCharacter\nKode indikator PADU (KE, HS, KH, KI, KL, RTP, SE).\n\n\nBobot\nNumeric\nBobot masing-masing indikator dengan rentang nilai 0–1.\n\n\n\n\n\n\n2.3.3 Aturan Validasi\n\nKode harus unik.\nNilai bobot harus berupa angka.\nNilai bobot tidak boleh negatif.\nTotal seluruh bobot sebaiknya bernilai 1.\nApabila tabel tidak diunggah, sistem menggunakan bobot 1/n secara otomatis.\n\n\n\n2.3.3.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.3.4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nBobot PADU\nPengguna\n-\n\n\n\n\n\n\n2.3.5 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n7\n\n\nColumns\n2\n\n\nFields\nKodeBobot\n\n\n\n\n\n\n\n2.3.6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPADU\n✔\n\n\nPerhitungan PADU Final\n✔"
+  },
+  {
+    "objectID": "step1-tables.html#tabel-opsi-alternatif",
+    "href": "step1-tables.html#tabel-opsi-alternatif",
+    "title": "Tabel Acuan",
+    "section": "2.4 Tabel Opsi Alternatif",
+    "text": "2.4 Tabel Opsi Alternatif\n\n2.4.1 Deskripsi\nTabel ini digunakan untuk menentukan alternatif perubahan kelas RTRW maupun zona RZWP3K pada area yang mengalami konflik.\nTabel ini dihasilkan setelah proses identifikasi overlap. Pengguna kemudian memilih alternatif perubahan menggunakan daftar pilihan (dropdown) yang tersedia pada kolom alt_RTRW dan alt_RZWP3K.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.4.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nid_pu\nNumeric\nID Planning Unit.\n\n\nid_rtrw\nNumeric\nID kelas RTRW.\n\n\nid_rzwp3k\nNumeric\nID zona RZWP3K.\n\n\nRTRW\nCharacter\nNama kelas RTRW.\n\n\nRZWP3K\nCharacter\nNama zona RZWP3K.\n\n\narea_ha\nNumeric\nLuas area overlap (ha).\n\n\nidx_serasi\nNumeric\nNilai indeks SERASI.\n\n\nalt_RTRW\nCharacter\nAlternatif RTRW yang dipilih pengguna.\n\n\nalt_RZWP3K\nCharacter\nAlternatif zona RZWP3K yang dipilih pengguna.\n\n\n\n\n\n\n2.4.3 Aturan Validasi\n\nNilai alt_RTRW harus dipilih dari daftar kelas RTRW yang tersedia.\nNilai alt_RZWP3K harus dipilih dari daftar zona RZWP3K yang tersedia.\nNilai id_pu harus unik.\nNilai area_ha harus lebih besar dari nol.\nNilai idx_serasi berada pada rentang 0–1.\n\n\n\n2.4.3.1 Preview\n\n\n\n\n2.4.4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nOpsi Alternatif\nPengguna\n-\n\n\n\n\n\n\n2.4.5 Spesifikasi\n\n\n\n2.4.6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPenyusunan Alternatif\n✔\n\n\nRekomendasi Rekonsiliasi\n✔"
+  },
+  {
+    "objectID": "step1-tables.html#tabel-overlap-reconciliation",
+    "href": "step1-tables.html#tabel-overlap-reconciliation",
+    "title": "Tabel Acuan",
+    "section": "2.5 Tabel Overlap Reconciliation",
+    "text": "2.5 Tabel Overlap Reconciliation\n\n2.5.1 Deskripsi\nTabel Overlap Reconciliation merupakan tabel hasil pengolahan utama pada proses rekonsiliasi tata ruang. Tabel ini berisi seluruh area yang mengalami overlap antara RTRW dan RZWP3K beserta seluruh indeks hasil analisis SERASI, PADU, rekomendasi sistem, alternatif zona, hingga keputusan akhir pengguna.\nTabel ini digunakan sebagai dasar dalam menentukan perubahan zona maupun penyusunan hasil akhir rekonsiliasi tata ruang.\n\nCatatan: Tabel yang ditampilkan di bawah ini hanya merupakan contoh format data.\n\n\n2.5.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nid_pu\nInteger\nID Planning Unit.\n\n\nstat_pu\nCharacter\nStatus Planning Unit, misalnya intersection, RTRW only, atau RZWP3K only.\n\n\nid_rtrw\nInteger\nID polygon RTRW.\n\n\nid_rzwp3k\nInteger\nID polygon RZWP3K.\n\n\nRTRW\nCharacter\nNama kelas RTRW yang beririsan.\n\n\nRZWP3K\nCharacter\nNama kelas RZWP3K yang beririsan.\n\n\narea_ha\nNumeric\nLuas area overlap (hektar).\n\n\nidx_serasi\nNumeric\nNilai indeks kesesuaian SERASI.\n\n\nidx_padu_hs\nNumeric\nNilai indeks PADU-HS.\n\n\nidx_padu_ke\nNumeric\nNilai indeks PADU-KE.\n\n\nidx_padu_kh\nNumeric\nNilai indeks PADU-KH.\n\n\nidx_padu_ki\nNumeric\nNilai indeks PADU-KI.\n\n\nidx_padu_kl\nNumeric\nNilai indeks PADU-KL.\n\n\nidx_padu_rtp\nNumeric\nNilai indeks PADU-RTP.\n\n\nidx_padu_final\nNumeric\nNilai gabungan seluruh indikator PADU.\n\n\nidx_padan\nNumeric\nNilai PADAN awal.\n\n\nalt_RTRW\nCharacter\nAlternatif kelas RTRW yang dipilih apabila dilakukan perubahan RTRW.\n\n\nalt_RZWP3K\nCharacter\nAlternatif kelas RZWP3K yang dipilih apabila dilakukan perubahan RZWP3K.\n\n\nidx_serasi_rtrw_alt\nNumeric\nNilai SERASI apabila RTRW diganti dengan alternatif.\n\n\nidx_serasi_rzwp3k_alt\nNumeric\nNilai SERASI apabila RZWP3K diganti dengan alternatif.\n\n\nidx_padan_rtrw_alt\nNumeric\nNilai PADAN apabila RTRW menggunakan alternatif.\n\n\nidx_padan_rzwp3k_alt\nNumeric\nNilai PADAN apabila RZWP3K menggunakan alternatif.\n\n\nrecommendation\nCharacter\nRekomendasi otomatis yang dihasilkan sistem berdasarkan seluruh indeks.\n\n\ndecision\nCharacter\nKeputusan akhir yang disarankan sistem.\n\n\nidx_padan_final\nNumeric\nNilai PADAN setelah mempertimbangkan alternatif terbaik.\n\n\nuser_decision\nCharacter\nKeputusan akhir yang dipilih oleh pengguna.\n\n\n\n\n\n2.5.1.2 Preview\n\n\n\n2.5.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nOverlap Reconciliation\nHasil Proses LaSPUR\n-\n\n\n\n\n\n2.5.3 Spesifikasi\n\n\n2.5.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput Akhir\n✔"
+  },
+  {
+    "objectID": "raster/padu-rtp.html",
+    "href": "raster/padu-rtp.html",
+    "title": "PADU-RTP",
+    "section": "",
+    "text": "Dataset PADU-RTP merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-RTP di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran."
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-industri",
+    "href": "raster/padu-rtp.html#euclidean-distance-industri",
+    "title": "PADU-RTP",
+    "section": "3.1 Euclidean Distance Industri",
+    "text": "3.1 Euclidean Distance Industri"
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran",
+    "href": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran",
+    "title": "PADU-RTP",
+    "section": "3.2 Euclidean Distance Alur Pelayaran",
+    "text": "3.2 Euclidean Distance Alur Pelayaran"
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-industri-1",
+    "href": "raster/padu-rtp.html#euclidean-distance-industri-1",
+    "title": "PADU-RTP",
+    "section": "5.1 Euclidean Distance Industri",
+    "text": "5.1 Euclidean Distance Industri\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 / UTM zone 51S (EPSG:32751)\n\n\nLayer\n1\n\n\nResolution\n30 × 30\n\n\nExtent\nxmin : 134990.56490ymin : 9918293.10450xmax : 167270.56490ymax : 9983213.10450"
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran-1",
+    "href": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran-1",
+    "title": "PADU-RTP",
+    "section": "5.2 Euclidean Distance Alur Pelayaran",
+    "text": "5.2 Euclidean Distance Alur Pelayaran\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 / UTM zone 51S (EPSG:32751)\n\n\nLayer\n1\n\n\nResolution\n30 × 30\n\n\nExtent\nxmin : 119294.16606ymin : 9908302.69640xmax : 152174.16606ymax : 10003282.69640"
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-industri-2",
+    "href": "raster/padu-rtp.html#euclidean-distance-industri-2",
+    "title": "PADU-RTP",
+    "section": "7.1 Euclidean Distance Industri",
+    "text": "7.1 Euclidean Distance Industri\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 134990.5649, 167270.5649, 9918293.1045, 9983213.1045\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 30 × 30\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran-2",
+    "href": "raster/padu-rtp.html#euclidean-distance-alur-pelayaran-2",
+    "title": "PADU-RTP",
+    "section": "7.2 Euclidean Distance Alur Pelayaran",
+    "text": "7.2 Euclidean Distance Alur Pelayaran\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 119294.1661, 152174.1661, 9908302.6964, 10003282.6964\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 30 × 30\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "raster/padu-hs.html",
+    "href": "raster/padu-hs.html",
+    "title": "PADU-HS",
+    "section": "",
+    "text": "Dataset PADU-HS merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-HS di LaSPUR. Raster digunakan untuk menghitung indeks yang berkaitan dengan habitat sensitif dan karakteristik lingkungan pesisir."
+  },
+  {
+    "objectID": "raster/padu-hs.html#euclidean-distance-estuari",
+    "href": "raster/padu-hs.html#euclidean-distance-estuari",
+    "title": "PADU-HS",
+    "section": "3.1 Euclidean Distance Estuari",
+    "text": "3.1 Euclidean Distance Estuari"
+  },
+  {
+    "objectID": "raster/padu-hs.html#total-suspended-solid-tss",
+    "href": "raster/padu-hs.html#total-suspended-solid-tss",
+    "title": "PADU-HS",
+    "section": "3.2 Total Suspended Solid (TSS)",
+    "text": "3.2 Total Suspended Solid (TSS)"
+  },
+  {
+    "objectID": "raster/padu-hs.html#euclidean-distance-estuari-1",
+    "href": "raster/padu-hs.html#euclidean-distance-estuari-1",
+    "title": "PADU-HS",
+    "section": "5.1 Euclidean Distance Estuari",
+    "text": "5.1 Euclidean Distance Estuari\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 / UTM zone 51S (EPSG:32751)\n\n\nLayer\n1\n\n\nResolution\n30 × 30\n\n\nExtent\nxmin : 123485.72960ymin : 9901797.10400xmax : 152375.72960ymax : 9987387.10400"
+  },
+  {
+    "objectID": "raster/padu-hs.html#total-suspended-solid-tss-1",
+    "href": "raster/padu-hs.html#total-suspended-solid-tss-1",
+    "title": "PADU-HS",
+    "section": "5.2 Total Suspended Solid (TSS)",
+    "text": "5.2 Total Suspended Solid (TSS)\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 / UTM zone 50S (EPSG:32750)\n\n\nLayer\n1\n\n\nResolution\n30 × 30\n\n\nExtent\nxmin : 787143.54507ymin : 9887545.39766xmax : 835263.54507ymax : 10003285.39766"
+  },
+  {
+    "objectID": "raster/padu-hs.html#euclidean-distance-estuari-2",
+    "href": "raster/padu-hs.html#euclidean-distance-estuari-2",
+    "title": "PADU-HS",
+    "section": "7.1 Euclidean Distance Estuari",
+    "text": "7.1 Euclidean Distance Estuari\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 123485.7296, 152375.7296, 9901797.104, 9987387.104\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 30 × 30\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "raster/padu-hs.html#total-suspended-solid-tss-2",
+    "href": "raster/padu-hs.html#total-suspended-solid-tss-2",
+    "title": "PADU-HS",
+    "section": "7.2 Total Suspended Solid (TSS)",
+    "text": "7.2 Total Suspended Solid (TSS)\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 787143.5451, 835263.5451, 9887545.3977, 10003285.3977\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 30 × 30\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "guide.html",
+    "href": "guide.html",
+    "title": "Panduan Penggunaan",
+    "section": "",
+    "text": "Halaman ini menyediakan seluruh dokumen pendukung yang diperlukan untuk melakukan instalasi, memahami alur kerja, serta menjalankan analisis menggunakan LaSPUR (Land & Sea Planning Unit Reconciliation).\n\n\n1 Panduan Penyiapan Modul\nDokumen ini menjelaskan langkah-langkah menyiapkan Portable Module LaSPUR sebelum digunakan, mulai dari struktur folder, persiapan data, hingga menjalankan aplikasi.\n\n\n\n\n\n\nUnduh Panduan Penyiapan Modul\n\n\n\nDokumen:\n\nPanduan Penyiapan Modul LaSPUR (.pdf)\n\nLink Unduh\n\nTambahkan tautan Google Drive / OneDrive / GitHub Release.\n\n\n\n\n\n\n2 Panduan Pengguna\nPanduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses impor data, menjalankan setiap modul analisis, hingga interpretasi hasil keluaran.\n\n\n\n\n\n\nUnduh Panduan Pengguna\n\n\n\nDokumen:\n\nUser Manual LaSPUR (.pdf)\n\nLink Unduh\n\nTambahkan tautan menuju User Manual.\n\n\n\n\n\n\n3 Bahan Ajar\nMateri pelatihan yang digunakan pada kegiatan sosialisasi maupun pelatihan penggunaan LaSPUR.\n\n\n\n\n\n\nUnduh Bahan Ajar\n\n\n\nDokumen:\n\nSlide Presentasi LaSPUR (.pptx)\nModul Pelatihan (.pdf)\nContoh Studi Kasus (.pdf)\n\nLink Unduh\n\nTambahkan tautan menuju folder bahan ajar.\n\n\n\n\n\n\n4 Referensi\nDokumen referensi yang menjadi dasar pengembangan metode analisis maupun penyusunan data pada LaSPUR.\nReferensi dapat berupa:\n\nPeraturan perundang-undangan\nPedoman teknis\nPublikasi ilmiah\nDokumen kebijakan\nBahan bacaan pendukung lainnya\n\n\n\n\n\n\n\nReferensi\n\n\n\n\n4.0.1 Regulasi\n\nUndang-Undang\nPeraturan Pemerintah\nPeraturan Menteri\nPeraturan Daerah\n\n\n\n4.0.2 Pedoman Teknis\n\nPedoman Penyusunan RTRW\nPedoman Penyusunan RZWP3K\nPedoman Analisis Spasial\n\n\n\n4.0.3 Publikasi\n\nArtikel ilmiah\nBuku\nTechnical Report\nWorking Paper\n\n\n\n4.0.4 Link Unduh\n\nTambahkan tautan menuju folder referensi.\n\n\n\n\n\n\n\n5 Ringkasan Dokumen\n\n\n\n\n\n\n\n\nDokumen\nFormat\nKeterangan\n\n\n\n\nPanduan Penyiapan Modul\nPDF\nLangkah instalasi dan konfigurasi aplikasi\n\n\nPanduan Pengguna\nPDF\nPetunjuk penggunaan seluruh fitur LaSPUR\n\n\nBahan Ajar\nPPTX / PDF\nMateri pelatihan dan presentasi\n\n\nReferensi\nPDF / URL\nRegulasi, pedoman teknis, dan bahan bacaan pendukung"
+  },
+  {
+    "objectID": "glossary.html",
+    "href": "glossary.html",
+    "title": "Glosarium",
+    "section": "",
+    "text": "Dokumen ini menjelaskan istilah-istilah yang digunakan dalam dokumentasi, proses analisis spasial, serta modul-modul pada LaSPUR. Glosarium ini bertujuan agar pengguna memiliki pemahaman yang sama terhadap setiap istilah teknis yang digunakan."
+  },
+  {
+    "objectID": "glossary.html#referensi",
+    "href": "glossary.html#referensi",
+    "title": "Glosarium",
+    "section": "21.1 Referensi",
+    "text": "21.1 Referensi\n\nOGC (Open Geospatial Consortium)\nBadan Informasi Geospasial (BIG)\nDokumentasi LaSPUR\nDokumentasi GDAL, PROJ, dan sf (R)"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Alat Bantu LaSPUR",
+    "section": "",
+    "text": "Land and Seascape Planning Unit Reconciliation (LaSPUR) merupakan alat bantu yang dikembangkan untuk mendukung proses rekonsiliasi antara tata ruang darat (Rencana Tata Ruang Wilayah/RTRW) dan tata ruang laut (Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil/RZWP3K). Modul ini membantu pengguna dalam mengidentifikasi potensi konflik pemanfaatan ruang, mengevaluasi tingkat keterpaduan sistem darat dan laut, serta menghasilkan rekomendasi rekonsiliasi berdasarkan analisis spasial dan berbagai indikator lingkungan.\nLaSPUR mengevaluasi hubungan antara perencanaan ruang darat dan laut berdasarkan tiga kondisi spasial utama berikut.\n\n\nMengidentifikasi dan memberikan rekomendasi penyelesaian terhadap alokasi ruang darat dan laut yang saling bertampalan secara spasial, baik sebagian maupun seluruhnya.\n\n\n\nMengidentifikasi dan memberikan rekomendasi area darat dan laut yang saling berbatasan langsung sehingga memerlukan pengelolaan yang terintegrasi untuk mengurangi potensi konflik pemanfaatan ruang.\n\n\n\nMengidentifikasi dan memberikan rekomendasi alokasi ruang darat maupun laut yang memberikan dampak ekologis, hidrologis, sosial, maupun ekonomi terhadap wilayah lainnya melalui keterhubungan sistem alami maupun fungsional.\n\nUntuk mendukung proses rekonsiliasi tersebut, LaSPUR terdiri atas tiga tahapan analisis utama, yaitu SERASI, PADU, dan PADAN.\n\n\n\nAnalisis SERASI menilai kompatibilitas berdasarkan nomenklatur kawasan darat (RTRW) yang disandingkan dengan zonasi laut (RZWP3K). Penilaian dilakukan menggunakan matriks keserasian yang menghasilkan Indeks SERASI sebagai ukuran tingkat kompatibilitas antara kedua rencana tata ruang.\n\n\n\nAnalisis PADU bertujuan untuk meningkatkan keterpaduan setiap unit perencanaan melalui penilaian indeks komposit yang menggabungkan berbagai indikator biofisik, lingkungan, sosial, dan ekonomi. Semakin tinggi nilai indeks komposit menunjukkan keterpaduan darat-laut yang lebih baik dalam aspek biofisik, lingkungan, sosial, dan ekonomi.\nIndeks PADU disusun dari beberapa sub-indeks berikut.\n\n\n\n\n\n\n\n\nSub-Indeks\nNama\nDeskripsi\n\n\n\n\nPADU-KE\nKeterpaduan Lahan dan Perairan\nMenunjukkan keterpaduan berdasarkan peta penggunaan lahan darat dan zonasi perairan.\n\n\nPADU-HS\nHidrologi dan Sedimentasi\nMenggabungkan informasi estuari dan Total Suspended Solid (TSS).\n\n\nPADU-KL\nKawasan Lindung Terintegrasi\nMenggunakan peta kawasan lindung di darat maupun laut.\n\n\nPADU-KH\nKomposisi Habitat\nMenggabungkan peta mangrove, terumbu karang, dan lamun.\n\n\nPADU-RTp\nRisiko dan Tekanan\nMengukur tekanan berdasarkan jarak terhadap industri dan alur pelayaran.\n\n\nPADU-SE\nSosial-Ekonomi\nMengidentifikasi tekanan sosial-ekonomi, seperti kepadatan penduduk dan Night-Time Light (NTL).\n\n\nPADU-KI\nKetahanan Iklim\nMengukur kerentanan wilayah pesisir berdasarkan topografi, geomorfologi, bencana, dan indikator perubahan iklim lainnya.\n\n\n\n\n\n\nAnalisis PADAN merupakan hasil penggabungan antara Indeks SERASI dan Indeks PADU yang digunakan sebagai dasar dalam menghasilkan rekomendasi akhir rekonsiliasi tata ruang darat dan laut.\n\n\n\n\n\n\n\n\nKomponen\nTeknologi\n\n\n\n\nBahasa Pemrograman\nR\n\n\nFramework Aplikasi\nShiny\n\n\nAnalisis Spasial\nsf, terra\n\n\nVisualisasi\nleaflet, ggplot2, DT\n\n\nDokumentasi\nQuarto\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nKomponen\nMinimum\nRekomendasi\n\n\n\n\nSistem Operasi\nWindows 10/11 (64-bit)\nWindows 11\n\n\nProcessor\nIntel Core i5 Generasi ke-8 atau setara\nIntel Core i7 / AMD Ryzen 7\n\n\nRAM\n8 GB\n16 GB atau lebih\n\n\nPenyimpanan\nMinimal 10 GB ruang kosong\nSSD dengan minimal 20 GB ruang kosong\n\n\nResolusi Layar\n1366 × 768\nFull HD (1920 × 1080)"
+  },
+  {
+    "objectID": "index.html#definisi-dan-tujuan-modul",
+    "href": "index.html#definisi-dan-tujuan-modul",
+    "title": "Alat Bantu LaSPUR",
+    "section": "",
+    "text": "Land and Seascape Planning Unit Reconciliation (LaSPUR) merupakan alat bantu yang dikembangkan untuk mendukung proses rekonsiliasi antara tata ruang darat (Rencana Tata Ruang Wilayah/RTRW) dan tata ruang laut (Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil/RZWP3K). Modul ini membantu pengguna dalam mengidentifikasi potensi konflik pemanfaatan ruang, mengevaluasi tingkat keterpaduan sistem darat dan laut, serta menghasilkan rekomendasi rekonsiliasi berdasarkan analisis spasial dan berbagai indikator lingkungan.\nLaSPUR mengevaluasi hubungan antara perencanaan ruang darat dan laut berdasarkan tiga kondisi spasial utama berikut.\n\n\nMengidentifikasi dan memberikan rekomendasi penyelesaian terhadap alokasi ruang darat dan laut yang saling bertampalan secara spasial, baik sebagian maupun seluruhnya.\n\n\n\nMengidentifikasi dan memberikan rekomendasi area darat dan laut yang saling berbatasan langsung sehingga memerlukan pengelolaan yang terintegrasi untuk mengurangi potensi konflik pemanfaatan ruang.\n\n\n\nMengidentifikasi dan memberikan rekomendasi alokasi ruang darat maupun laut yang memberikan dampak ekologis, hidrologis, sosial, maupun ekonomi terhadap wilayah lainnya melalui keterhubungan sistem alami maupun fungsional.\n\nUntuk mendukung proses rekonsiliasi tersebut, LaSPUR terdiri atas tiga tahapan analisis utama, yaitu SERASI, PADU, dan PADAN.\n\n\n\nAnalisis SERASI menilai kompatibilitas berdasarkan nomenklatur kawasan darat (RTRW) yang disandingkan dengan zonasi laut (RZWP3K). Penilaian dilakukan menggunakan matriks keserasian yang menghasilkan Indeks SERASI sebagai ukuran tingkat kompatibilitas antara kedua rencana tata ruang.\n\n\n\nAnalisis PADU bertujuan untuk meningkatkan keterpaduan setiap unit perencanaan melalui penilaian indeks komposit yang menggabungkan berbagai indikator biofisik, lingkungan, sosial, dan ekonomi. Semakin tinggi nilai indeks komposit menunjukkan keterpaduan darat-laut yang lebih baik dalam aspek biofisik, lingkungan, sosial, dan ekonomi.\nIndeks PADU disusun dari beberapa sub-indeks berikut.\n\n\n\n\n\n\n\n\nSub-Indeks\nNama\nDeskripsi\n\n\n\n\nPADU-KE\nKeterpaduan Lahan dan Perairan\nMenunjukkan keterpaduan berdasarkan peta penggunaan lahan darat dan zonasi perairan.\n\n\nPADU-HS\nHidrologi dan Sedimentasi\nMenggabungkan informasi estuari dan Total Suspended Solid (TSS).\n\n\nPADU-KL\nKawasan Lindung Terintegrasi\nMenggunakan peta kawasan lindung di darat maupun laut.\n\n\nPADU-KH\nKomposisi Habitat\nMenggabungkan peta mangrove, terumbu karang, dan lamun.\n\n\nPADU-RTp\nRisiko dan Tekanan\nMengukur tekanan berdasarkan jarak terhadap industri dan alur pelayaran.\n\n\nPADU-SE\nSosial-Ekonomi\nMengidentifikasi tekanan sosial-ekonomi, seperti kepadatan penduduk dan Night-Time Light (NTL).\n\n\nPADU-KI\nKetahanan Iklim\nMengukur kerentanan wilayah pesisir berdasarkan topografi, geomorfologi, bencana, dan indikator perubahan iklim lainnya.\n\n\n\n\n\n\nAnalisis PADAN merupakan hasil penggabungan antara Indeks SERASI dan Indeks PADU yang digunakan sebagai dasar dalam menghasilkan rekomendasi akhir rekonsiliasi tata ruang darat dan laut."
+  },
+  {
+    "objectID": "index.html#modul-dibangun-menggunakan",
+    "href": "index.html#modul-dibangun-menggunakan",
+    "title": "Alat Bantu LaSPUR",
+    "section": "",
+    "text": "Komponen\nTeknologi\n\n\n\n\nBahasa Pemrograman\nR\n\n\nFramework Aplikasi\nShiny\n\n\nAnalisis Spasial\nsf, terra\n\n\nVisualisasi\nleaflet, ggplot2, DT\n\n\nDokumentasi\nQuarto"
+  },
+  {
+    "objectID": "index.html#spesifikasi-minimum-laptop",
+    "href": "index.html#spesifikasi-minimum-laptop",
+    "title": "Alat Bantu LaSPUR",
+    "section": "",
+    "text": "Komponen\nMinimum\nRekomendasi\n\n\n\n\nSistem Operasi\nWindows 10/11 (64-bit)\nWindows 11\n\n\nProcessor\nIntel Core i5 Generasi ke-8 atau setara\nIntel Core i7 / AMD Ryzen 7\n\n\nRAM\n8 GB\n16 GB atau lebih\n\n\nPenyimpanan\nMinimal 10 GB ruang kosong\nSSD dengan minimal 20 GB ruang kosong\n\n\nResolusi Layar\n1366 × 768\nFull HD (1920 × 1080)"
+  },
+  {
+    "objectID": "index.html#dataset-yang-disediakan",
+    "href": "index.html#dataset-yang-disediakan",
+    "title": "Alat Bantu LaSPUR",
+    "section": "3.1 Dataset yang Disediakan",
+    "text": "3.1 Dataset yang Disediakan\n\n\n\n\n\n\n\nJenis Data\nDeskripsi\n\n\n\n\nTabular\nTabel referensi, matriks, tabel bobot, dan tabel intermediate\n\n\nRaster\nData raster yang digunakan pada proses analisis PADU\n\n\nVektor\nData RTRW, RZWP3K, dan layer pendukung analisis\n\n\n\nLink Unduh\n\nTambahkan tautan Google Drive, OneDrive, GitHub Release, atau media distribusi lainnya."
+  },
+  {
+    "objectID": "index.html#preview-data-tabular",
+    "href": "index.html#preview-data-tabular",
+    "title": "Alat Bantu LaSPUR",
+    "section": "3.1 Preview Data Tabular",
+    "text": "3.1 Preview Data Tabular\nData yang disusun dalam bentuk baris dan kolom, seperti tabel atau spreadsheet. Data tabular yang tersedia antara lain: tabel referensi, matriks, tabel bobot, dan tabel intermediate."
+  },
+  {
+    "objectID": "index.html#preview-data-raster",
+    "href": "index.html#preview-data-raster",
+    "title": "Alat Bantu LaSPUR",
+    "section": "3.2 Preview Data Raster",
+    "text": "3.2 Preview Data Raster"
+  },
+  {
+    "objectID": "index.html#preview-data-vektor",
+    "href": "index.html#preview-data-vektor",
+    "title": "Alat Bantu LaSPUR",
+    "section": "3.3 Preview Data Vektor",
+    "text": "3.3 Preview Data Vektor\n\n\n\n\n\n\n\n\n\n\n\n\n\nDokumentasi Data Input\n\n\n\nDokumentasi lengkap mengenai seluruh data input yang digunakan pada LaSPUR, termasuk spesifikasi setiap dataset, metadata, definisi kolom, contoh data, dan validasi data dapat dilihat pada halaman berikut.\n\nData Input"
+  },
+  {
+    "objectID": "raster/padu-ke.html",
+    "href": "raster/padu-ke.html",
+    "title": "PADU-KE",
+    "section": "",
+    "text": "Dataset PADU-KE merupakan data raster yang digunakan sebagai masukan pada proses analisis PADU-KE di LaSPUR. Raster ini digunakan sebagai dasar analisis spasial dan perhitungan pada tahapan identifikasi kesesuaian penggunaan lahan."
+  },
+  {
+    "objectID": "raster/padu-ke.html#raster-padu-ke",
+    "href": "raster/padu-ke.html#raster-padu-ke",
+    "title": "PADU-KE",
+    "section": "3.1 Raster PADU-KE",
+    "text": "3.1 Raster PADU-KE"
+  },
+  {
+    "objectID": "raster/padu-se.html",
+    "href": "raster/padu-se.html",
+    "title": "PADU-SE",
+    "section": "",
+    "text": "Dataset PADU-SE merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-SE di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran."
+  },
+  {
+    "objectID": "raster/padu-se.html#night-time-light",
+    "href": "raster/padu-se.html#night-time-light",
+    "title": "PADU-SE",
+    "section": "3.1 Night Time Light",
+    "text": "3.1 Night Time Light"
+  },
+  {
+    "objectID": "raster/padu-se.html#population-density",
+    "href": "raster/padu-se.html#population-density",
+    "title": "PADU-SE",
+    "section": "3.2 Population Density",
+    "text": "3.2 Population Density"
+  },
+  {
+    "objectID": "raster/padu-se.html#night-time-light-1",
+    "href": "raster/padu-se.html#night-time-light-1",
+    "title": "PADU-SE",
+    "section": "5.1 Night Time Light",
+    "text": "5.1 Night Time Light\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 (EPSG:4326)\n\n\nLayer\n1\n\n\nResolution\n0.000833333329999993 × 0.000833333329999993\n\n\nExtent\nxmin : 119.58000ymin : -1.01583xmax : 120.01167ymax : 0.03000"
+  },
+  {
+    "objectID": "raster/padu-se.html#population-density-1",
+    "href": "raster/padu-se.html#population-density-1",
+    "title": "PADU-SE",
+    "section": "5.2 Population Density",
+    "text": "5.2 Population Density\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 (EPSG:4326)\n\n\nLayer\n1\n\n\nResolution\n0.000833333329999993 × 0.000833333329999993\n\n\nExtent\nxmin : 119.58000ymin : -1.01583xmax : 120.01167ymax : 0.03000"
+  },
+  {
+    "objectID": "raster/padu-se.html#night-time-light-2",
+    "href": "raster/padu-se.html#night-time-light-2",
+    "title": "PADU-SE",
+    "section": "7.1 Night Time Light",
+    "text": "7.1 Night Time Light\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 119.58, 120.0117, -1.0158, 0.03\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 0.000833333329999993 × 0.000833333329999993\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "raster/padu-se.html#population-density-2",
+    "href": "raster/padu-se.html#population-density-2",
+    "title": "PADU-SE",
+    "section": "7.2 Population Density",
+    "text": "7.2 Population Density\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 119.58, 120.0117, -1.0158, 0.03\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 0.000833333329999993 × 0.000833333329999993\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "step2-tables.html",
+    "href": "step2-tables.html",
+    "title": "Tabel Acuan",
+    "section": "",
+    "text": "Dokumen ini menjelaskan seluruh data tabular yang digunakan pada proses analisis LaSPUR.\nSeluruh data yang ditampilkan pada halaman ini merupakan contoh struktur tabel. Pengguna dapat menggunakan data sesuai wilayah analisis, namun struktur kolom dan tipe data harus tetap mengikuti spesifikasi yang dijelaskan pada masing-masing tabel."
+  },
+  {
+    "objectID": "step2-tables.html#tabel-acuan-prioritas-rtrw",
+    "href": "step2-tables.html#tabel-acuan-prioritas-rtrw",
+    "title": "Tabel Acuan",
+    "section": "1.1 Tabel Acuan Prioritas RTRW",
+    "text": "1.1 Tabel Acuan Prioritas RTRW\n\n1.1.1 Deskripsi\nTabel ini berisi prioritas masing-masing kelas RTRW yang digunakan pada proses rekonsiliasi tata ruang.\n\n1.1.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nID\nNumeric\nNomor unik setiap kelas RTRW. Nilai harus berupa bilangan bulat.\n\n\nRTRW\nCharacter\nNama kelas RTRW yang harus sesuai dengan atribut pada data vektor RTRW.\n\n\nPrioritas\nNumeric\nNilai prioritas kawasan. Hanya diperbolehkan bernilai 0 atau 1.\n\n\n\n\n\n\n1.1.1.2 Preview\n\n\n\n\n\n\n\n\n\n\n\n1.1.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nPrioritas RTRW\nPemerintah Daerah\n-\n\n\n\n\n\n\n1.1.3 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n22\n\n\nColumns\n3\n\n\nFields\nIDRTRWPrioritas\n\n\n\n\n\n\n\n1.1.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖"
+  },
+  {
+    "objectID": "step2-tables.html#tabel-acuan-prioritas-rzwp3k",
+    "href": "step2-tables.html#tabel-acuan-prioritas-rzwp3k",
+    "title": "Tabel Acuan",
+    "section": "1.2 Tabel Acuan Prioritas RZWP3K",
+    "text": "1.2 Tabel Acuan Prioritas RZWP3K\n\n1.2.1 Deskripsi\nTabel ini berisi prioritas masing-masing zona RZWP3K yang digunakan pada proses rekonsiliasi tata ruang darat dan laut.\n\n1.2.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nID\nNumeric\nNomor unik setiap kelas RZWP3K. Nilai harus berupa bilangan bulat.\n\n\nRZWP3K\nCharacter\nNama zona RZWP3K yang harus sesuai dengan atribut pada data vektor RZWP3K.\n\n\nPrioritas\nNumeric\nNilai prioritas kawasan. Hanya diperbolehkan bernilai 0 atau 1.\n\n\n\n\n\n\n1.2.1.2 Preview\n\n\n\n\n\n\n\n\n\n\n\n1.2.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nPrioritas RZWP3K\nPemerintah Daerah\n-\n\n\n\n\n\n\n1.2.3 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n26\n\n\nColumns\n3\n\n\nFields\nIDRZWP3KPrioritas\n\n\n\n\n\n\n\n1.2.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 1\n✔\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✖"
+  },
+  {
+    "objectID": "step2-tables.html#matriks-serasi",
+    "href": "step2-tables.html#matriks-serasi",
+    "title": "Tabel Acuan",
+    "section": "2.1 Matriks SERASI",
+    "text": "2.1 Matriks SERASI\n\n2.1.1 Deskripsi\nMatriks SERASI merupakan tabel acuan yang digunakan untuk menentukan tingkat kesesuaian (compatibility) antara setiap kelas RTRW dan RZWP3K pada area yang saling tumpang tindih.\nSetiap sel pada matriks merepresentasikan nilai indeks kesesuaian antara satu kelas RTRW dengan satu zona RZWP3K. Nilai tersebut digunakan pada proses perhitungan Indeks SERASI.\n\nCatatan: Tabel yang ditampilkan di bawah merupakan contoh struktur data. Jumlah kolom dan kelas dapat berbeda sesuai wilayah analisis, namun format matriks harus tetap dipertahankan.\n\n\n\n\n2.1.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nRTRW_RZWP3K\nCharacter\nNama kelas RTRW yang digunakan sebagai baris pada matriks.\n\n\nKawasan Konservasi Maritim\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nSuaka\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nTaman\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nKawasan Konservasi Lainnya\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nZona Wilayah Kelola Masyarakat Hukum Adat\nNumeric\nNilai indeks kesesuaian terhadap zona tersebut.\n\n\nKolom zona lainnya\nNumeric\nSeluruh kolom setelah kolom pertama merupakan kelas RZWP3K dengan nilai indeks kesesuaian.\n\n\n\nNilai yang digunakan pada matriks umumnya berada pada rentang:\n\n\n\nNilai\nArti\n\n\n\n\n1\nSangat sesuai\n\n\n0.5\nCukup sesuai\n\n\n0\nTidak sesuai\n\n\n\n\n\n2.1.2.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.1.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nMatriks SERASI\nLaSPUR\n-\n\n\n\n\n\n\n2.1.4 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n22\n\n\nColumns\n23\n\n\nFields\nRTRW_RZWP3KKawasan Konservasi MaritimSuakaTamanKawasan Konservasi LainnyaKawasan Wilayah Kelola Masyarakat Hukum AdatKawasan Pertambangan Minyak dan Gas BumiKawasan Pertambangan Mineral dan Batu BaraKawasan Pengelolaan EnergiKawasan Pengelolaan Ekosistem PesisirKawasan PerikananKawasan IndustriKawasan Perdagangan Barang Dan/Atau JasaKawasan PariwisataKawasan PermukimanKawasan Pertahanan dan KeamananKawasan PergaramanKawasan Bandar UdaraKawasan TransportasiKawasan Pelabuhan PerikananKawasan Pemanfaatan Air Laut selain Energi/Pengolahan AirKawasan PembuanganKawasan Pemanfaatan Lainnya\n\n\n\n\n\n\n\n2.1.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPerhitungan Indeks SERASI\n✔\n\n\nRekomendasi Rekonsiliasi\n✔"
+  },
+  {
+    "objectID": "step2-tables.html#matriks-padu-ke",
+    "href": "step2-tables.html#matriks-padu-ke",
+    "title": "Tabel Acuan",
+    "section": "2.2 Matriks PADU-KE",
+    "text": "2.2 Matriks PADU-KE\n\n2.2.1 Deskripsi\nMatriks PADU-KE merupakan matriks kedekatan (adjacency matrix) antar kelas penutupan lahan yang digunakan dalam perhitungan PADU-KE (Kedekatan Ekologi).\nNilai pada matriks menunjukkan tingkat hubungan spasial antar kelas penutupan lahan.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.2.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nclass\nCharacter\nNama kelas penutupan lahan yang menjadi baris matriks.\n\n\nHutan Lahan Kering Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Lahan Kering Sekunder\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Mangrove Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nHutan Rawa Primer\nNumeric\nNilai adjacency terhadap kelas tersebut.\n\n\nKolom kelas lainnya\nNumeric\nNilai adjacency terhadap kelas penutupan lahan lainnya.\n\n\n\nSecara umum digunakan nilai:\n\n\n\nNilai\nArti\n\n\n\n\n3\nSangat berdekatan\n\n\n1\nBerdekatan\n\n\n\n\n\n2.2.2.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.2.3 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nMatriks PADU-KE\nLaSPUR\n-\n\n\n\n\n\n\n2.2.4 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n24\n\n\nColumns\n25\n\n\nFields\nclassHutan Lahan Kering PrimerHutan Lahan Kering SekunderHutan Mangrove PrimerHutan Rawa PrimerHutan Mangrove SekunderHutan Rawa SekunderHutan TanamanSemak BelukarPerkebunan/KebunPermukiman/Lahan TerbangunLahan TerbukaSavanna/Padang RumputTubuh AirSemak Belukar RawaPertanian Lahan KeringPertanian Lahan Kering Campur Semak/Kebun CampurSawahTambakBandara/PelabuhanTransmigrasiPertambanganRawaTerumbu KarangPadang Lamun\n\n\n\n\n\n\n\n2.2.5 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPADU-KE\n✔\n\n\nPADU Final\n✔"
+  },
+  {
+    "objectID": "step2-tables.html#tabel-bobot-padu",
+    "href": "step2-tables.html#tabel-bobot-padu",
+    "title": "Tabel Acuan",
+    "section": "2.3 Tabel Bobot PADU",
+    "text": "2.3 Tabel Bobot PADU\n\n2.3.1 Deskripsi\nTabel ini berisi bobot masing-masing indikator PADU yang digunakan dalam perhitungan Indeks PADU Final.\nBobot setiap indikator dapat disesuaikan dengan kebutuhan analisis. Apabila tabel ini tidak disediakan, sistem akan menggunakan bobot seragam (1/n) secara otomatis.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.3.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nKode\nCharacter\nKode indikator PADU (KE, HS, KH, KI, KL, RTP, SE).\n\n\nBobot\nNumeric\nBobot masing-masing indikator dengan rentang nilai 0–1.\n\n\n\n\n\n\n2.3.3 Aturan Validasi\n\nKode harus unik.\nNilai bobot harus berupa angka.\nNilai bobot tidak boleh negatif.\nTotal seluruh bobot sebaiknya bernilai 1.\nApabila tabel tidak diunggah, sistem menggunakan bobot 1/n secara otomatis.\n\n\n\n2.3.3.1 Preview\n\n\n\n\n\n\n\n\n\n\n\n2.3.4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nBobot PADU\nPengguna\n-\n\n\n\n\n\n\n2.3.5 Spesifikasi\n\n\n\n\nFormat\nXLSX\n\n\nRows\n7\n\n\nColumns\n2\n\n\nFields\nKodeBobot\n\n\n\n\n\n\n\n2.3.6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPADU\n✔\n\n\nPerhitungan PADU Final\n✔"
+  },
+  {
+    "objectID": "step2-tables.html#tabel-opsi-alternatif",
+    "href": "step2-tables.html#tabel-opsi-alternatif",
+    "title": "Tabel Acuan",
+    "section": "2.4 Tabel Opsi Alternatif",
+    "text": "2.4 Tabel Opsi Alternatif\n\n2.4.1 Deskripsi\nTabel ini digunakan untuk menentukan alternatif perubahan kelas RTRW maupun zona RZWP3K pada area yang mengalami konflik.\nTabel ini dihasilkan setelah proses identifikasi overlap. Pengguna kemudian memilih alternatif perubahan menggunakan daftar pilihan (dropdown) yang tersedia pada kolom alt_RTRW dan alt_RZWP3K.\n\nCatatan: Data yang ditampilkan di bawah merupakan contoh struktur tabel.\n\n\n\n\n2.4.2 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nid_pu\nNumeric\nID Planning Unit.\n\n\nid_rtrw\nNumeric\nID kelas RTRW.\n\n\nid_rzwp3k\nNumeric\nID zona RZWP3K.\n\n\nRTRW\nCharacter\nNama kelas RTRW.\n\n\nRZWP3K\nCharacter\nNama zona RZWP3K.\n\n\narea_ha\nNumeric\nLuas area overlap (ha).\n\n\nidx_serasi\nNumeric\nNilai indeks SERASI.\n\n\nalt_RTRW\nCharacter\nAlternatif RTRW yang dipilih pengguna.\n\n\nalt_RZWP3K\nCharacter\nAlternatif zona RZWP3K yang dipilih pengguna.\n\n\n\n\n\n\n2.4.3 Aturan Validasi\n\nNilai alt_RTRW harus dipilih dari daftar kelas RTRW yang tersedia.\nNilai alt_RZWP3K harus dipilih dari daftar zona RZWP3K yang tersedia.\nNilai id_pu harus unik.\nNilai area_ha harus lebih besar dari nol.\nNilai idx_serasi berada pada rentang 0–1.\n\n\n\n2.4.3.1 Preview\n\n\n\n\n2.4.4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nOpsi Alternatif\nPengguna\n-\n\n\n\n\n\n\n2.4.5 Spesifikasi\n\n\n\n2.4.6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPenyusunan Alternatif\n✔\n\n\nRekomendasi Rekonsiliasi\n✔"
+  },
+  {
+    "objectID": "step2-tables.html#tabel-overlap-reconciliation",
+    "href": "step2-tables.html#tabel-overlap-reconciliation",
+    "title": "Tabel Acuan",
+    "section": "2.5 Tabel Overlap Reconciliation",
+    "text": "2.5 Tabel Overlap Reconciliation\n\n2.5.1 Deskripsi\nTabel Overlap Reconciliation merupakan tabel hasil pengolahan utama pada proses rekonsiliasi tata ruang. Tabel ini berisi seluruh area yang mengalami overlap antara RTRW dan RZWP3K beserta seluruh indeks hasil analisis SERASI, PADU, rekomendasi sistem, alternatif zona, hingga keputusan akhir pengguna.\nTabel ini digunakan sebagai dasar dalam menentukan perubahan zona maupun penyusunan hasil akhir rekonsiliasi tata ruang.\n\nCatatan: Tabel yang ditampilkan di bawah ini hanya merupakan contoh format data.\n\n\n2.5.1.1 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nid_pu\nInteger\nID Planning Unit.\n\n\nstat_pu\nCharacter\nStatus Planning Unit, misalnya intersection, RTRW only, atau RZWP3K only.\n\n\nid_rtrw\nInteger\nID polygon RTRW.\n\n\nid_rzwp3k\nInteger\nID polygon RZWP3K.\n\n\nRTRW\nCharacter\nNama kelas RTRW yang beririsan.\n\n\nRZWP3K\nCharacter\nNama kelas RZWP3K yang beririsan.\n\n\narea_ha\nNumeric\nLuas area overlap (hektar).\n\n\nidx_serasi\nNumeric\nNilai indeks kesesuaian SERASI.\n\n\nidx_padu_hs\nNumeric\nNilai indeks PADU-HS.\n\n\nidx_padu_ke\nNumeric\nNilai indeks PADU-KE.\n\n\nidx_padu_kh\nNumeric\nNilai indeks PADU-KH.\n\n\nidx_padu_ki\nNumeric\nNilai indeks PADU-KI.\n\n\nidx_padu_kl\nNumeric\nNilai indeks PADU-KL.\n\n\nidx_padu_rtp\nNumeric\nNilai indeks PADU-RTP.\n\n\nidx_padu_final\nNumeric\nNilai gabungan seluruh indikator PADU.\n\n\nidx_padan\nNumeric\nNilai PADAN awal.\n\n\nalt_RTRW\nCharacter\nAlternatif kelas RTRW yang dipilih apabila dilakukan perubahan RTRW.\n\n\nalt_RZWP3K\nCharacter\nAlternatif kelas RZWP3K yang dipilih apabila dilakukan perubahan RZWP3K.\n\n\nidx_serasi_rtrw_alt\nNumeric\nNilai SERASI apabila RTRW diganti dengan alternatif.\n\n\nidx_serasi_rzwp3k_alt\nNumeric\nNilai SERASI apabila RZWP3K diganti dengan alternatif.\n\n\nidx_padan_rtrw_alt\nNumeric\nNilai PADAN apabila RTRW menggunakan alternatif.\n\n\nidx_padan_rzwp3k_alt\nNumeric\nNilai PADAN apabila RZWP3K menggunakan alternatif.\n\n\nrecommendation\nCharacter\nRekomendasi otomatis yang dihasilkan sistem berdasarkan seluruh indeks.\n\n\ndecision\nCharacter\nKeputusan akhir yang disarankan sistem.\n\n\nidx_padan_final\nNumeric\nNilai PADAN setelah mempertimbangkan alternatif terbaik.\n\n\nuser_decision\nCharacter\nKeputusan akhir yang dipilih oleh pengguna.\n\n\n\n\n\n2.5.1.2 Preview\n\n\n\n2.5.2 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\n\n\n\n\nOverlap Reconciliation\nHasil Proses LaSPUR\n-\n\n\n\n\n\n2.5.3 Spesifikasi\n\n\n2.5.4 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nSERASI Step 2\n✔\n\n\nPADU\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput Akhir\n✔"
+  },
+  {
+    "objectID": "vector/padu-ke.html",
+    "href": "vector/padu-ke.html",
+    "title": "PADU-KE",
+    "section": "",
+    "text": "1 Deskripsi\nDataset PADU-KE menggunakan data vektor ekosistem pesisir berupa terumbu karang dan padang lamun sebagai salah satu masukan dalam analisis kesesuaian ekologi. Dataset ini digunakan untuk mengidentifikasi area yang memiliki nilai ekologis tinggi sehingga menjadi pertimbangan dalam proses rekonsiliasi tata ruang.\n\n\n\n2 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nPL2024_Coral Seagrass Union\nShapefile\nData gabungan terumbu karang dan padang lamun.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nCoral & Seagrass\nPemerintah Daerah / KLHK\n-\n-\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n17\n\n\nExtent\nxmin : 119339.84929ymin : 9887559.03807xmax : 167288.65812ymax : 10003275.98866\n\n\nFields\nKODE_PROVPL2024_IDPL2023_ID_LUAS_HANAMAOBJFCODELCODESRS_IDMETADATAREMARKIDLC\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nPADU-KE\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n7 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-ki.html",
+    "href": "vector/padu-ki.html",
+    "title": "PADU-KI",
+    "section": "",
+    "text": "1 Deskripsi\nDataset PADU-KI merupakan data vektor yang merepresentasikan kawasan rawan bencana yang dipengaruhi oleh perubahan iklim. Dataset ini digunakan sebagai salah satu parameter dalam analisis PADU-KI untuk menilai tingkat kesesuaian dan potensi konflik pemanfaatan ruang.\n\n\n\n2 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nST_KRB_climate\nShapefile\nKawasan rawan bencana akibat perubahan iklim.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nKawasan Rawan Bencana\nPemerintah Daerah\n-\n-\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n4\n\n\nExtent\nxmin : 119846.95040ymin : 9887756.09920xmax : 166999.24880ymax : 10002887.41910\n\n\nFields\nKRB_03KerawananShape_LengShape_Area\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nPADU-KI\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-rtp.html",
+    "href": "vector/padu-rtp.html",
+    "title": "PADU-RTP",
+    "section": "",
+    "text": "Dataset PADU-RTP merupakan kumpulan data vektor yang digunakan sebagai parameter pada analisis PADU-RTP di LaSPUR. Dataset ini terdiri atas kawasan industri dan alur pelayaran yang digunakan untuk mengidentifikasi aktivitas pemanfaatan ruang yang berpotensi memengaruhi proses rekonsiliasi tata ruang darat dan laut."
+  },
+  {
+    "objectID": "vector/padu-rtp.html#kawasan-industri",
+    "href": "vector/padu-rtp.html#kawasan-industri",
+    "title": "PADU-RTP",
+    "section": "3.1 Kawasan Industri",
+    "text": "3.1 Kawasan Industri"
+  },
+  {
+    "objectID": "vector/padu-rtp.html#alur-pelayaran",
+    "href": "vector/padu-rtp.html#alur-pelayaran",
+    "title": "PADU-RTP",
+    "section": "3.2 Alur Pelayaran",
+    "text": "3.2 Alur Pelayaran"
+  },
+  {
+    "objectID": "vector/padu-rtp.html#kawasan-industri-1",
+    "href": "vector/padu-rtp.html#kawasan-industri-1",
+    "title": "PADU-RTP",
+    "section": "5.1 Kawasan Industri",
+    "text": "5.1 Kawasan Industri\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n1\n\n\nExtent\nxmin : 134990.56490ymin : 9918293.10450xmax : 167246.84261ymax : 9983187.52990\n\n\nFields\nNAMOBJShape_LengShape_Area"
+  },
+  {
+    "objectID": "vector/padu-rtp.html#alur-pelayaran-1",
+    "href": "vector/padu-rtp.html#alur-pelayaran-1",
+    "title": "PADU-RTP",
+    "section": "5.2 Alur Pelayaran",
+    "text": "5.2 Alur Pelayaran\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTILINESTRING\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n1\n\n\nExtent\nxmin : 119294.16606ymin : 9908302.69640xmax : 152146.63780ymax : 10003276.54034\n\n\nFields\nNAMOBJShape_Leng"
+  },
+  {
+    "objectID": "vector/padu-rtp.html#kawasan-industri-2",
+    "href": "vector/padu-rtp.html#kawasan-industri-2",
+    "title": "PADU-RTP",
+    "section": "7.1 Kawasan Industri",
+    "text": "7.1 Kawasan Industri\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/padu-rtp.html#alur-pelayaran-2",
+    "href": "vector/padu-rtp.html#alur-pelayaran-2",
+    "title": "PADU-RTP",
+    "section": "7.2 Alur Pelayaran",
+    "text": "7.2 Alur Pelayaran\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "vector/administrasi.html",
+    "href": "vector/administrasi.html",
+    "title": "Administrasi",
+    "section": "",
+    "text": "1 Deskripsi\nDataset Administrasi merupakan data vektor yang digunakan sebagai referensi batas wilayah administrasi pada berbagai tahapan analisis LaSPUR. Dataset ini berfungsi sebagai acuan dalam identifikasi lokasi, penyajian hasil analisis, agregasi statistik, serta visualisasi spasial.\n\n\n\n2 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nGADM 4.1 Indonesia\nShapefile\nBatas wilayah administrasi yang digunakan sebagai referensi analisis dan visualisasi pada LaSPUR.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\n\n\n\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nGADM 4.1\nGlobal Administrative Areas (GADM)\n2022\nhttps://gadm.org\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n26\n\n\nExtent\nxmin : 119291.94124ymin : 9889228.26390xmax : 167264.08874ymax : 10003276.85793\n\n\nFields\nGID_3GID_0COUNTRYGID_1NAME_1NL_NAME_1GID_2NAME_2NL_NAME_2NAME_3VARNAME_3NL_NAME_3TYPE_3ENGTYPE_3CC_3HASC_3\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nAnalisis SERASI\n✔\n\n\nAnalisis PADU\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n130 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  }
+]

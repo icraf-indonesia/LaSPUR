@@ -10,15 +10,13 @@ execute:
 source("R/utils.R")
 ```
 
-## Deskripsi
+# Deskripsi
 
 Dataset PADU-RTP merupakan kumpulan data vektor yang digunakan sebagai parameter pada analisis PADU-RTP di LaSPUR. Dataset ini terdiri atas kawasan industri dan alur pelayaran yang digunakan untuk mengidentifikasi aktivitas pemanfaatan ruang yang berpotensi memengaruhi proses rekonsiliasi tata ruang darat dan laut.
 
 ---
 
-# 1. Data yang Digunakan
-
-## Vektor
+# Data yang Digunakan
 
 | Nama Data | Format | Keterangan |
 |-----------|--------|------------|
@@ -27,7 +25,7 @@ Dataset PADU-RTP merupakan kumpulan data vektor yang digunakan sebagai parameter
 
 ---
 
-# 2. Visualisasi
+# Visualisasi
 
 ## Kawasan Industri
 
@@ -55,7 +53,7 @@ create_vector_map(
 
 ---
 
-# 3. Sumber Data
+# Sumber Data
 
 | Dataset | Instansi | Tahun | URL |
 |----------|----------|-------|-----|
@@ -64,7 +62,7 @@ create_vector_map(
 
 ---
 
-# 4. Spesifikasi Teknis
+# Spesifikasi Teknis
 
 ## Kawasan Industri
 
@@ -92,7 +90,7 @@ get_vector_metadata(
 
 ---
 
-# 5. Digunakan pada Tahapan
+# Digunakan pada Tahapan
 
 | Tahapan | Digunakan |
 |----------|:---------:|
@@ -103,7 +101,7 @@ get_vector_metadata(
 
 ---
 
-# 6. Pemeriksaan Data
+# Pemeriksaan Data
 
 ## Kawasan Industri
 
