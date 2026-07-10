@@ -276,10 +276,14 @@ padan_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
-      # Show key columns for clarity
-      table_data <- rv$analysis_result$table[, c("id_pu", "idx_serasi", "idx_padu_final", "idx_padan")]
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "idx_serasi", "idx_padu_final", "idx_padan")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Indeks SERASI", "Indeks PADU", "Indeks PADAN")
+
       DT::datatable(
-        table_data,
+        df_subset,
         options = list(
           pageLength = 10,
           scrollX = TRUE,
@@ -288,7 +292,11 @@ padan_server <- function(id, output_dir) {
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Indeks SERASI", "Indeks PADU", "Indeks PADAN"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

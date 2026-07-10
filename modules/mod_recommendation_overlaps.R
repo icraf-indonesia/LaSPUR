@@ -1,7 +1,7 @@
 # ui/modules/mod_recommendation_overlaps.R
 # ============================================================
 #  MODULE: Recommendation (Overlaps)
-#  Wizard flow (accordion in left panel) – gated by completion.
+#  Wizard flow (accordion in left panel)
 #  Outputs (map, table accordion, log) in right panel.
 # ============================================================
 
@@ -369,6 +369,20 @@ recommendation_overlaps_server <- function(id, output_dir) {
       )
     })
     
+    # ── Step 2: load matrix on upload (independent of template button) ─
+    # This ensures rv$matriks_serasi is populated as soon as the file lands,
+    # so alt_upload can be validated regardless of order.
+    observeEvent(input$matrix_file, {
+      req(input$matrix_file)
+      tryCatch({
+        rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
+        showNotification("Matriks Serasi berhasil dimuat.", type = "message", duration = 3)
+      }, error = function(e) {
+        rv$matriks_serasi <- NULL
+        showNotification(paste("Gagal memuat Matriks Serasi:", e$message), type = "error", duration = 8)
+      })
+    })
+
     # ── Make template using step = "step1" ─────────────────────
     observeEvent(input$btn_make_template, {
       
@@ -387,35 +401,41 @@ recommendation_overlaps_server <- function(id, output_dir) {
       # Clear previous status
       rv$alt_template_path <- NULL
       
-      tryCatch({
-        rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
-        
-        out_dir_step2 <- file.path(output_dir(), "step2")
-        dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
-        
-        # Call determine_alternative_zones with step = "step1" (overlaps)
-        # The function expects columns: id_pu, id_rtrw, id_rzwp3k, RTRW, RZWP3K, area_ha, idx_serasi
-        # Our filtered map has exactly those.
-        result <- determine_alternative_zones(
-          idx_padan_map_filter = rv$idx_padan_map_filter,
-          serasi_matrix = rv$matriks_serasi,
-          step = "step1",
-          n_alt = input$n_alt,
-          output_dir = out_dir_step2
-        )
-        
-        # The function saves a file named "overlaps_alternative_zones_selections.xlsx"
-        output_path <- file.path(out_dir_step2, "overlaps_alternative_zones_selections.xlsx")
-        if (!file.exists(output_path)) {
-          stop("File template tidak ditemukan setelah pembuatan.")
-        }
-        
-        rv$alt_template_path <- output_path
-        showNotification("Template alternatif zona berhasil dibuat.", type = "message")
-        
-      }, error = function(e) {
-        rv$alt_template_path <- NULL
-        showNotification(paste("Gagal membuat template:", e$message), type = "error", duration = 10)
+      withProgress(message = "Membuat Template Opsi Alternatif", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Memuat matriks serasi...")
+          rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
+          
+          out_dir_step2 <- file.path(output_dir(), "step2")
+          dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
+          
+          incProgress(0.4, detail = "Memproses opsi alternatif...")
+          # Call determine_alternative_zones with step = "step1" (overlaps)
+          # The function expects columns: id_pu, id_rtrw, id_rzwp3k, RTRW, RZWP3K, area_ha, idx_serasi
+          # Our filtered map has exactly those.
+          result <- determine_alternative_zones(
+            idx_padan_map_filter = rv$idx_padan_map_filter,
+            serasi_matrix = rv$matriks_serasi,
+            step = "step1",
+            n_alt = input$n_alt,
+            output_dir = out_dir_step2
+          )
+          
+          incProgress(0.8, detail = "Menyimpan file template...")
+          # The function saves a file named "overlaps_alternative_zones_selections.xlsx"
+          output_path <- file.path(out_dir_step2, "overlaps_alternative_zones_selections.xlsx")
+          if (!file.exists(output_path)) {
+            stop("File template tidak ditemukan setelah pembuatan.")
+          }
+          
+          rv$alt_template_path <- output_path
+          showNotification("Template alternatif zona berhasil dibuat.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
+          
+        }, error = function(e) {
+          rv$alt_template_path <- NULL
+          showNotification(paste("Gagal membuat template:", e$message), type = "error", duration = 10)
+        })
       })
     })
     
@@ -436,9 +456,28 @@ recommendation_overlaps_server <- function(id, output_dir) {
       }
     )
     
-    # Upload & validate alt table
-    observeEvent(input$alt_upload, {
-      req(input$alt_upload, rv$matriks_serasi, rv$idx_padan_map_filter)
+    # Use observe() so processing retries automatically whenever the uploaded
+    # file or its dependencies (matriks_serasi, idx_padan_map_filter) become
+    # available — regardless of upload order.
+    observe({
+      req(input$alt_upload)
+      
+      # Dependencies not yet ready — show a pending hint and wait.
+      if (is.null(rv$matriks_serasi) || is.null(rv$idx_padan_map_filter)) {
+        missing <- c(
+          if (is.null(rv$matriks_serasi))       "Matriks Serasi (.xlsx)",
+          if (is.null(rv$idx_padan_map_filter)) "Peta PADAN yang sudah difilter"
+        )
+        rv$alt_status <- list(
+          ok  = FALSE,
+          msg = paste0(
+            "File template telah diunggah. Menunggu input berikut sebelum dapat divalidasi:\n- ",
+            paste(missing, collapse = "\n- ")
+          ),
+          preview = NULL
+        )
+        return()
+      }
       
       tryCatch({
         alt_table <- load_and_validate_table(input$alt_upload$datapath)
@@ -536,7 +575,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run_final"),
-                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Generate Recommendation"),
+                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Buat Rekomendasi"),
                        class = "btn-success btn-sm")
         ),
         .step_nav(ns, back_id = "btn_back_3", next_id = NULL)
@@ -559,101 +598,106 @@ recommendation_overlaps_server <- function(id, output_dir) {
       req(rv$idx_padan_map_alt, input$rtrw_priority_file, input$rzwp3k_priority_file)
       
       rv$final_result <- NULL
-      log_lines <- character(0)
-      
-      tryCatch({
-        rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
-        rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
-        
-        chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW")
-        if (!chk_rtrw$ok) stop(chk_rtrw$msg)
-        chk_rz <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K")
-        if (!chk_rz$ok) stop(chk_rz$msg)
-        
-        priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
-        priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
-        
-        alpha            <- input$alpha_val
-        threshold_serasi <- input$threshold_serasi
-        threshold_padu   <- input$threshold_padu
-        
-        df <- rv$idx_padan_map_alt
-        
-        # Compute alternative padan indices
-        df <- df %>%
-          dplyr::mutate(
-            idx_padan_rtrw_alt = alpha * idx_serasi_rtrw_alt + (1 - alpha) * idx_padu_final,
-            idx_padan_rzwp3k_alt = alpha * idx_serasi_rzwp3k_alt + (1 - alpha) * idx_padu_final
-          )
-        
-        # First-pass recommendation
-        df <- df %>%
-          dplyr::mutate(
-            recommendation = dplyr::case_when(
-              is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
-              RTRW %in% priority_rtrw ~ "",
-              RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
-              idx_serasi >= threshold_serasi ~ "Koordinasi",
-              idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
-              idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
+      withProgress(message = "Membuat Rekomendasi Tumpang Tindih", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Memuat tabel prioritas...")
+          rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
+          rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
+          
+          chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW")
+          if (!chk_rtrw$ok) stop(chk_rtrw$msg)
+          chk_rz <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K")
+          if (!chk_rz$ok) stop(chk_rz$msg)
+          
+          priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
+          priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
+          
+          alpha            <- input$alpha_val
+          threshold_serasi <- input$threshold_serasi
+          threshold_padu   <- input$threshold_padu
+          
+          incProgress(0.4, detail = "Menghitung indeks padan alternatif...")
+          df <- rv$idx_padan_map_alt
+          
+          # Compute alternative padan indices
+          df <- df %>%
+            dplyr::mutate(
+              idx_padan_rtrw_alt = alpha * idx_serasi_rtrw_alt + (1 - alpha) * idx_padu_final,
+              idx_padan_rzwp3k_alt = alpha * idx_serasi_rzwp3k_alt + (1 - alpha) * idx_padu_final
             )
-          )
-        
-        # Final decision
-        df <- df %>%
-          dplyr::mutate(
-            decision = dplyr::case_when(
-              is.na(recommendation) | is.na(idx_padan_rzwp3k_alt) | is.na(idx_padan) | 
-                is.na(alt_RZWP3K) | is.na(idx_padan_rtrw_alt) | is.na(alt_RTRW) ~ NA_character_,
-              recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
-                paste("Ubah RZWP3K ke", alt_RZWP3K),
-              recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
-              recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
-                paste("Ubah RTRW ke", alt_RTRW),
-              recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
-              TRUE ~ "Tetap/Koordinasi"
+          
+          # First-pass recommendation
+          df <- df %>%
+            dplyr::mutate(
+              recommendation = dplyr::case_when(
+                is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
+                RTRW %in% priority_rtrw ~ "",
+                RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
+                idx_serasi >= threshold_serasi ~ "Koordinasi",
+                idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
+                idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
+              )
             )
-          )
-        
-        # Final padan index
-        df <- df %>%
-          dplyr::mutate(
-            idx_padan_final = dplyr::case_when(
-              grepl("Ubah RTRW", decision, fixed = TRUE) ~ idx_padan_rtrw_alt,
-              grepl("Ubah RZWP3K", decision, fixed = TRUE) ~ idx_padan_rzwp3k_alt,
-              grepl("Tetap/Koordinasi", decision, fixed = TRUE) ~ idx_padan,
-              TRUE ~ NA_real_
+          
+          incProgress(0.6, detail = "Membuat keputusan akhir...")
+          # Final decision
+          df <- df %>%
+            dplyr::mutate(
+              decision = dplyr::case_when(
+                is.na(recommendation) | is.na(idx_padan_rzwp3k_alt) | is.na(idx_padan) | 
+                  is.na(alt_RZWP3K) | is.na(idx_padan_rtrw_alt) | is.na(alt_RTRW) ~ NA_character_,
+                recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
+                  paste("Ubah RZWP3K ke", alt_RZWP3K),
+                recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
+                recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
+                  paste("Ubah RTRW ke", alt_RTRW),
+                recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
+                TRUE ~ "Tetap/Koordinasi"
+              )
             )
+          
+          # Final padan index
+          df <- df %>%
+            dplyr::mutate(
+              idx_padan_final = dplyr::case_when(
+                grepl("Ubah RTRW", decision, fixed = TRUE) ~ idx_padan_rtrw_alt,
+                grepl("Ubah RZWP3K", decision, fixed = TRUE) ~ idx_padan_rzwp3k_alt,
+                grepl("Tetap/Koordinasi", decision, fixed = TRUE) ~ idx_padan,
+                TRUE ~ NA_real_
+              )
+            )
+          
+          incProgress(0.8, detail = "Menyimpan hasil ke disk...")
+          out_gpkg <- file.path(output_dir(), "idx_padan_overlaps_recommendation.gpkg")
+          out_xlsx <- file.path(output_dir(), "idx_padan_overlaps_recommendation.xlsx")
+          
+          sf::st_write(df, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
+          openxlsx::write.xlsx(sf::st_drop_geometry(df), out_xlsx)
+          
+          log_lines <- c(
+            character(0),
+            "Ringkasan rekomendasi (langkah pertama):",
+            capture.output(print(table(df$recommendation, useNA = "ifany"))),
+            "",
+            "Ringkasan keputusan akhir:",
+            capture.output(print(table(df$decision, useNA = "ifany")))
           )
-        
-        out_gpkg <- file.path(output_dir(), "idx_padan_overlaps_recommendation.gpkg")
-        out_xlsx <- file.path(output_dir(), "idx_padan_overlaps_recommendation.xlsx")
-        
-        sf::st_write(df, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-        openxlsx::write.xlsx(sf::st_drop_geometry(df), out_xlsx)
-        
-        log_lines <- c(
-          log_lines,
-          "Ringkasan rekomendasi (langkah pertama):",
-          capture.output(print(table(df$recommendation, useNA = "ifany"))),
-          "",
-          "Ringkasan keputusan akhir:",
-          capture.output(print(table(df$decision, useNA = "ifany")))
-        )
-        
-        rv$final_result <- list(
-          map = df,
-          table = sf::st_drop_geometry(df),
-          gpkg_path = out_gpkg,
-          xlsx_path = out_xlsx
-        )
-        rv$final_log <- paste(log_lines, collapse = "\n")
-        showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
-        
-      }, error = function(e) {
-        call_txt <- if (!is.null(conditionCall(e))) paste0("\n(pada pemanggilan: ", paste(deparse(conditionCall(e)), collapse = " "), ")") else ""
-        rv$final_log <- paste0("Error: ", conditionMessage(e), call_txt)
-        showNotification(paste("Gagal:", conditionMessage(e)), type = "error", duration = NULL)
+          
+          rv$final_result <- list(
+            map = df,
+            table = sf::st_drop_geometry(df),
+            gpkg_path = out_gpkg,
+            xlsx_path = out_xlsx
+          )
+          rv$final_log <- paste(log_lines, collapse = "\n")
+          showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
+          
+        }, error = function(e) {
+          call_txt <- if (!is.null(conditionCall(e))) paste0("\n(pada pemanggilan: ", paste(deparse(conditionCall(e)), collapse = " "), ")") else ""
+          rv$final_log <- paste0("Error: ", conditionMessage(e), call_txt)
+          showNotification(paste("Gagal:", conditionMessage(e)), type = "error", duration = NULL)
+        })
       })
     })
     

@@ -297,7 +297,7 @@ ui <- page_sidebar(
                    style = "font-weight: bold; font-size: 0.9rem;")
     ),
     
-    title = "Jelajahi Modul",
+    title = "Jelajahi Modul LaSPUR",
     
     div(
       style = "margin-bottom: 16px;",
@@ -385,7 +385,7 @@ ui <- page_sidebar(
   
   tags$a(
     id = "user-guide-link",
-    href = "https://lumens.or.id/id/",
+    href = "https://laspur.landseascape.id/",
     target = "_blank",
     class = "btn btn-warning btn-sm",
     style = "
