@@ -54,12 +54,12 @@ padu_ki_ui <- function(id) {
                     accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                     multiple = TRUE),
           
+          # Dynamic dropdown — populated after shapefile is uploaded
+          uiOutput(ns("risk_col_ui")),
+          
           hr(),
           
-          textInput(ns("risk_col_name"), "Nama Kolom Atribut Risiko", value = "Kerawanan"),
-          
-          hr(),
-          
+
           # ── Pengaturan lanjutan (collapsible) ──────────────
           accordion(
             accordion_panel(
@@ -136,9 +136,11 @@ padu_ki_server <- function(id, output_dir) {
     # ── Reactive values ──────────────────────────────────────────
     rv <- reactiveValues(
       analysis_result = NULL,
-      gpkg_path = NULL,
-      xlsx_path = NULL,
-      log_messages = ""
+      gpkg_path       = NULL,
+      xlsx_path       = NULL,
+      log_messages    = "",
+      dr_vect         = NULL,   # loaded disaster-risk sf object
+      risk_col        = NULL    # selected column name
     )
     
     # ── Robust helper to extract shapefile path ────────────────
@@ -180,6 +182,42 @@ padu_ki_server <- function(id, output_dir) {
       }
     })
     
+    # ── Load disaster-risk shapefile & populate column dropdown ──
+    observeEvent(input$disaster_risk_file, {
+      req(input$disaster_risk_file)
+      tryCatch({
+        shp_path <- extract_shp_path(input$disaster_risk_file)
+        dr_sf    <- load_and_validate_shapefile(shp_path)
+        dr_sf    <- ensure_geometry_name(dr_sf)
+        rv$dr_vect <- dr_sf
+        
+        # Extract non-geometry column names for the dropdown
+        col_names <- names(dr_sf)
+        col_names <- col_names[!col_names %in% c("geometry", "geom")]
+        
+        output$risk_col_ui <- renderUI({
+          req(rv$dr_vect)
+          selectInput(
+            ns("risk_col_select"),
+            label = "Pilih kolom atribut risiko bencana",
+            choices  = col_names,
+            selected = if (!is.null(rv$risk_col) && rv$risk_col %in% col_names) rv$risk_col else col_names[1]
+          )
+        })
+        
+        showNotification("Peta Risiko Bencana berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$dr_vect <- NULL
+        output$risk_col_ui <- renderUI(NULL)
+        showNotification(paste("Gagal memuat Peta Risiko Bencana:", e$message), type = "error")
+      })
+    })
+    
+    # Store the selected column name reactively
+    observeEvent(input$risk_col_select, {
+      rv$risk_col <- input$risk_col_select
+    })
+    
     # ── Run analysis ──────────────────────────────────────────
     observeEvent(input$btn_run, {
       
@@ -193,7 +231,7 @@ padu_ki_server <- function(id, output_dir) {
         return()
       }
       
-      req(input$idx_serasi_file, input$disaster_risk_file)
+      req(input$idx_serasi_file, input$disaster_risk_file, rv$risk_col)
       
       # Reset previous results
       rv$analysis_result <- NULL
@@ -209,12 +247,15 @@ padu_ki_server <- function(id, output_dir) {
           # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
           idx_map_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
-          idx_map_raw <- ensure_geometry_name(idx_map_raw) 
+          idx_map_raw <- ensure_geometry_name(idx_map_raw)
           
-          dr_vect <- load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
-          dr_vect <- ensure_geometry_name(dr_vect)       
+          # Reuse the already-loaded sf object; fall back to re-reading if needed
+          dr_vect <- if (!is.null(rv$dr_vect)) rv$dr_vect else {
+            tmp <- load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
+            ensure_geometry_name(tmp)
+          }
           
-          risk_col <- input$risk_col_name
+          risk_col <- rv$risk_col
           
           # Conditional dissolve idx_serasi_map
           if ("length" %in% colnames(idx_map_raw)) {
@@ -345,8 +386,14 @@ padu_ki_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "idx_padu_ki")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Indeks PADU-KI")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
         options = list(
           pageLength = 10,
           scrollX = TRUE,
@@ -355,7 +402,11 @@ padu_ki_server <- function(id, output_dir) {
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Indeks PADU-KI"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

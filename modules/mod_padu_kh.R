@@ -631,17 +631,32 @@ padu_kh_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "coastal_habitat_ha", "idx_padu_kh")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Habitat Pesisir (ha)", "Indeks PADU-KH")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
         options = list(
           pageLength = 10,
           scrollX = TRUE,
           scrollY = "400px",
-          dom = 'Bfrtip'
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Habitat Pesisir (ha)", "Indeks PADU-KH"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

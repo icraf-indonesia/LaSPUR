@@ -1,7 +1,7 @@
 # ui/modules/mod_recommendation_adjacent.R
 # ============================================================
 #  MODULE: Recommendation (4. Analisis Rekomendasi)
-#  Wizard flow (accordion in left panel) – gated by completion.
+#  Wizard flow (accordion in left panel)
 #  Outputs (map, table accordion, log) in right panel.
 # ============================================================
 
@@ -386,6 +386,20 @@ recommendation_adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Step 2: load matrix on upload (independent of template button) ─
+    # This ensures rv$matriks_serasi is populated as soon as the file lands,
+    # so alt_upload can be validated regardless of order.
+    observeEvent(input$matrix_file, {
+      req(input$matrix_file)
+      tryCatch({
+        rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
+        showNotification("Matriks Serasi berhasil dimuat.", type = "message", duration = 3)
+      }, error = function(e) {
+        rv$matriks_serasi <- NULL
+        showNotification(paste("Gagal memuat Matriks Serasi:", e$message), type = "error", duration = 8)
+      })
+    })
+
     # ── Step 2: make template ───────────────────────────────
     observeEvent(input$btn_make_template, {
       
@@ -400,30 +414,36 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
       
       req(rv$idx_padan_map_filter, input$matrix_file)
-      tryCatch({
-        rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
-        
-        out_dir_step2 <- file.path(output_dir(), "step2")
-        dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
-        
-        determine_alternative_zones(
-          idx_padan_map_filter = rv$idx_padan_map_filter,
-          serasi_matrix = rv$matriks_serasi,
-          n_alt = input$n_alt,
-          step = "step2",
-          output_dir = out_dir_step2
-        )
-        
-        generated <- list.files(out_dir_step2, pattern = "\\.xlsx$", full.names = TRUE)
-        if (length(generated) == 0) {
-          stop("Template dibuat tetapi file .xlsx tidak ditemukan di folder output.")
-        }
-        rv$alt_template_path <- generated[order(file.info(generated)$mtime, decreasing = TRUE)][1]
-        
-        showNotification("Template alternatif zona berhasil dibuat.", type = "message")
-      }, error = function(e) {
-        rv$alt_template_path <- NULL
-        showNotification(paste("Gagal membuat template:", e$message), type = "error", duration = 10)
+      withProgress(message = "Membuat Template Opsi Alternatif", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Memuat matriks serasi...")
+          rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
+          
+          out_dir_step2 <- file.path(output_dir(), "step2")
+          dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
+          
+          incProgress(0.5, detail = "Memproses opsi alternatif...")
+          determine_alternative_zones(
+            idx_padan_map_filter = rv$idx_padan_map_filter,
+            serasi_matrix = rv$matriks_serasi,
+            n_alt = input$n_alt,
+            step = "step2",
+            output_dir = out_dir_step2
+          )
+          
+          incProgress(0.8, detail = "Menyimpan file template...")
+          generated <- list.files(out_dir_step2, pattern = "\\.xlsx$", full.names = TRUE)
+          if (length(generated) == 0) {
+            stop("Template dibuat tetapi file .xlsx tidak ditemukan di folder output.")
+          }
+          rv$alt_template_path <- generated[order(file.info(generated)$mtime, decreasing = TRUE)][1]
+          
+          showNotification("Template alternatif zona berhasil dibuat.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
+        }, error = function(e) {
+          rv$alt_template_path <- NULL
+          showNotification(paste("Gagal membuat template:", e$message), type = "error", duration = 10)
+        })
       })
     })
     
@@ -444,8 +464,28 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
     )
     
-    observeEvent(input$alt_upload, {
-      req(input$alt_upload, rv$matriks_serasi, rv$idx_padan_map_filter)
+    # Use observe() so processing retries automatically whenever the uploaded
+    # file or its dependencies (matriks_serasi, idx_padan_map_filter) become
+    # available — regardless of upload order.
+    observe({
+      req(input$alt_upload)
+      
+      # Dependencies not yet ready — show a pending hint and wait.
+      if (is.null(rv$matriks_serasi) || is.null(rv$idx_padan_map_filter)) {
+        missing <- c(
+          if (is.null(rv$matriks_serasi))       "Matriks Serasi (.xlsx)",
+          if (is.null(rv$idx_padan_map_filter)) "Peta PADAN yang sudah difilter"
+        )
+        rv$alt_status <- list(
+          ok  = FALSE,
+          msg = paste0(
+            "File template telah diunggah. Menunggu input berikut sebelum dapat divalidasi:\n- ",
+            paste(missing, collapse = "\n- ")
+          ),
+          preview = NULL
+        )
+        return()
+      }
       
       tryCatch({
         alt_table <- load_and_validate_table(input$alt_upload$datapath)
@@ -609,7 +649,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run_final"),
-                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Generate Recommendation"),
+                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Buat Rekomendasi"),
                        class = "btn-success btn-sm")
         ),
         .step_nav(ns, back_id = "btn_back_4", next_id = NULL)
@@ -634,163 +674,162 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$final_result <- NULL
       log_lines <- character(0)
       
-      tryCatch({
-        rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
-        rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
-        
-        chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW")
-        if (!chk_rtrw$ok) stop(chk_rtrw$msg)
-        chk_rz <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K")
-        if (!chk_rz$ok) stop(chk_rz$msg)
-        
-        priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
-        priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
-        
-        alpha   <- input$alpha_val
-        th_high <- input$th_high
-        th_med  <- input$th_med
-        th_low  <- input$th_low
-        
-        matriks_serasi <- rv$matriks_serasi
-        adjacent_economy_map <- rv$adjacent_economy_map
-        
-        get_compat <- function(x, y) {
-          if (is.na(x) || is.na(y)) return(NA_real_)
-          val <- matriks_serasi %>%
-            dplyr::filter(class1 == x, class2 == y) %>%
-            dplyr::pull(idx_serasi)
-          if (length(val) == 0) NA_real_ else val
-        }
-        
-        # Split RTRW / RZWP3K sides and re-join
-        rtrw_rows <- adjacent_economy_map %>%
-          dplyr::filter(!is.na(RTRW)) %>%
-          dplyr::select(id_pu, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
-          sf::st_drop_geometry() %>%
-          dplyr::as_tibble()
-        
-        rz_rows <- adjacent_economy_map %>%
-          dplyr::filter(!is.na(RZWP3K)) %>%
-          dplyr::select(id_pu, RZWP3K, alt_RZWP3K, econ_rzwp3k_delta) %>%
-          sf::st_drop_geometry() %>%
-          dplyr::as_tibble()
-        
-        common_cols <- adjacent_economy_map %>%
-          dplyr::select(id_pu, idx_padan, area_buffer_ha) %>%
-          sf::st_drop_geometry() %>%
-          dplyr::distinct(id_pu, .keep_all = TRUE)
-        
-        split_rtrw_rzwp3k <- rtrw_rows %>%
-          dplyr::full_join(rz_rows, by = "id_pu") %>%
-          dplyr::left_join(common_cols, by = "id_pu")
-        
-        stopifnot(all(!is.na(split_rtrw_rzwp3k$RTRW) & !is.na(split_rtrw_rzwp3k$RZWP3K)))
-        
-        prep_recomendation <- split_rtrw_rzwp3k %>%
-          dplyr::mutate(
-            # idx_padu_final = if ("idx_padu_final" %in% names(split_rtrw_rzwp3k)) {
-            #   idx_padu_final
-            # } else {
-            #   dplyr::case_when(
-            #     idx_padu_rtrw == 0 | idx_padu_rzwp3k == 0 ~ 0,
-            #     TRUE ~ 2 * idx_padu_rtrw * idx_padu_rzwp3k / (idx_padu_rtrw + idx_padu_rzwp3k)
-            #   )
-            # },
-            priority_class = dplyr::case_when(
-              RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ "Both",
-              RTRW %in% priority_rtrw ~ "Yes",
-              RZWP3K %in% priority_rzwp3k ~ "Yes",
-              TRUE ~ "None"
-            ),
-            comp_if_rtrw = purrr::map2_dbl(alt_RTRW, RZWP3K, get_compat),
-            comp_if_rz   = purrr::map2_dbl(RTRW, alt_RZWP3K, get_compat),
-            N_if_rtrw = alpha * comp_if_rtrw + (1 - alpha) * idx_padu_final,
-            N_if_rz   = alpha * comp_if_rz   + (1 - alpha) * idx_padu_final,
-            dR = N_if_rtrw - idx_padan,
-            dZ = N_if_rz   - idx_padan
-          )
-        
-        recommendation_decision <- prep_recomendation %>%
-          dplyr::mutate(
-            recommendation = dplyr::case_when(
-              RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ dplyr::case_when(
-                dZ > dR ~ "Ubah RZ",
-                dR > dZ ~ "Ubah RTRW",
-                TRUE    ~ "Tetap/Koordinasi"
+      withProgress(message = "Membuat Rekomendasi Bertetangga", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Memuat tabel prioritas...")
+          rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
+          rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
+          
+          chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW")
+          if (!chk_rtrw$ok) stop(chk_rtrw$msg)
+          chk_rz <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K")
+          if (!chk_rz$ok) stop(chk_rz$msg)
+          
+          priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
+          priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
+          
+          alpha   <- input$alpha_val
+          th_high <- input$th_high
+          th_med  <- input$th_med
+          th_low  <- input$th_low
+          
+          matriks_serasi <- rv$matriks_serasi
+          adjacent_economy_map <- rv$adjacent_economy_map
+          
+          get_compat <- function(x, y) {
+            if (is.na(x) || is.na(y)) return(NA_real_)
+            val <- matriks_serasi %>%
+              dplyr::filter(class1 == x, class2 == y) %>%
+              dplyr::pull(idx_serasi)
+            if (length(val) == 0) NA_real_ else val
+          }
+          
+          incProgress(0.4, detail = "Memisahkan layer RTRW dan RZWP3K...")
+          # Split RTRW / RZWP3K sides and re-join
+          rtrw_rows <- adjacent_economy_map %>%
+            dplyr::filter(!is.na(RTRW)) %>%
+            dplyr::select(id_pu, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
+            sf::st_drop_geometry() %>%
+            dplyr::as_tibble()
+          
+          rz_rows <- adjacent_economy_map %>%
+            dplyr::filter(!is.na(RZWP3K)) %>%
+            dplyr::select(id_pu, RZWP3K, alt_RZWP3K, econ_rzwp3k_delta) %>%
+            sf::st_drop_geometry() %>%
+            dplyr::as_tibble()
+          
+          common_cols <- adjacent_economy_map %>%
+            dplyr::select(id_pu, idx_padan, area_buffer_ha) %>%
+            sf::st_drop_geometry() %>%
+            dplyr::distinct(id_pu, .keep_all = TRUE)
+          
+          split_rtrw_rzwp3k <- rtrw_rows %>%
+            dplyr::full_join(rz_rows, by = "id_pu") %>%
+            dplyr::left_join(common_cols, by = "id_pu")
+          
+          stopifnot(all(!is.na(split_rtrw_rzwp3k$RTRW) & !is.na(split_rtrw_rzwp3k$RZWP3K)))
+          
+          incProgress(0.6, detail = "Menghitung keputusan dan rekomendasi...")
+          prep_recomendation <- split_rtrw_rzwp3k %>%
+            dplyr::mutate(
+              priority_class = dplyr::case_when(
+                RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ "Both",
+                RTRW %in% priority_rtrw ~ "Yes",
+                RZWP3K %in% priority_rzwp3k ~ "Yes",
+                TRUE ~ "None"
               ),
-              RTRW %in% priority_rtrw & dZ > 0 ~ "Ubah RZ",
-              RZWP3K %in% priority_rzwp3k & dR > 0 ~ "Ubah RTRW",
-              dR > 0 | dZ > 0 ~ dplyr::if_else(dR >= dZ, "Ubah RTRW", "Ubah RZ"),
-              TRUE ~ "Tetap/Koordinasi"
-            ),
-            RTRW_new = dplyr::if_else(recommendation == "Ubah RTRW", alt_RTRW, RTRW),
-            RZWP3K_new = dplyr::if_else(recommendation == "Ubah RZ", alt_RZWP3K, RZWP3K),
-            idx_serasi_new = purrr::map2_dbl(RTRW_new, RZWP3K_new, get_compat),
-            idx_padan_new = alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
-            actual_integration = .classify_integrasi(idx_padan, th_high, th_med, th_low),
-            recom_integration = .classify_integrasi(idx_padan_new, th_high, th_med, th_low),
-            econ_delta = dplyr::case_when(
-              recommendation == "Ubah RTRW" ~ econ_rtrw_delta,
-              recommendation == "Ubah RZ"   ~ econ_rzwp3k_delta,
-              TRUE ~ 0
-            ),
-            area_change_ha = dplyr::if_else(recommendation == "Tetap/Koordinasi", 0, area_buffer_ha),
-            idx_padan_delta = idx_padan_new - idx_padan
+              comp_if_rtrw = purrr::map2_dbl(alt_RTRW, RZWP3K, get_compat),
+              comp_if_rz   = purrr::map2_dbl(RTRW, alt_RZWP3K, get_compat),
+              N_if_rtrw = alpha * comp_if_rtrw + (1 - alpha) * idx_padu_final,
+              N_if_rz   = alpha * comp_if_rz   + (1 - alpha) * idx_padu_final,
+              dR = N_if_rtrw - idx_padan,
+              dZ = N_if_rz   - idx_padan
+            )
+          
+          recommendation_decision <- prep_recomendation %>%
+            dplyr::mutate(
+              recommendation = dplyr::case_when(
+                RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ dplyr::case_when(
+                  dZ > dR ~ "Ubah RZ",
+                  dR > dZ ~ "Ubah RTRW",
+                  TRUE    ~ "Tetap/Koordinasi"
+                ),
+                RTRW %in% priority_rtrw & dZ > 0 ~ "Ubah RZ",
+                RZWP3K %in% priority_rzwp3k & dR > 0 ~ "Ubah RTRW",
+                dR > 0 | dZ > 0 ~ dplyr::if_else(dR >= dZ, "Ubah RTRW", "Ubah RZ"),
+                TRUE ~ "Tetap/Koordinasi"
+              ),
+              RTRW_new = dplyr::if_else(recommendation == "Ubah RTRW", alt_RTRW, RTRW),
+              RZWP3K_new = dplyr::if_else(recommendation == "Ubah RZ", alt_RZWP3K, RZWP3K),
+              idx_serasi_new = purrr::map2_dbl(RTRW_new, RZWP3K_new, get_compat),
+              idx_padan_new = alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
+              actual_integration = .classify_integrasi(idx_padan, th_high, th_med, th_low),
+              recom_integration = .classify_integrasi(idx_padan_new, th_high, th_med, th_low),
+              econ_delta = dplyr::case_when(
+                recommendation == "Ubah RTRW" ~ econ_rtrw_delta,
+                recommendation == "Ubah RZ"   ~ econ_rzwp3k_delta,
+                TRUE ~ 0
+              ),
+              area_change_ha = dplyr::if_else(recommendation == "Tetap/Koordinasi", 0, area_buffer_ha),
+              idx_padan_delta = idx_padan_new - idx_padan
+            )
+          
+          # Select only new columns to avoid duplication
+          recommendation_decision_filter <- recommendation_decision %>%
+            dplyr::select(
+              id_pu,
+              recommendation,
+              RTRW_new,
+              RZWP3K_new,
+              idx_serasi_new,
+              idx_padan_new,
+              actual_integration,
+              recom_integration,
+              econ_delta,
+              area_change_ha,
+              idx_padan_delta
+            ) %>%
+            sf::st_drop_geometry()
+          
+          adjacent_recom_map <- adjacent_economy_map %>%
+            dplyr::left_join(recommendation_decision_filter, by = "id_pu")
+          
+          incProgress(0.8, detail = "Menyimpan hasil ke disk...")
+          out_gpkg <- file.path(output_dir(), "idx_padan_recommendation.gpkg")
+          out_xlsx <- file.path(output_dir(), "idx_padan_recommendation.xlsx")
+          
+          sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
+          openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
+          
+          log_lines <- c(
+            log_lines,
+            "Ringkasan rekomendasi:",
+            capture.output(print(table(adjacent_recom_map$recommendation))),
+            "",
+            "Ringkasan integrasi (aktual vs rekomendasi):",
+            capture.output(print(
+              adjacent_recom_map %>%
+                sf::st_drop_geometry() %>%
+                dplyr::count(actual_integration, recom_integration) %>%
+                dplyr::arrange(actual_integration, recom_integration)
+            ))
           )
-        
-        # Select only new columns to avoid duplication
-        recommendation_decision_filter <- recommendation_decision %>%
-          dplyr::select(
-            id_pu,
-            recommendation,
-            RTRW_new,
-            RZWP3K_new,
-            idx_serasi_new,
-            idx_padan_new,
-            actual_integration,
-            recom_integration,
-            econ_delta,
-            area_change_ha,
-            idx_padan_delta
-          ) %>%
-          sf::st_drop_geometry()
-        
-        adjacent_recom_map <- adjacent_economy_map %>%
-          dplyr::left_join(recommendation_decision_filter, by = "id_pu")
-        
-        out_gpkg <- file.path(output_dir(), "idx_padan_recommendation.gpkg")
-        out_xlsx <- file.path(output_dir(), "idx_padan_recommendation.xlsx")
-        
-        sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-        openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
-        
-        log_lines <- c(
-          log_lines,
-          "Ringkasan rekomendasi:",
-          capture.output(print(table(adjacent_recom_map$recommendation))),
-          "",
-          "Ringkasan integrasi (aktual vs rekomendasi):",
-          capture.output(print(
-            adjacent_recom_map %>%
-              sf::st_drop_geometry() %>%
-              dplyr::count(actual_integration, recom_integration) %>%
-              dplyr::arrange(actual_integration, recom_integration)
-          ))
-        )
-        
-        rv$final_result <- list(
-          map = adjacent_recom_map,
-          table = sf::st_drop_geometry(adjacent_recom_map),
-          gpkg_path = out_gpkg,
-          xlsx_path = out_xlsx
-        )
-        rv$final_log <- paste(log_lines, collapse = "\n")
-        showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
-        
-      }, error = function(e) {
-        call_txt <- if (!is.null(conditionCall(e))) paste0("\n(pada pemanggilan: ", paste(deparse(conditionCall(e)), collapse = " "), ")") else ""
-        rv$final_log <- paste0("Error: ", conditionMessage(e), call_txt)
-        showNotification(paste("Gagal:", conditionMessage(e)), type = "error", duration = NULL)
+          
+          rv$final_result <- list(
+            map = adjacent_recom_map,
+            table = sf::st_drop_geometry(adjacent_recom_map),
+            gpkg_path = out_gpkg,
+            xlsx_path = out_xlsx
+          )
+          rv$final_log <- paste(log_lines, collapse = "\n")
+          showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
+          
+        }, error = function(e) {
+          call_txt <- if (!is.null(conditionCall(e))) paste0("\n(pada pemanggilan: ", paste(deparse(conditionCall(e)), collapse = " "), ")") else ""
+          rv$final_log <- paste0("Error: ", conditionMessage(e), call_txt)
+          showNotification(paste("Gagal:", conditionMessage(e)), type = "error", duration = NULL)
+        })
       })
     })
     

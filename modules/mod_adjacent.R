@@ -310,29 +310,23 @@ adjacent_server <- function(id, output_dir) {
     matrix_template_path <- reactiveVal(NULL)
     
     observeEvent(input$btn_generate_matrix, {
-      
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur...", type = "error", duration = 5)
         return()
       }
       
       req(rv$rtrw_vect, rv$rzwp3k_vect)
       tryCatch({
-        template <- generate_matrix_serasi(sf_1 = rv$rtrw_vect, sf_2 = rv$rzwp3k_vect)
-        out_path <- file.path(output_dir(), "matriks_serasi_adjacent.xlsx")
+        out_path <- file.path(output_dir(), "matriks_serasi.xlsx")
         dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-        write.xlsx(template, out_path, overwrite = TRUE)
+        
+        # Writes the styled file and returns invisibly
+        generate_matrix_serasi(rv$rtrw_vect, rv$rzwp3k_vect, file_path = out_path)
+        
         matrix_template_path(out_path)
-        showNotification(paste("Template matriks dibuat →", out_path),
-                         type = "message", duration = 5)
+        showNotification(paste("Template matriks dibuat →", out_path), type = "message", duration = 5)
       }, error = function(e) {
-        showNotification(paste("Gagal membuat template matriks:", e$message),
-                         type = "error", duration = 8)
+        showNotification(paste("Gagal membuat template matriks:", e$message), type = "error", duration = 8)
       })
     })
     
@@ -385,7 +379,7 @@ adjacent_server <- function(id, output_dir) {
           # Input presisi numerik
           numericInput(
             ns("m_precision"),
-            "Presisi Geometri (meter)",
+            "Galat Geometri (meter)",
             value = 1, min = 0.001, step = 1
           ),
           tags$small(
@@ -401,7 +395,7 @@ adjacent_server <- function(id, output_dir) {
           # Input toleransi snap
           numericInput(
             ns("snap_tolerance"),
-            "Jarak Penjepretan Batas (meter)",
+            "Snapping Distance (meter)",
             value = 0.5, min = 0, step = 0.1
           ),
           tags$small(
@@ -664,8 +658,14 @@ adjacent_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id", "id_pu", "RTRW", "RZWP3K", "admin",  "area_ha", "length", "idx_serasi")]
+      
+      colnames(df_subset) <- c("ID", "ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Panjang Segmen Ketetanggaan (m)", "Indeks SERASI")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
         options = list(
           pageLength = 10,
           scrollX = TRUE,
@@ -674,7 +674,11 @@ adjacent_server <- function(id, output_dir) {
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Panjang Segmen Ketetanggaan (m)", "Indeks SERASI"),
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

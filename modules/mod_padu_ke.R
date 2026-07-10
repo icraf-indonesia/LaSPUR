@@ -34,9 +34,9 @@ padu_ke_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("2.1 PADU-KE (Konektivitas Ekologis)", style = "margin: 0; font-weight: 700;"),
+      h4("2.1 PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)", style = "margin: 0; font-weight: 700;"),
       tags$p(
-        "Menilai kepaduan lingkungan berdasarkan konektivitas ekologis untuk menghasilkan nilai indeks PADU-KE.",
+        "Menilai kepaduan lingkungan berdasarkan keterpaduan penggunaan lahan dan lautan untuk menghasilkan nilai indeks PADU-KE.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
@@ -248,11 +248,22 @@ padu_ke_server <- function(id, output_dir) {
       }
       
       req(rv$lulc_ref)
+      
+      if (!requireNamespace("openxlsx2", quietly = TRUE)) {
+        showNotification(
+          "Paket 'openxlsx2' diperlukan untuk membuat template dengan instruksi. Harap instal.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      
       tryCatch({
-        template <- generate_matrix_padu_ke(rv$lulc_ref)
         out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
         dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-        write.xlsx(template, out_path, overwrite = TRUE)
+
+        generate_matrix_padu_ke(rv$lulc_ref, file_path = out_path)
+        
         matrix_template_path(out_path)
         showNotification(paste("Template matriks PADU-KE dibuat →", out_path),
                          type = "message", duration = 5)
@@ -535,8 +546,14 @@ padu_ke_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "idx_padu_ke")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Indeks PADU-KE")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
         options = list(
           pageLength = 10,
           scrollX = TRUE,
@@ -545,7 +562,11 @@ padu_ke_server <- function(id, output_dir) {
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Indeks PADU-KE"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

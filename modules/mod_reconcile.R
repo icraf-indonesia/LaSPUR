@@ -315,34 +315,40 @@ reconcile_server <- function(id, output_dir) {
       req(rv$recon_map, rv$detected_step, input$rtrw_priority_file, input$rzwp3k_priority_file)
       rv$template_path <- NULL
       
-      tryCatch({
-        rtrw_prioritas <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
-        rzwp3k_prioritas <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
-        
-        out_dir_step <- file.path(output_dir(), paste0("step", rv$detected_step))
-        dir.create(out_dir_step, recursive = TRUE, showWarnings = FALSE)
-        
-        file_name <- if (rv$detected_step == 1) "overlaps_reconcilliation_table.xlsx" else "adjacent_reconcilliation_table.xlsx"
-        
-        generate_reconciliation_excel(
-          recon_map        = rv$recon_map,
-          rtrw_prioritas   = rtrw_prioritas,
-          rzwp3k_prioritas = rzwp3k_prioritas,
-          output_dir       = out_dir_step,
-          step             = rv$detected_step,
-          file_name        = file_name
-        )
-        
-        generated_path <- file.path(out_dir_step, file_name)
-        if (!file.exists(generated_path)) stop("File templat gagal dibuat oleh sistem core script.")
-        
-        rv$template_path <- generated_path
-        rv$rtrw_prioritas <- rtrw_prioritas
-        rv$rzwp3k_prioritas <- rzwp3k_prioritas
-        
-        showNotification("Templat Rekonsiliasi Berhasil Dibuat.", type = "message")
-      }, error = function(e) {
-        showNotification(paste("Gagal membuat templat:", e$message), type = "error", duration = 10)
+      withProgress(message = "Membuat Templat Rekonsiliasi", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Memuat tabel prioritas...")
+          rtrw_prioritas <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
+          rzwp3k_prioritas <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
+          
+          out_dir_step <- file.path(output_dir(), paste0("step", rv$detected_step))
+          dir.create(out_dir_step, recursive = TRUE, showWarnings = FALSE)
+          
+          file_name <- if (rv$detected_step == 1) "overlaps_reconcilliation_table.xlsx" else "adjacent_reconcilliation_table.xlsx"
+          
+          incProgress(0.5, detail = "Menjalankan pembuat templat...")
+          generate_reconciliation_excel(
+            recon_map        = rv$recon_map,
+            rtrw_prioritas   = rtrw_prioritas,
+            rzwp3k_prioritas = rzwp3k_prioritas,
+            output_dir       = out_dir_step,
+            step             = rv$detected_step,
+            file_name        = file_name
+          )
+          
+          incProgress(0.8, detail = "Verifikasi berkas templat...")
+          generated_path <- file.path(out_dir_step, file_name)
+          if (!file.exists(generated_path)) stop("File templat gagal dibuat oleh sistem core script.")
+          
+          rv$template_path <- generated_path
+          rv$rtrw_prioritas <- rtrw_prioritas
+          rv$rzwp3k_prioritas <- rzwp3k_prioritas
+          
+          showNotification("Templat Rekonsiliasi Berhasil Dibuat.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
+        }, error = function(e) {
+          showNotification(paste("Gagal membuat templat:", e$message), type = "error", duration = 10)
+        })
       })
     })
     
@@ -364,9 +370,17 @@ reconcile_server <- function(id, output_dir) {
     )
     
     observeEvent(input$btn_next_1, {
-      if (is.null(rv$template_path)) {
-        showNotification("Silakan buat dan simpan templat keputusan rekonsiliasi terlebih dahulu.", type = "warning")
+      # Require at least the recommendation map to have been loaded; the
+      # template itself is optional if the user already has a filled table.
+      if (is.null(rv$recon_map)) {
+        showNotification("Harap unggah Peta Rekomendasi terlebih dahulu.", type = "warning")
         return()
+      }
+      if (is.null(rv$template_path)) {
+        showNotification(
+          "Templat belum dibuat. Jika sudah memiliki tabel rekonsiliasi yang sudah diisi, Anda tetap dapat melanjutkan.",
+          type = "message", duration = 5
+        )
       }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
@@ -421,88 +435,95 @@ reconcile_server <- function(id, output_dir) {
       
       showNotification("Menjalankan proses rekonstruksi spasial rekonsiliasi...", type = "message", id = "recon_progress", duration = NULL)
       
-      tryCatch({
-        # Context Parsing
-        rtrw_vect <- .read_spatial_input(input$rtrw_file)
-        rzwp3k_vect <- .read_spatial_input(input$rzwp3k_file)
-        recon_table_path <- input$recon_table_filled_file$datapath
-        
-        out_base_dir <- file.path(output_dir(), paste0("step", rv$detected_step))
-        dir.create(out_base_dir, recursive = TRUE, showWarnings = FALSE)
-        
-        if (rv$detected_step == 1) {
-          # STEP 1 Execution Flow
-          recon_table <- load_and_validate_table(recon_table_path)
+      withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
+        tryCatch({
+          incProgress(0.1, detail = "Membaca berkas input...")
+          # Context Parsing
+          rtrw_vect <- .read_spatial_input(input$rtrw_file)
+          rzwp3k_vect <- .read_spatial_input(input$rzwp3k_file)
+          recon_table_path <- input$recon_table_filled_file$datapath
           
-          rtrw <- rtrw_vect %>% dplyr::mutate(id_rtrw = dplyr::row_number())
-          rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id_rzwp3k = dplyr::row_number())
+          out_base_dir <- file.path(output_dir(), paste0("step", rv$detected_step))
+          dir.create(out_base_dir, recursive = TRUE, showWarnings = FALSE)
           
-          union_layer <- identify_overlaps_union(rtrw, rzwp3k)
-          final_map <- reconcile_map(
-            step             = 1,
-            union            = union_layer,
-            recon_table      = recon_table,
-            rtrw_prioritas   = rv$rtrw_prioritas,
-            rzwp3k_prioritas = rv$rzwp3k_prioritas
-          )
+          if (rv$detected_step == 1) {
+            incProgress(0.3, detail = "Menjalankan rekonsiliasi Overlaps...")
+            # STEP 1 Execution Flow
+            recon_table <- load_and_validate_table(recon_table_path)
+            
+            rtrw <- rtrw_vect %>% dplyr::mutate(id_rtrw = dplyr::row_number())
+            rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id_rzwp3k = dplyr::row_number())
+            
+            union_layer <- identify_overlaps_union(rtrw, rzwp3k)
+            final_map <- reconcile_map(
+              step             = 1,
+              union            = union_layer,
+              recon_table      = recon_table,
+              rtrw_prioritas   = rv$rtrw_prioritas,
+              rzwp3k_prioritas = rv$rzwp3k_prioritas
+            )
+            
+            rtrw_final <- final_map[final_map$stat_pu_final == "RTRW", ]
+            rzwp3k_final <- final_map[final_map$stat_pu_final == "RZWP3K", ]
+            
+            rv$resolved_rtrw <- rtrw_final
+            rv$resolved_rzwp3k <- rzwp3k_final
+            
+            incProgress(0.7, detail = "Mempersiapkan visualisasi peta...")
+            # Display final_map as-is: one pass through the safe-display
+            # pipeline, colored by its own stat_pu_final column. No need to
+            # split it into RTRW/RZWP3K and rbind them back together just to
+            # render it - that was pure wasted computation on ~6k features.
+            rv$display_step1 <- .prepare_map_display(final_map, category_col = "stat_pu_final")
+            
+            log_lines <- c(
+              log_lines,
+              "--- LOG REKONSILIASI KASUS STEP 1 (OVERLAPS) ---",
+              sprintf("Jumlah Feature RTRW Hasil Resolusi: %d", nrow(rtrw_final)),
+              sprintf("Jumlah Feature RZWP3K Hasil Resolusi: %d", nrow(rzwp3k_final))
+            )
+            
+          } else {
+            incProgress(0.3, detail = "Menjalankan rekonsiliasi Bertetangga...")
+            # STEP 2 Execution Flow
+            rtrw <- rtrw_vect %>% dplyr::mutate(id = dplyr::row_number())
+            rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id = dplyr::row_number())
+            
+            # The function reads the Excel file internally, pass the path
+            rtrw_resolved <- reconcile_map(step = 2, sf_obj = rtrw,   recon_table = recon_table_path, class_type = "RTRW")
+            rzwp3k_resolved <- reconcile_map(step = 2, sf_obj = rzwp3k, recon_table = recon_table_path, class_type = "RZWP3K")
+            
+            rv$resolved_rtrw <- rtrw_resolved
+            rv$resolved_rzwp3k <- rzwp3k_resolved
+            
+            incProgress(0.7, detail = "Mempersiapkan visualisasi peta...")
+            # Keep RTRW and RZWP3K as two independent map layers instead of
+            # rbinding them into one object. rbinding two ~6k-feature layers
+            # was expensive and unnecessary - Leaflet can draw two polygon
+            # layers on the same canvas (with a toggle) without merging the
+            # underlying data, and each still goes through the same safe-
+            # display pipeline (geometry repair/flatten/empty-drop) that fixed
+            # the earlier "missing value where TRUE/FALSE needed" crash.
+            rv$display_rtrw <- .prepare_map_display(rtrw_resolved, layer_name = "RTRW Adjacent Resolved")
+            rv$display_rzwp3k <- .prepare_map_display(rzwp3k_resolved, layer_name = "RZWP3K Adjacent Resolved")
+            
+            log_lines <- c(
+              log_lines,
+              "--- LOG REKONSILIASI KASUS STEP 2 (ADJACENT) ---",
+              sprintf("Jumlah Feature RTRW Berhasil Diselaraskan: %d", nrow(rtrw_resolved)),
+              sprintf("Jumlah Feature RZWP3K Berhasil Diselaraskan: %d", nrow(rzwp3k_resolved))
+            )
+          }
           
-          rtrw_final <- final_map[final_map$stat_pu_final == "RTRW", ]
-          rzwp3k_final <- final_map[final_map$stat_pu_final == "RZWP3K", ]
+          incProgress(0.9, detail = "Menyelesaikan log...")
+          rv$final_log <- paste(log_lines, collapse = "\n")
+          showNotification("Proses Penyelesaian Konflik Peta Selesai.", type = "message")
+          incProgress(1.0, detail = "Selesai!")
           
-          rv$resolved_rtrw <- rtrw_final
-          rv$resolved_rzwp3k <- rzwp3k_final
-          
-          # Display final_map as-is: one pass through the safe-display
-          # pipeline, colored by its own stat_pu_final column. No need to
-          # split it into RTRW/RZWP3K and rbind them back together just to
-          # render it - that was pure wasted computation on ~6k features.
-          rv$display_step1 <- .prepare_map_display(final_map, category_col = "stat_pu_final")
-          
-          log_lines <- c(
-            log_lines,
-            "--- LOG REKONSILIASI KASUS STEP 1 (OVERLAPS) ---",
-            sprintf("Jumlah Feature RTRW Hasil Resolusi: %d", nrow(rtrw_final)),
-            sprintf("Jumlah Feature RZWP3K Hasil Resolusi: %d", nrow(rzwp3k_final))
-          )
-          
-        } else {
-          # STEP 2 Execution Flow
-          rtrw <- rtrw_vect %>% dplyr::mutate(id = dplyr::row_number())
-          rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id = dplyr::row_number())
-          
-          # The function reads the Excel file internally, pass the path
-          rtrw_resolved <- reconcile_map(step = 2, sf_obj = rtrw,   recon_table = recon_table_path, class_type = "RTRW")
-          rzwp3k_resolved <- reconcile_map(step = 2, sf_obj = rzwp3k, recon_table = recon_table_path, class_type = "RZWP3K")
-          
-          rv$resolved_rtrw <- rtrw_resolved
-          rv$resolved_rzwp3k <- rzwp3k_resolved
-          
-          # Keep RTRW and RZWP3K as two independent map layers instead of
-          # rbinding them into one object. rbinding two ~6k-feature layers
-          # was expensive and unnecessary - Leaflet can draw two polygon
-          # layers on the same canvas (with a toggle) without merging the
-          # underlying data, and each still goes through the same safe-
-          # display pipeline (geometry repair/flatten/empty-drop) that fixed
-          # the earlier "missing value where TRUE/FALSE needed" crash.
-          rv$display_rtrw <- .prepare_map_display(rtrw_resolved, layer_name = "RTRW Adjacent Resolved")
-          rv$display_rzwp3k <- .prepare_map_display(rzwp3k_resolved, layer_name = "RZWP3K Adjacent Resolved")
-          
-          log_lines <- c(
-            log_lines,
-            "--- LOG REKONSILIASI KASUS STEP 2 (ADJACENT) ---",
-            sprintf("Jumlah Feature RTRW Berhasil Diselaraskan: %d", nrow(rtrw_resolved)),
-            sprintf("Jumlah Feature RZWP3K Berhasil Diselaraskan: %d", nrow(rzwp3k_resolved))
-          )
-        }
-        
-        rv$final_log <- paste(log_lines, collapse = "\n")
-        removeNotification("recon_progress")
-        showNotification("Proses Penyelesaian Konflik Peta Selesai.", type = "message")
-        
-      }, error = function(e) {
-        removeNotification("recon_progress")
-        rv$final_log <- paste0("Error Runtime Execution:\n", e$message)
-        showNotification(paste("Gagal melakukan rekonsiliasi:", e$message), type = "error", duration = NULL)
+        }, error = function(e) {
+          rv$final_log <- paste0("Error Runtime Execution:\n", e$message)
+          showNotification(paste("Gagal melakukan rekonsiliasi:", e$message), type = "error", duration = NULL)
+        })
       })
     })
     

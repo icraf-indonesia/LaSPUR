@@ -126,6 +126,7 @@ padu_hs_server <- function(id, output_dir) {
       idx_serasi_map = NULL,
       tss_rast = NULL,
       euc_dist_rast = NULL,
+      estuari_vect = NULL,
       estuari_mode = "upload_raster",
       
       # analysis results
@@ -210,12 +211,13 @@ padu_hs_server <- function(id, output_dir) {
           condition = sprintf("input['%s'] == 'calculate'", ns("estuari_input_mode")),
           fileInput(ns("estuari_file"), label = "Shapefile Estuari",
                     accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE),
-          numericInput(ns("euc_resolution"), "Resolusi Perhitungan (meter)", value = 30, min = 1),
-          div(
-            class = "alert alert-warning py-2 px-3",
-            style = "font-size: 0.85rem;",
-            tags$i(class = "bi bi-exclamation-triangle me-1"),
-            "Jarak Euclidean akan dihitung dari shapefile di atas. Proses ini dapat memakan beberapa menit untuk dataset besar. Hasilnya akan otomatis disimpan ke direktori output."
+          numericInput(ns("euc_resolution"), "Resolusi Perhitungan (meter)", value = 100, min = 1),
+          actionButton(ns("btn_calc_estuari_dist"),
+                       tagList(tags$i(class = "bi bi-calculator me-1"), "Buat Peta Jarak Estuari"),
+                       class = "btn-outline-primary btn-sm"),
+          tags$small(
+            style = "color: #6c757d; display: block; margin-top: 6px;",
+            "Proses ini dapat memakan beberapa menit untuk dataset besar. Hasilnya akan otomatis disimpan ke direktori output."
           )
         ),
         uiOutput(ns("estuari_status")),
@@ -263,24 +265,54 @@ padu_hs_server <- function(id, output_dir) {
     
     # Compute distance from shapefile when uploaded
     observeEvent(input$estuari_file, {
-      req(input$estuari_input_mode == "calculate", input$estuari_file, rv$idx_serasi_map)
-      tryCatch({
-        showNotification("Menghitung jarak Euclidean dari shapefile estuari...", type = "message")
-        estuari <- load_and_validate_shapefile(extract_shp_path(input$estuari_file))
-        estuari <- ensure_geometry_name(estuari)  
-        euc <- calculate_euclidean_dist(
-          estuari,
-          rv$idx_serasi_map,
-          resolution = input$euc_resolution
+      req(input$estuari_input_mode == "calculate", input$estuari_file)
+      if (is.null(rv$idx_serasi_map)) {
+        showNotification(
+          "Harap unggah Peta Indeks SERASI terlebih dahulu sebelum menghitung jarak dari shapefile estuari.",
+          type = "warning", duration = 6
         )
-        out_path <- file.path(output_dir(), "estuari_euc_dist.tif")
-        dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-        terra::writeRaster(euc, out_path, overwrite = TRUE)
-        rv$euc_dist_rast <- euc
-        showNotification(paste("Raster jarak berhasil dihitung dan disimpan →", out_path), type = "message")
+        return()
+      }
+      tryCatch({
+        estuari <- load_and_validate_shapefile(extract_shp_path(input$estuari_file))
+        rv$estuari_vect <- ensure_geometry_name(estuari)
+        showNotification("Shapefile estuari berhasil dimuat. Klik 'Buat Peta Jarak Estuari' untuk menghitung.", type = "message")
       }, error = function(e) {
-        rv$euc_dist_rast <- NULL
-        showNotification(paste("Gagal menghitung jarak:", e$message), type = "error")
+        rv$estuari_vect <- NULL
+        showNotification(paste("Gagal memuat shapefile estuari:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$btn_calc_estuari_dist, {
+      if (is.null(rv$idx_serasi_map)) {
+        showNotification(
+          "Harap unggah Peta Indeks SERASI terlebih dahulu.",
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      if (is.null(rv$estuari_vect)) {
+        showNotification("Harap unggah shapefile estuari terlebih dahulu.", type = "warning")
+        return()
+      }
+      withProgress(message = "Menghitung jarak ke Estuari...", value = 0.3, {
+        tryCatch({
+          euc <- calculate_euclidean_dist(
+            rv$estuari_vect,
+            rv$idx_serasi_map,
+            resolution = input$euc_resolution,
+            clip_to_pu = FALSE
+          )
+          out_path <- file.path(output_dir(), "estuari_euc_dist.tif")
+          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          terra::writeRaster(euc, out_path, overwrite = TRUE)
+          rv$euc_dist_rast <- euc
+          incProgress(1, detail = "Selesai!")
+          showNotification(paste("Raster jarak berhasil dihitung dan disimpan →", out_path), type = "message")
+        }, error = function(e) {
+          rv$euc_dist_rast <- NULL
+          showNotification(paste("Gagal menghitung jarak:", e$message), type = "error")
+        })
       })
     })
     
@@ -493,17 +525,32 @@ padu_hs_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "estuari_dist_mean", "tss_mean", "idx_padu_hs")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Jarak ke Estuari (m)", "Total Suspended Solids (mg/L)", "Indeks PADU-HS")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
         options = list(
           pageLength = 10,
           scrollX = TRUE,
           scrollY = "400px",
-          dom = 'Bfrtip'
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Jarak ke Estuari (m)", "Total Suspended Solids (mg/L)", "Indeks PADU-HS"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

@@ -743,39 +743,39 @@ st_get_precision_for_meters <- function(x, m_precision = 1, silent = FALSE) {
   }
 }
 
-# Perhitungan Indeks PADU-KE ----------------------------------------------
+#' Helper: build a shape with real multi-line text.
+#' create_shape() only supports one paragraph/run, so this splits `lines`
+#' into separate runs joined by <a:br/> (proper line breaks).
+create_multiline_shape <- function(lines, ...) {
+  base_xml <- as.character(create_shape(text = "PLACEHOLDER", ...))
+  run_match <- regmatches(base_xml, regexpr("<a:r>.*?</a:r>", base_xml, perl = TRUE))
+  rpr <- regmatches(run_match, regexpr("<a:rPr.*?</a:rPr>|<a:rPr[^>]*/>", run_match, perl = TRUE))
+  if (length(rpr) == 0) rpr <- ""
+  
+  make_run <- function(txt) {
+    txt <- gsub("&", "&amp;", txt, fixed = TRUE)
+    txt <- gsub("<", "&lt;",  txt, fixed = TRUE)
+    txt <- gsub(">", "&gt;",  txt, fixed = TRUE)
+    sprintf('<a:r>%s<a:t xml:space="preserve">%s</a:t></a:r>', rpr, txt)
+  }
+  
+  runs <- paste(vapply(lines, make_run, NA_character_), collapse = "<a:br/>")
+  out <- sub("<a:r>.*?</a:r>", runs, base_xml, perl = TRUE)
+  read_xml(out, pointer = FALSE)
+}
 
 #' Generate a Compatibility Matrix (SERASI)
-#'
-#' @description
-#' Creates a tibble matrix where unique classes from `sf_1` form rows and
-#' unique classes from `sf_2` form columns.
 #'
 #' @param sf_1 `sf` object; first column used for row classes
 #' @param sf_2 `sf` object; first column used for column headers
 #' @param fill_value Initial value for matrix cells (default NA)
+#' @param file_path Optional path to write a styled Excel file. If NULL, returns the tibble.
 #'
-#' @return A tibble with first column "RTRW_RZWP3K" and columns named after
-#'   unique classes in `sf_2`
-#'
-#' @examples
-#' result <- generate_matrix_serasi(rtrw_vect, rzwp3k_vect, fill_value = 0)
-#'
-#' @importFrom dplyr distinct pull
-#' @importFrom sf st_drop_geometry
-#' @importFrom tibble as_tibble add_column
-#'
+#' @return A tibble (if file_path is NULL), or invisibly returns the workbook object.
 #' @export
-generate_matrix_serasi <- function(sf_1, sf_2, fill_value = NA) {
-  rows <- sf_1 |> 
-    sf::st_drop_geometry() |> 
-    dplyr::distinct(dplyr::across(1)) |> 
-    dplyr::pull(1)
-  
-  cols <- sf_2 |> 
-    sf::st_drop_geometry() |> 
-    dplyr::distinct(dplyr::across(1)) |> 
-    dplyr::pull(1)
+generate_matrix_serasi <- function(sf_1, sf_2, fill_value = NA, file_path = NULL) {
+  rows <- sf_1 |> sf::st_drop_geometry() |> dplyr::distinct(dplyr::across(1)) |> dplyr::pull(1)
+  cols <- sf_2 |> sf::st_drop_geometry() |> dplyr::distinct(dplyr::across(1)) |> dplyr::pull(1)
   
   mat <- matrix(fill_value, nrow = length(rows), ncol = length(cols))
   colnames(mat) <- cols
@@ -783,8 +783,104 @@ generate_matrix_serasi <- function(sf_1, sf_2, fill_value = NA) {
   matrix_tibble <- tibble::as_tibble(mat) |>
     tibble::add_column(RTRW_RZWP3K = rows, .before = 1)
   
-  return(matrix_tibble)
+  if (is.null(file_path)) {
+    return(matrix_tibble)
+  }
+  
+  if (!requireNamespace("openxlsx2", quietly = TRUE)) {
+    stop("Package 'openxlsx2' is required but not installed.")
+  }
+  require(openxlsx2)
+  
+  wb <- wb_workbook()$add_worksheet(sheet = "Matriks SERASI")
+  wb$add_data(x = matrix_tibble, col_names = TRUE, row_names = FALSE)
+  
+  nrows <- nrow(matrix_tibble) + 1
+  ncols <- ncol(matrix_tibble)
+  
+  header_dims    <- paste0("A1:", int2col(ncols), "1")
+  first_col_dims <- paste0("A1:A", nrows)
+  
+  black <- wb_color(hex = "FF000000")
+  white <- wb_color(hex = "FFFFFFFF")
+  
+  # Header row
+  wb$
+    add_fill(dims = header_dims, color = wb_color(hex = "FF1F4E79"))$
+    add_font(dims = header_dims, color = white, size = 11, bold = TRUE)$
+    add_border(dims = header_dims,
+               top_border = "thin", top_color = black,
+               bottom_border = "thin", bottom_color = black,
+               left_border = "thin", left_color = black,
+               right_border = "thin", right_color = black,
+               inner_vgrid = "thin", inner_vcolor = black)$
+    add_cell_style(dims = header_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  
+  # First column
+  wb$
+    add_fill(dims = first_col_dims, color = wb_color(hex = "FF1F4E79"))$
+    add_font(dims = first_col_dims, color = white, size = 11, bold = TRUE)$
+    add_border(dims = first_col_dims,
+               top_border = "thin", top_color = black,
+               bottom_border = "thin", bottom_color = black,
+               left_border = "thin", left_color = black,
+               right_border = "thin", right_color = black,
+               inner_hgrid = "thin", inner_hcolor = black)$
+    add_cell_style(dims = first_col_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  
+  # Matrix body 
+  if (nrows >= 2 && ncols >= 2) {
+    body_dims <- paste0(int2col(2), "2:", int2col(ncols), nrows)
+    wb$
+      add_fill(dims = body_dims, color = wb_color(hex = "FFF5F5DC"))$
+      add_border(dims = body_dims,
+                 top_border = "thin", top_color = black,
+                 bottom_border = "thin", bottom_color = black,
+                 left_border = "thin", left_color = black,
+                 right_border = "thin", right_color = black,
+                 inner_hgrid = "thin", inner_hcolor = black,
+                 inner_vgrid = "thin", inner_vcolor = black)$
+      add_cell_style(dims = body_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  }
+  
+  wb$freeze_pane(first_row = TRUE, first_col = TRUE)  
+  wb$set_col_widths(cols = 1, width = 30)
+  if (ncols >= 2) wb$set_col_widths(cols = 2:ncols, width = 25)
+  
+  # Instructions as a floating text box 
+  instr_row <- nrows + 4
+  
+  instr_lines <- c(
+    "Template matriks SERASI ini menyatakan tingkat kesesuaian lintas-ruang (darat-laut) dan menjadi \u201ckamus kebijakan\u201d yang dipakai LaSPUR untuk menilai kesesuaian pasangan kategori (existing maupun usulan).",
+    "",
+    "Instruksi Pengisian:",
+    "1. Matriks hanya boleh diisi dengan nilai numerik 0, 0.5, dan 1",
+    "2. Pengisian nilai disesuaikan dengan hubungan pasangan kawasan, dengan deskripsi sebagai berikut:",
+    "     1 = sangat sesuai / langsung selaras kebijakan;",
+    "     0.5 = sesuai bersyarat (dapat berjalan dengan pengaturan/mitigasi);",
+    "     0 = tidak sesuai (konflik mendasar/harus dihindari).",
+    "3. Tidak diperkenankan mengubah header kolom dan baris serta mengisi cell di luar matriks"
+  )
+  
+  shape_xml <- create_multiline_shape(
+    instr_lines,
+    shape      = "rect",
+    name       = "instructions_box",
+    fill_color = wb_color(hex = "FFF5F5DC"),
+    text_color = black,
+    line_color = black,
+    text_align = "left"
+  )
+  
+  instr_dims <- paste0("B", instr_row, ":", int2col(max(ncols, 4)), instr_row + 10)
+  wb$add_drawing(dims = instr_dims, xml = shape_xml)
+  
+  wb$save(file_path, overwrite = TRUE)
+  
+  invisible(wb)
 }
+
+# Perhitungan Indeks PADU-KE ----------------------------------------------
 
 #' Merge numeric compatibility values from lookup table
 #'
@@ -874,12 +970,15 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
 #'
 #' @description
 #' Creates a square matrix where both rows and columns are labelled with
-#' unique class names from the second column of input table.
+#' unique class names from the second column of input table. If `file_path`
+#' is supplied, writes a styled Excel workbook with instructions and
+#' diagonal values set to 3.
 #'
 #' @param tbl Data frame with at least 2 columns; second column contains class names
 #' @param fill_value Value to fill matrix cells (default NA)
+#' @param file_path Optional path to write a styled Excel file. If NULL, returns the tibble.
 #'
-#' @return A tibble with first column "class" and remaining columns named after classes
+#' @return A tibble (if file_path is NULL), or invisibly returns the workbook object.
 #'
 #' @examples
 #' \dontrun{
@@ -888,15 +987,16 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
 #'   1,   "Hutan Lindung",
 #'   2,   "Kawasan Permukiman"
 #' )
-#' mat_na <- generate_matrix_padu_ke(class_table)
-#' mat_zero <- generate_matrix_padu_ke(class_table, fill_value = 0)
+#' mat <- generate_matrix_padu_ke(class_table)
+#' generate_matrix_padu_ke(class_table, file_path = "padu_ke.xlsx")
 #' }
 #'
 #' @importFrom dplyr mutate
 #' @importFrom tibble as_tibble
-#'
+#' @importFrom openxlsx2 wb_workbook wb_color wb_add_data wb_add_fill wb_add_font
+#'   wb_add_border wb_add_cell_style wb_freeze_pane wb_set_col_widths wb_add_drawing
 #' @export
-generate_matrix_padu_ke <- function(tbl, fill_value = NA) {
+generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
   if (!is.data.frame(tbl)) stop("Input 'tbl' must be a data frame.")
   if (ncol(tbl) < 2) stop("Input must have at least two columns.")
   
@@ -910,22 +1010,111 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA) {
   colnames(mat) <- classes
   rownames(mat) <- classes
   
+  # Set diagonal to 3
+  diag(mat) <- 3
+  
   result <- tibble::as_tibble(mat) |>
     dplyr::mutate(class = rownames(mat), .before = 1)
   
-  return(result)
-}
-
-safe_extract_polygons <- function(x) {
-  geom_types <- sf::st_geometry_type(x)
-  poly_idx <- which(geom_types %in% c("POLYGON", "MULTIPOLYGON"))
-  if (length(poly_idx) == 0) return(NULL)
-  x <- x[poly_idx, ]
-  if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
-    x <- sf::st_collection_extract(x, "POLYGON")
-    if (is.null(x) || nrow(x) == 0) return(NULL)
+  if (is.null(file_path)) {
+    return(result)
   }
-  return(x)
+  
+  # --------------------- write styled Excel ----------------------------
+  if (!requireNamespace("openxlsx2", quietly = TRUE)) {
+    stop("Package 'openxlsx2' is required but not installed.")
+  }
+  require(openxlsx2)
+  
+  wb <- wb_workbook()$add_worksheet(sheet = "Matriks PADU-KE")
+  wb$add_data(x = result, col_names = TRUE, row_names = FALSE)
+  
+  nrows <- nrow(result) + 1   # +1 for header
+  ncols <- ncol(result)
+  
+  header_dims    <- paste0("A1:", int2col(ncols), "1")
+  first_col_dims <- paste0("A1:A", nrows)
+  
+  black <- wb_color(hex = "FF000000")
+  white <- wb_color(hex = "FFFFFFFF")
+  
+  # Header row (all columns)
+  wb$
+    add_fill(dims = header_dims, color = wb_color(hex = "FF1F4E79"))$
+    add_font(dims = header_dims, color = white, size = 11, bold = TRUE)$
+    add_border(dims = header_dims,
+               top_border = "thin", top_color = black,
+               bottom_border = "thin", bottom_color = black,
+               left_border = "thin", left_color = black,
+               right_border = "thin", right_color = black,
+               inner_vgrid = "thin", inner_vcolor = black)$
+    add_cell_style(dims = header_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  
+  # First column (including header cell)
+  wb$
+    add_fill(dims = first_col_dims, color = wb_color(hex = "FF1F4E79"))$
+    add_font(dims = first_col_dims, color = white, size = 11, bold = TRUE)$
+    add_border(dims = first_col_dims,
+               top_border = "thin", top_color = black,
+               bottom_border = "thin", bottom_color = black,
+               left_border = "thin", left_color = black,
+               right_border = "thin", right_color = black,
+               inner_hgrid = "thin", inner_hcolor = black)$
+    add_cell_style(dims = first_col_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  
+  # Matrix body (from B2 to bottom-right)
+  if (nrows >= 2 && ncols >= 2) {
+    body_dims <- paste0(int2col(2), "2:", int2col(ncols), nrows)
+    wb$
+      add_fill(dims = body_dims, color = wb_color(hex = "FFF5F5DC"))$
+      add_border(dims = body_dims,
+                 top_border = "thin", top_color = black,
+                 bottom_border = "thin", bottom_color = black,
+                 left_border = "thin", left_color = black,
+                 right_border = "thin", right_color = black,
+                 inner_hgrid = "thin", inner_hcolor = black,
+                 inner_vgrid = "thin", inner_vcolor = black)$
+      add_cell_style(dims = body_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+  }
+  
+  wb$freeze_pane(first_row = TRUE, first_col = TRUE)  
+  wb$set_col_widths(cols = 1, width = 30)
+  if (ncols >= 2) wb$set_col_widths(cols = 2:ncols, width = 25)
+  
+  # --------------------- instruction box ------------------------------
+  instr_row <- nrows + 4
+  
+  instr_lines <- c(
+    "Template matriks PADU-KE ini menyatakan tingkat keterpaduan penggunaan lahan dan lautan dalam bentang darat-laut",
+    "",
+    "Instruksi Pengisian:",
+    "1. Matriks hanya boleh diisi dengan nilai numerik 0, 1, 2, dan 3",
+    "2. Pengisian nilai disesuaikan dengan hubungan pasangan jenis penutup lahan, dengan deskripsi sebagai berikut:",
+    "    3 = Konektivitas alami tinggi",
+    "    2 = Bisa berdampingan dengan pengaturan",
+    "    1 = Kurang cocok/risiko",
+    "    0 = Tidak cocok/terlarang",
+    "3. Tidak diperkenankan mengubah header kolom dan baris serta mengisi cell di luar matriks"
+  )
+  
+  shape_xml <- create_multiline_shape(
+    instr_lines,
+    shape      = "rect",
+    name       = "instructions_box",
+    fill_color = wb_color(hex = "FFF5F5DC"),
+    text_color = black,
+    line_color = black,
+    text_align = "left"
+  )
+  
+  # Position the box from column B down, spanning enough columns and rows
+  # Use max(ncols, 6) to give reasonable width
+  instr_dims <- paste0("B", instr_row, ":", int2col(max(ncols, 6)), instr_row + 10)
+  wb$add_drawing(dims = instr_dims, xml = shape_xml)
+  
+  wb$save(file_path, overwrite = TRUE)
+  
+  invisible(wb)
 }
 
 #' Calculate LULC adjacency matrix by administrative unit
@@ -1340,29 +1529,42 @@ calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
 #' @importFrom sf st_make_valid st_crs st_transform st_intersection st_is_empty st_bbox
 #' @importFrom terra rast vect distance mask
 #' @export
-calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100) {
+calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100, clip_to_pu = TRUE) {
   # Input validation
   if (!inherits(vector_obj, "sf")) stop("vector_obj must be an sf object")
   if (!inherits(pu, "sf")) stop("pu must be an sf object")
-  
+
   vector_obj <- sf::st_make_valid(vector_obj)
   pu <- sf::st_make_valid(pu)
-  
+
   # Harmonise CRS
   if (!identical(sf::st_crs(vector_obj), sf::st_crs(pu))) {
     message("Reprojecting vector_obj to CRS of pu")
     vector_obj <- sf::st_transform(vector_obj, sf::st_crs(pu))
   }
-  
-  # Clip vector_obj by pu 
-  vector_clipped <- sf::st_intersection(vector_obj, pu)
-  vector_clipped <- handle_geom_collection(vector_clipped)
-  vector_clipped <- vector_clipped[!sf::st_is_empty(vector_clipped), ]
-  
-  if (nrow(vector_clipped) == 0) {
-    stop("After intersection, no part of vector_obj overlaps pu")
+
+  # Optionally clip vector_obj to pu extent; fall back to full vector if
+  # intersection yields nothing (e.g. estuaries that border but don't overlap).
+  if (clip_to_pu) {
+    vector_clipped <- tryCatch(
+      {
+        clipped <- sf::st_intersection(vector_obj, pu)
+        clipped <- handle_geom_collection(clipped)
+        clipped <- clipped[!sf::st_is_empty(clipped), ]
+        clipped
+      },
+      error = function(e) sf::st_sf(geometry = sf::st_sfc(crs = sf::st_crs(pu)))
+    )
+
+    # Fall back to unclipped vector if intersection is empty
+    if (nrow(vector_clipped) == 0) {
+      message("Intersection with pu yielded no features; using full vector_obj extent for distance calculation.")
+      vector_clipped <- vector_obj
+    }
+  } else {
+    vector_clipped <- vector_obj
   }
-  
+
   # Create raster template from pu bounding box
   bb <- sf::st_bbox(pu)
   r_template <- terra::rast(
@@ -1371,15 +1573,15 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100) {
     resolution = resolution,
     crs = sf::st_crs(pu)$wkt
   )
-  
+
   # Calculate euclidean distance
   source_vect <- terra::vect(vector_clipped)
   dist_raster <- terra::distance(r_template, source_vect)
-  
+
   # Mask to pu
   pu_vect <- terra::vect(pu)
   dist_raster <- terra::mask(dist_raster, pu_vect)
-  
+
   return(dist_raster)
 }
 
@@ -2825,8 +3027,8 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
 #' @param n_alt integer. Number of alternatives to consider (passed to
 #'   `get_alternative_zone`). Default = 5.
 #' @param output_dir character. Directory where the output Excel file will be
-#'   saved. The file will be named "alternative_zones_selections.xlsx" for
-#'   step2, or "alternative_zones_selections_step1.xlsx" for step1.
+#'   saved. The file will be named "adjacent_alternative_zones_selections.xlsx"
+#'   for step2, or "overlaps_alternative_zones_selections.xlsx" for step1.
 #'   Default = "." (current working directory).
 #'
 #' @return A list with two components:
@@ -2834,40 +3036,7 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
 #'   \item{data}{The final cleaned data frame (without the temporary alternative
 #'     columns).}
 #'
-#' @details The function assumes that `get_alternative_zone()` is available in
-#'   the calling environment. For step2 it uses `lead()` and `lag()` from
-#'   dplyr, so the input data should be ordered appropriately (e.g., by
-#'   geography or ID). For step1 no lead/lag is used. The workbook includes
-#'   data validation dropdowns based on row-specific alternative lists, and
-#'   cells with "No alternative" are coloured black.
-#'
-#' @importFrom openxlsx createWorkbook addWorksheet writeData dataValidation
-#'   createStyle addStyle freezePane saveWorkbook int2col
-#' @importFrom dplyr mutate lead lag rowwise ungroup select rename_with
-#'   starts_with all_of everything
-#' @importFrom tidyr unnest_wider
-#' @importFrom sf st_drop_geometry
-#'
-#' @examples
-#' \dontrun{
-#' # Step 2 (existing behaviour, unchanged)
-#' result2 <- determine_alternative_zones(
-#'   idx_padan_map_filter = my_sf_data,
-#'   serasi_matrix = matriks_serasi,
-#'   step = "step2",
-#'   n_alt = 5,
-#'   output_dir = "output/step2/AOI_Palu-Parigi"
-#' )
-#'
-#' # Step 1 (new)
-#' result1 <- determine_alternative_zones(
-#'   idx_padan_map_filter = my_sf_data,
-#'   serasi_matrix = matriks_serasi,
-#'   step = "step1",
-#'   n_alt = 5,
-#'   output_dir = "output/step1/AOI_Palu-Parigi"
-#' )
-#' }
+#' @details ... (as before)
 determine_alternative_zones <- function(idx_padan_map_filter,
                                         serasi_matrix,
                                         step = c("step2", "step1"),
@@ -2993,6 +3162,26 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   addWorksheet(wb, "Validation_Lists")
   writeData(wb, "Data", df_export_clean, startRow = 1, startCol = 1)
   writeData(wb, "Validation_Lists", df_validation_lists, startRow = 1, startCol = 1)
+
+  unique_pu <- unique(df_export_clean$id_pu)
+  if (length(unique_pu) > 0) {
+    color1 <- "#DCE6F1"  # light blue
+    color2 <- "#FFFFFF"  # white
+    style_group1 <- createStyle(fgFill = color1)
+    style_group2 <- createStyle(fgFill = color2)
+    
+    # Excel row numbers
+    for (i in seq_along(unique_pu)) {
+      pu <- unique_pu[i]
+      rows_data <- which(df_export_clean$id_pu == pu)
+      rows_excel <- rows_data + 1
+      style <- if (i %% 2 == 1) style_group1 else style_group2
+      addStyle(wb, "Data", style = style,
+               rows = rows_excel,
+               cols = 1:ncol(df_export_clean),
+               gridExpand = TRUE)
+    }
+  }
   
   alt_rtrw_col_idx <- which(names(df_export_clean) == "alt_RTRW")
   alt_rzwp3k_col_idx <- which(names(df_export_clean) == "alt_RZWP3K")
@@ -3034,7 +3223,7 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     )
   }
   
-  # Colour "No alternative" cells black
+  # Colour "No alternative" cells black (overrides group colours on those cells)
   black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
   black_rows_rtrw <- which(df_lists_rtrw[, 1] == "No alternative") + 1
   black_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] == "No alternative") + 1
@@ -3269,35 +3458,33 @@ calculate_economic_npv <- function(
 #'   file will be saved. The directory is created recursively if it does not exist.
 #' @param file_name Character string giving the name of the output Excel file.
 #'   Defaults to `"recon_map.xlsx"`.
+#' @param group_col Character string naming a column in `recon_map` to group rows
+#'   for alternating background colors. If `NULL` (default), the function looks
+#'   for a column named `"id_pu"`; if found, it is used. If no suitable column
+#'   exists, no row coloring is applied.
 #'
 #' @return The function is called for its side effect of creating an Excel file.
 #'   It returns `NULL` invisibly.
 #'
-#' @details The Excel workbook contains two sheets:
+#' @details The workbook now contains three sheets:
 #' \itemize{
-#'   \item **Data**: Contains all columns from `recon_map` (with geometry
-#'     removed) plus decision column(s) at the end. Data validation is applied
-#'     to those columns.
-#'   \item **Lists**: Holds the valid option lists. For both steps, column A
-#'     holds RTRW options and column B holds RZWP3K options. When `step = 1`,
-#'     column C holds the combined list used for the `user_decision` dropdown.
+#'   \item **Data**: Main data with dropdown validations.
+#'   \item **Lists**: Option lists for dropdowns.
+#'   \item **Glossary**: Column descriptions extracted from the documentation.
 #' }
-#'
-#' The function requires the `openxlsx` and `sf` packages to be installed. It
-#' checks for their presence and stops with an error if they are missing.
+#' Additionally, the header row and the first four columns of the **Data** sheet
+#' are frozen for easier navigation.
 #'
 #' @examples
 #' \dontrun{
-#' # Step 2 (two separate decisions)
+#' # Step 2 with grouping and glossary
 #' generate_reconciliation_excel(recon_sf, rtrw_prior, rzp3k_prior, 
-#'                               step = 2, output_dir = "out")
-#'
-#' # Step 1 (single combined decision)
-#' generate_reconciliation_excel(recon_sf, rtrw_prior, rzp3k_prior,
-#'                               step = 1, output_dir = "out")
+#'                               step = 2, output_dir = "out",
+#'                               group_col = "id_pu")
 #' }
 #'
-#' @importFrom openxlsx createWorkbook addWorksheet writeData dataValidation saveWorkbook
+#' @importFrom openxlsx createWorkbook addWorksheet writeData dataValidation
+#'   saveWorkbook createStyle addStyle freezePane
 #' @importFrom sf st_drop_geometry
 #' @export
 generate_reconciliation_excel <- function(recon_map, 
@@ -3305,7 +3492,8 @@ generate_reconciliation_excel <- function(recon_map,
                                           rzwp3k_prioritas, 
                                           output_dir, 
                                           step, 
-                                          file_name = "recon_map.xlsx") {
+                                          file_name = "recon_map.xlsx",
+                                          group_col = NULL) {
   
   # Validate step argument
   if (missing(step) || !(step %in% c(1, 2))) {
@@ -3335,6 +3523,39 @@ generate_reconciliation_excel <- function(recon_map,
   openxlsx::addWorksheet(wb, "Data")
   openxlsx::addWorksheet(wb, "Lists")
   openxlsx::writeData(wb, "Data", df_flat)
+  
+  # Apply alternating row background colors based on grouping column
+  use_col <- NULL
+  if (!is.null(group_col) && group_col %in% names(df_flat)) {
+    use_col <- group_col
+  } else if ("id_pu" %in% names(df_flat)) {
+    use_col <- "id_pu"
+    message("Using column 'id_pu' for alternating row colors.")
+  } else {
+    message("No suitable grouping column found; skipping row coloring.")
+  }
+  
+  if (!is.null(use_col)) {
+    unique_vals <- unique(df_flat[[use_col]])
+    if (length(unique_vals) > 0) {
+      color1 <- "#DCE6F1"   # light blue
+      color2 <- "#FFFFFF"   # white
+      style_group1 <- openxlsx::createStyle(fgFill = color1)
+      style_group2 <- openxlsx::createStyle(fgFill = color2)
+      
+      # Data rows start at row 2 (header is row 1)
+      for (i in seq_along(unique_vals)) {
+        val <- unique_vals[i]
+        rows_data <- which(df_flat[[use_col]] == val)
+        rows_excel <- rows_data + 1
+        style <- if (i %% 2 == 1) style_group1 else style_group2
+        openxlsx::addStyle(wb, "Data", style = style,
+                           rows = rows_excel,
+                           cols = 1:ncol(df_flat),
+                           gridExpand = TRUE)
+      }
+    }
+  }
   
   # Write option lists to the Lists sheet
   openxlsx::writeData(wb, "Lists", x = "RTRW Options", startCol = 1, startRow = 1)
@@ -3391,6 +3612,68 @@ generate_reconciliation_excel <- function(recon_map,
                              type = "list",
                              value = formula_rzwp3k)
   }
+  
+  glossary_data <- data.frame(
+    Kelompok = c(
+      rep("Kolom Identitas", 4),
+      rep("Kolom Zona", 3),
+      rep("Kolom Indeks SERASI & PADU", 8),
+      rep("Kolom Indeks PADAN", 1),
+      rep("Kolom Alternatif Zona", 2),
+      rep("Kolom Indeks Alternatif", 4),
+      rep("Kolom Rekomendasi & Keputusan Sistem", 3),
+      rep("Kolom Keputusan Pengguna", 1)
+    ),
+    Kolom = c(
+      "id_pu", "stat_pu", "id_rtrw", "id_rzwp3k",
+      "RTRW", "RZWP3K", "area_ha",
+      "idx_serasi", "idx_padu_hs", "idx_padu_ke", "idx_padu_kh",
+      "idx_padu_ki", "idx_padu_kl", "idx_padu_rtp", "idx_padu_final",
+      "idx_padan",
+      "alt_RTRW", "alt_RZWP3K",
+      "idx_serasi_rtrw_alt", "idx_serasi_rzwp3k_alt",
+      "idx_padan_rtrw_alt", "idx_padan_rzwp3k_alt",
+      "recommendation", "decision", "idx_padan_final",
+      "user_decision"
+    ),
+    Deskripsi = c(
+      "ID unik unit perencanaan (Planning Unit). Merupakan penomoran tiap area konflik tumpang tindih yang diidentifikasi.",
+      "Status geometri unit perencanaan. Nilai tipikal: `intersection` (area tumpang tindih antara RTRW dan RZWP3K).",
+      "ID fitur RTRW asal yang membentuk unit perencanaan ini.",
+      "ID fitur RZWP3K asal yang membentuk unit perencanaan ini.",
+      "Nama kelas/zona kawasan RTRW yang berlaku pada unit perencanaan ini (kondisi eksisting).",
+      "Nama kelas/zona RZWP3K yang berlaku pada unit perencanaan ini (kondisi eksisting).",
+      "Luas unit perencanaan dalam satuan hektar (ha).",
+      "Indeks SERASI — mengukur tingkat kesesuaian/kompatibilitas antara kelas RTRW dan RZWP3K berdasarkan matriks serasi. Rentang 0–1, semakin tinggi semakin serasi.",
+      "Indeks PADU-HS (Hidrologi dan Sedimentasi) — menilai kepaduan lingkungan berdasarkan kedekatan terhadap estuari dan tingkat TSS.",
+      "Indeks PADU-KE (Konektivitas Ekologis) — menilai kepaduan berdasarkan ketetanggaan kelas tutupan lahan.",
+      "Indeks PADU-KH (Komposisi Habitat) — menilai kepaduan berdasarkan persentase tutupan habitat pesisir (mangrove, terumbu karang, lamun).",
+      "Indeks PADU-KI (Ketahanan Iklim) — menilai kepaduan berdasarkan tingkat risiko bencana pada unit perencanaan.",
+      "Indeks PADU-KL (Kualitas Lingkungan) — menilai kepaduan berdasarkan kondisi kualitas lingkungan perairan.",
+      "Indeks PADU-RTp (Risiko dan Tekanan) — menilai kepaduan berdasarkan jarak ke sumber tekanan (industri dan alur pelayaran).",
+      "Indeks PADU gabungan — hasil pembobotan dari seluruh komponen PADU (KE, HS, KL, KH, RTp, SE, KI). Rentang 0–1.",
+      "Indeks PADAN eksisting — nilai integrasi tata ruang darat-laut saat ini, dihitung dari kombinasi indeks SERASI dan PADU: `(α × idx_serasi) + ((1−α) × idx_padu_final)`.",
+      "Zona RTRW alternatif yang direkomendasikan untuk menggantikan zona RTRW eksisting guna meningkatkan integrasi.",
+      "Zona RZWP3K alternatif yang direkomendasikan untuk menggantikan zona RZWP3K eksisting guna meningkatkan integrasi.",
+      "Indeks SERASI yang dihitung jika zona RTRW diganti dengan `alt_RTRW` (berpasangan dengan RZWP3K eksisting).",
+      "Indeks SERASI yang dihitung jika zona RZWP3K diganti dengan `alt_RZWP3K` (berpasangan dengan RTRW eksisting).",
+      "Indeks PADAN proyeksi jika zona RTRW diganti dengan `alt_RTRW`.",
+      "Indeks PADAN proyeksi jika zona RZWP3K diganti dengan `alt_RZWP3K`.",
+      "Rekomendasi awal dari sistem berdasarkan logika prioritas zona dan perbandingan indeks PADAN alternatif. Nilai tipikal: `Ubah_RTRW`, `Ubah_RZWP3K`, `Koordinasi`.",
+      "Keputusan akhir sistem — hasil evaluasi apakah penggantian zona benar-benar meningkatkan indeks PADAN. Nilai tipikal: `Ubah RTRW ke [zona]`, `Ubah RZWP3K ke [zona]`, `Tetap/Koordinasi`.",
+      "Indeks PADAN setelah keputusan diterapkan. Jika keputusan adalah `Tetap/Koordinasi`, nilai ini sama dengan `idx_padan` eksisting.",
+      "**Kolom yang diisi oleh pengguna.** Keputusan rekonsiliasi akhir yang dipilih secara manual untuk setiap unit perencanaan. Nilai yang valid adalah salah satu dari: zona RTRW baru, zona RZWP3K baru, atau `Tetap/Koordinasi`. Kolom ini menjadi input utama untuk proses rekonsiliasi spasial di modul berikutnya."
+    ),
+    stringsAsFactors = FALSE
+  )
+  
+  openxlsx::addWorksheet(wb, "Glossary")
+  openxlsx::writeData(wb, "Glossary", glossary_data, startRow = 1, startCol = 1)
+  # Freeze header row in Glossary
+  openxlsx::freezePane(wb, "Glossary", firstRow = TRUE)
+  
+  # Freeze header row and first 4 columns in Data sheet
+  openxlsx::freezePane(wb, "Data", firstActiveRow = 2, firstActiveCol = 5)
   
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)

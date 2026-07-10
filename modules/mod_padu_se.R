@@ -357,17 +357,32 @@ padu_se_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "ntl", "popdens", "idx_padu_se")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Cahaya Malam (nanoWatts/sr/cm²)", "Kepadatan Penduduk (jiwa/ha)", "Indeks PADU-SE")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
         options = list(
           pageLength = 10,
           scrollX = TRUE,
           scrollY = "400px",
-          dom = 'Bfrtip'
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Cahaya Malam (nanoWatts/sr/cm²)", "Kepadatan Penduduk (jiwa/ha)", "Indeks PADU-SE"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

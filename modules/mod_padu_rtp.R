@@ -124,6 +124,8 @@ padu_rtp_server <- function(id, output_dir) {
       
       # step1 data
       idx_serasi_map = NULL,
+      ind_vect = NULL,
+      pel_vect = NULL,
       industry_euc_dist = NULL,
       pelayaran_euc_dist = NULL,
       
@@ -186,53 +188,61 @@ padu_rtp_server <- function(id, output_dir) {
         radioButtons(ns("ind_input_type"), label = NULL,
                      choices = c("Unggah Vektor (hitung jarak otomatis)" = "vector",
                                  "Unggah Raster Jarak yang Sudah Ada (.tif)" = "raster"),
+                     selected = "raster",
                      inline = FALSE),
         uiOutput(ns("ui_ind_file")),
-        
+
         hr(),
-        
+
         tags$p(tags$i(class = "bi bi-water me-1"), "2. Peta Jarak ke Alur Pelayaran",
                style = "font-weight: 600; margin-bottom: 4px;"),
         radioButtons(ns("pel_input_type"), label = NULL,
                      choices = c("Unggah Vektor (hitung jarak otomatis)" = "vector",
                                  "Unggah Raster Jarak yang Sudah Ada (.tif)" = "raster"),
+                     selected = "raster",
                      inline = FALSE),
         uiOutput(ns("ui_pel_file")),
-        
+
         hr(),
-        
-        numericInput(ns("calc_resolution"), "Resolusi Perhitungan Jarak Otomatis (m)", value = 30, min = 1),
-        tags$small(
-          style = "color: #6c757d; display: block; margin-bottom: 8px;",
-          "Hanya digunakan jika opsi 'Unggah Vektor' dipilih di atas."
-        ),
-        
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     
     output$ui_ind_file <- renderUI({
       ns <- session$ns
       if (input$ind_input_type == "vector") {
-        fileInput(ns("ind_file_vect"), "Shapefile Industri",
-                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE)
+        tagList(
+          fileInput(ns("ind_file_vect"), "Shapefile Industri",
+                    accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE),
+          numericInput(ns("ind_calc_resolution"), "Resolusi Perhitungan Jarak (m)", value = 100, min = 1),
+          actionButton(ns("btn_calc_ind_dist"),
+                       tagList(tags$i(class = "bi bi-calculator me-1"), "Buat Peta Jarak Industri"),
+                       class = "btn-outline-primary btn-sm"),
+          uiOutput(ns("ind_dist_status"))
+        )
       } else {
         fileInput(ns("ind_file_rast"), "Raster Industri (.tif)",
                   accept = c(".tif"), multiple = FALSE)
       }
     })
-    
+
     output$ui_pel_file <- renderUI({
       ns <- session$ns
       if (input$pel_input_type == "vector") {
-        fileInput(ns("pel_file_vect"), "Shapefile Alur Pelayaran",
-                  accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE)
+        tagList(
+          fileInput(ns("pel_file_vect"), "Shapefile Alur Pelayaran",
+                    accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE),
+          numericInput(ns("pel_calc_resolution"), "Resolusi Perhitungan Jarak (m)", value = 100, min = 1),
+          actionButton(ns("btn_calc_pel_dist"),
+                       tagList(tags$i(class = "bi bi-calculator me-1"), "Buat Peta Jarak Alur Pelayaran"),
+                       class = "btn-outline-primary btn-sm"),
+          uiOutput(ns("pel_dist_status"))
+        )
       } else {
         fileInput(ns("pel_file_rast"), "Raster Alur Pelayaran (.tif)",
                   accept = c(".tif"), multiple = FALSE)
       }
     })
-    
+
     # ── Load SERASI map ─────────────────────────────────────────
     observeEvent(input$idx_serasi_file, {
       req(input$idx_serasi_file)
@@ -257,24 +267,55 @@ padu_rtp_server <- function(id, output_dir) {
     })
     
     # ── Process industry data ──────────────────────────────────
+    # Store loaded vector in rv so button handler can access it
     observeEvent(input$ind_file_vect, {
-      req(input$ind_input_type == "vector", input$ind_file_vect, rv$idx_serasi_map)
+      req(input$ind_file_vect)
       tryCatch({
         ind_vect <- load_and_validate_shapefile(extract_shp_path(input$ind_file_vect))
-        ind_vect <- ensure_geometry_name(ind_vect)  
-        append_log("Menghitung jarak Euclidean dari vektor industri...")
-        rv$industry_euc_dist <- calculate_euclidean_dist(
-          ind_vect,
-          rv$idx_serasi_map,
-          resolution = input$calc_resolution
-        )
-        showNotification("Raster jarak industri berhasil dihitung.", type = "message")
+        rv$ind_vect <- ensure_geometry_name(ind_vect)
+        showNotification("Shapefile industri berhasil dimuat. Klik 'Buat Peta Jarak Industri' untuk menghitung.", type = "message")
       }, error = function(e) {
-        rv$industry_euc_dist <- NULL
-        showNotification(paste("Gagal memproses industri:", e$message), type = "error")
+        rv$ind_vect <- NULL
+        showNotification(paste("Gagal memuat shapefile industri:", e$message), type = "error")
       })
     })
-    
+
+    observeEvent(input$btn_calc_ind_dist, {
+      if (is.null(rv$idx_serasi_map)) {
+        showNotification(
+          "Harap unggah Peta Indeks SERASI terlebih dahulu.",
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      if (is.null(rv$ind_vect)) {
+        showNotification("Harap unggah shapefile industri terlebih dahulu.", type = "warning")
+        return()
+      }
+      withProgress(message = "Menghitung jarak ke Industri...", value = 0.3, {
+        tryCatch({
+          append_log("Menghitung jarak Euclidean dari vektor industri...")
+          rv$industry_euc_dist <- calculate_euclidean_dist(
+            rv$ind_vect,
+            rv$idx_serasi_map,
+            resolution = input$ind_calc_resolution
+          )
+          incProgress(1, detail = "Selesai!")
+          showNotification("Raster jarak industri berhasil dihitung.", type = "message")
+        }, error = function(e) {
+          rv$industry_euc_dist <- NULL
+          showNotification(paste("Gagal memproses industri:", e$message), type = "error")
+        })
+      })
+    })
+
+    output$ind_dist_status <- renderUI({
+      if (!is.null(rv$industry_euc_dist)) {
+        div(class = "alert alert-success mt-2 mb-0 py-1 px-2", style = "font-size: 0.85rem;",
+            tags$i(class = "bi bi-check-circle me-1"), "Peta jarak industri siap.")
+      }
+    })
+
     observeEvent(input$ind_file_rast, {
       req(input$ind_input_type == "raster", input$ind_file_rast)
       tryCatch({
@@ -285,26 +326,57 @@ padu_rtp_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat raster industri:", e$message), type = "error")
       })
     })
-    
+
     # ── Process shipping lane data ─────────────────────────────
+    # Store loaded vector in rv so button handler can access it
     observeEvent(input$pel_file_vect, {
-      req(input$pel_input_type == "vector", input$pel_file_vect, rv$idx_serasi_map)
+      req(input$pel_file_vect)
       tryCatch({
         pel_vect <- load_and_validate_shapefile(extract_shp_path(input$pel_file_vect))
-        pel_vect <- ensure_geometry_name(pel_vect)  
-        append_log("Menghitung jarak Euclidean dari vektor alur pelayaran...")
-        rv$pelayaran_euc_dist <- calculate_euclidean_dist(
-          pel_vect,
-          rv$idx_serasi_map,
-          resolution = input$calc_resolution
-        )
-        showNotification("Raster jarak alur pelayaran berhasil dihitung.", type = "message")
+        rv$pel_vect <- ensure_geometry_name(pel_vect)
+        showNotification("Shapefile alur pelayaran berhasil dimuat. Klik 'Buat Peta Jarak Alur Pelayaran' untuk menghitung.", type = "message")
       }, error = function(e) {
-        rv$pelayaran_euc_dist <- NULL
-        showNotification(paste("Gagal memproses alur pelayaran:", e$message), type = "error")
+        rv$pel_vect <- NULL
+        showNotification(paste("Gagal memuat shapefile alur pelayaran:", e$message), type = "error")
       })
     })
-    
+
+    observeEvent(input$btn_calc_pel_dist, {
+      if (is.null(rv$idx_serasi_map)) {
+        showNotification(
+          "Harap unggah Peta Indeks SERASI terlebih dahulu.",
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      if (is.null(rv$pel_vect)) {
+        showNotification("Harap unggah shapefile alur pelayaran terlebih dahulu.", type = "warning")
+        return()
+      }
+      withProgress(message = "Menghitung jarak ke Alur Pelayaran...", value = 0.3, {
+        tryCatch({
+          append_log("Menghitung jarak Euclidean dari vektor alur pelayaran...")
+          rv$pelayaran_euc_dist <- calculate_euclidean_dist(
+            rv$pel_vect,
+            rv$idx_serasi_map,
+            resolution = input$pel_calc_resolution
+          )
+          incProgress(1, detail = "Selesai!")
+          showNotification("Raster jarak alur pelayaran berhasil dihitung.", type = "message")
+        }, error = function(e) {
+          rv$pelayaran_euc_dist <- NULL
+          showNotification(paste("Gagal memproses alur pelayaran:", e$message), type = "error")
+        })
+      })
+    })
+
+    output$pel_dist_status <- renderUI({
+      if (!is.null(rv$pelayaran_euc_dist)) {
+        div(class = "alert alert-success mt-2 mb-0 py-1 px-2", style = "font-size: 0.85rem;",
+            tags$i(class = "bi bi-check-circle me-1"), "Peta jarak alur pelayaran siap.")
+      }
+    })
+
     observeEvent(input$pel_file_rast, {
       req(input$pel_input_type == "raster", input$pel_file_rast)
       tryCatch({
@@ -540,17 +612,32 @@ padu_rtp_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "pelayaran_dist_mean", "industry_dist_mean", "idx_padu_rtp")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Jarak ke Alur Pelayaran (m)", "Jarak ke Area Industri (m)", "Indeks PADU-RTp")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
         options = list(
           pageLength = 10,
           scrollX = TRUE,
           scrollY = "400px",
-          dom = 'Bfrtip'
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Jarak ke Alur Pelayaran (m)", "Jarak ke Area Industri (m)", "Indeks PADU-RTp"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────

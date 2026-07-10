@@ -365,17 +365,32 @@ padu_combine_server <- function(id, output_dir) {
     # ── Table output ───────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
+      
+      df <- rv$analysis_result$table
+      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "idx_padu_ke", "idx_padu_hs", "idx_padu_kl", "idx_padu_kh", "idx_padu_rtp", "idx_padu_se", "idx_padu_ki", "idx_padu_final")]
+      
+      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Indeks PADU-KE", "Indeks PADU-HS", "Indeks PADU-KL", "Indeks PADU-KH", "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI", "Indeks PADU Kombinasi")
+      
       DT::datatable(
-        rv$analysis_result$table,
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
         options = list(
           pageLength = 10,
           scrollX = TRUE,
           scrollY = "400px",
-          dom = 'Bfrtip'
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
         ),
         rownames = FALSE,
         class = "display compact stripe hover"
-      )
+      ) %>%
+        DT::formatRound(
+          columns = c("Indeks PADU-KE", "Indeks PADU-HS", "Indeks PADU-KL", "Indeks PADU-KH", "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI", "Indeks PADU Kombinasi"),  
+          digits = 2
+        )
     })
     
     # ── Validation log ─────────────────────────────────────────
