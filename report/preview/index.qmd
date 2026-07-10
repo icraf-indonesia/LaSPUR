@@ -138,6 +138,8 @@ preview_table(
 
 ## Preview Data Raster
 
+Data spasial berbentuk grid/piksel, di mana setiap sel menyimpan nilai tertentu (luas, jarak, dsb).
+
 ```{r}
 create_raster_map(
   data_path(
@@ -151,6 +153,8 @@ create_raster_map(
 ------------------------------------------------------------------------
 
 ## Preview Data Vektor
+
+Data spasial dalam bentuk titik, garis, atau poligon dengan koordinat geografis yang presisi. 
 
 ```{r}
 create_vector_map(

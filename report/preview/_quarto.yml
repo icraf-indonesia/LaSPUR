@@ -60,6 +60,8 @@ website:
                 href: vector/padu-rtp.qmd
               - text: "PADU-KI"
                 href: vector/padu-ki.qmd
+              - text: "Area of Interest (AoI)"
+                href: vector/aoi.qmd
 
       # =====================================================
       # PANDUAN PENGGUNAAN
