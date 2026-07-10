@@ -10,15 +10,13 @@ execute:
 source("R/utils.R")
 ```
 
-## Deskripsi
+# Deskripsi
 
 Dataset PADU-HS merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-HS di LaSPUR. Raster digunakan untuk menghitung indeks yang berkaitan dengan habitat sensitif dan karakteristik lingkungan pesisir.
 
 ---
 
-# 1. Data yang Digunakan
-
-### Raster
+# Data yang Digunakan
 
 | Nama Data | Format | Keterangan |
 |-----------|--------|------------|
@@ -27,7 +25,7 @@ Dataset PADU-HS merupakan kumpulan data raster yang digunakan sebagai masukan pa
 
 ---
 
-# 2. Visualisasi
+# Visualisasi
 
 ## Euclidean Distance Estuari
 
@@ -55,7 +53,7 @@ create_raster_map(
 
 ---
 
-# 3. Sumber Data
+# Sumber Data
 
 | Dataset | Instansi | Tahun | URL |
 |----------|----------|-------|-----|
@@ -63,7 +61,7 @@ create_raster_map(
 
 ---
 
-# 4. Spesifikasi Teknis
+# pesifikasi Teknis
 
 ## Euclidean Distance Estuari
 
@@ -91,7 +89,7 @@ get_raster_metadata(
 
 ---
 
-# 5. Digunakan pada Tahapan
+# Digunakan pada Tahapan
 
 | Tahapan | Digunakan |
 |----------|:---------:|
@@ -103,7 +101,7 @@ get_raster_metadata(
 
 ---
 
-# 6. Pemeriksaan Data
+# Pemeriksaan Data
 
 ## Euclidean Distance Estuari
 

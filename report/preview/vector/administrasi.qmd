@@ -1,0 +1,86 @@
+---
+title: "Administrasi"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset Administrasi merupakan data vektor yang digunakan sebagai referensi batas wilayah administrasi pada berbagai tahapan analisis LaSPUR. Dataset ini berfungsi sebagai acuan dalam identifikasi lokasi, penyajian hasil analisis, agregasi statistik, serta visualisasi spasial.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| GADM 4.1 Indonesia | Shapefile | Batas wilayah administrasi yang digunakan sebagai referensi analisis dan visualisasi pada LaSPUR. |
+
+---
+
+# Visualisasi
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "administrasi",
+    "gadm41_IDN_3_kecamatan.shp"
+  ),
+  color_field = "NAME_3"
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| GADM 4.1 | Global Administrative Areas (GADM) | 2022 | https://gadm.org |
+
+---
+
+# Spesifikasi Teknis
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "administrasi",
+    "gadm41_IDN_3_kecamatan.shp"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| Analisis SERASI | ✔ |
+| Analisis PADU | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "administrasi",
+    "gadm41_IDN_3_kecamatan.shp"
+  )
+)
+```

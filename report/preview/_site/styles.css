@@ -1,0 +1,61 @@
+.sidebar-header {
+  position: relative;
+}
+
+.sidebar-header::before {
+  content: "";
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 15px auto 10px auto;
+  background: url("images/pur_icon.png") no-repeat center;
+  background-size: contain;
+}
+
+.metadata-section{
+
+margin-top:15px;
+
+border:1px solid #d9d9d9;
+
+border-radius:6px;
+
+overflow:hidden;
+
+}
+
+.meta-row{
+
+display:grid;
+
+grid-template-columns:220px auto;
+
+border-bottom:1px solid #ececec;
+
+}
+
+.meta-row:last-child{
+
+border-bottom:none;
+
+}
+
+.meta-name{
+
+background:#f5f5f5;
+
+padding:10px 15px;
+
+font-weight:600;
+
+}
+
+.meta-value{
+
+padding:10px 15px;
+
+white-space:pre-wrap;
+
+word-break:break-word;
+
+}

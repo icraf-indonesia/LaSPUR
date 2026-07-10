@@ -148,45 +148,109 @@ create_vector_map <- function(file, color_field = NULL){
     domain = v[[color_field]]
   )
   
-  leaflet(v) |>
+  # Geometry type
+  geom_type <- unique(as.character(sf::st_geometry_type(v)))
+  geom_type <- gsub("^MULTI", "", geom_type)
+  
+  map <- leaflet(v) |>
+    addTiles()
+  
+  if (all(geom_type == "POLYGON")) {
     
-    addTiles() |>
-    
-    addPolygons(
-      
-      fillColor = ~pal(get(color_field)),
-      
-      weight = 2,
-      
-      opacity = 1,
-      
-      color = "white",
-      
-      dashArray = "3",
-      
-      fillOpacity = 0.7,
-      
-      highlight = highlightOptions(
-        weight = 5,
-        color = "#666",
-        dashArray = "",
+    map <- map |>
+      addPolygons(
+        
+        fillColor = ~pal(get(color_field)),
+        
+        weight = 2,
+        
+        opacity = 1,
+        
+        color = "white",
+        
+        dashArray = "3",
+        
         fillOpacity = 0.7,
-        bringToFront = TRUE
-      ),
-      
-      label = ~get(color_field),
-      
-      labelOptions = labelOptions(
-        style = list(
-          "font-weight" = "normal",
-          padding = "3px 8px"
+        
+        highlight = highlightOptions(
+          weight = 5,
+          color = "#666",
+          dashArray = "",
+          fillOpacity = 0.7,
+          bringToFront = TRUE
         ),
-        textsize = "15px",
-        direction = "auto"
+        
+        label = ~get(color_field),
+        
+        labelOptions = labelOptions(
+          style = list(
+            "font-weight" = "normal",
+            padding = "3px 8px"
+          ),
+          textsize = "15px",
+          direction = "auto"
+        )
       )
-      
-    ) |>
     
+  } else if (all(geom_type == "LINESTRING")) {
+    
+    map <- map |>
+      addPolylines(
+        
+        color = ~pal(get(color_field)),
+        
+        weight = 3,
+        
+        opacity = 1,
+        
+        label = ~get(color_field),
+        
+        labelOptions = labelOptions(
+          style = list(
+            "font-weight" = "normal",
+            padding = "3px 8px"
+          ),
+          textsize = "15px",
+          direction = "auto"
+        )
+      )
+    
+  } else if (all(geom_type == "POINT")) {
+    
+    map <- map |>
+      addCircleMarkers(
+        
+        radius = 5,
+        
+        stroke = TRUE,
+        
+        weight = 1,
+        
+        color = "white",
+        
+        fillColor = ~pal(get(color_field)),
+        
+        fillOpacity = 0.9,
+        
+        label = ~get(color_field),
+        
+        labelOptions = labelOptions(
+          style = list(
+            "font-weight" = "normal",
+            padding = "3px 8px"
+          ),
+          textsize = "15px",
+          direction = "auto"
+        )
+      )
+    
+  } else {
+    
+    stop("Unsupported geometry type: ", paste(geom_type, collapse = ", "))
+    
+  }
+  
+  map |>
     addLegend(
       pal = pal,
       values = v[[color_field]],
@@ -199,46 +263,214 @@ create_vector_map <- function(file, color_field = NULL){
 # RASTER MAP
 # ============================================================
 
-create_raster_map <- function(file,
-                              title=NULL){
+create_raster_map <- function(
+    file,
+    title = NULL,
+    max_cells = 250000
+){
+  
+  # ----------------------------------------------------------
+  # Read raster
+  # ----------------------------------------------------------
   
   r <- terra::rast(file)
   
   r <- project_to_wgs84(r)
   
-  pal <- colorNumeric(
+  # ----------------------------------------------------------
+  # Downsample raster
+  # ----------------------------------------------------------
+  
+  if (terra::ncell(r) > max_cells){
     
-    palette="viridis",
+    fact <- ceiling(
+      sqrt(
+        terra::ncell(r) / max_cells
+      )
+    )
     
-    domain=terra::values(r),
+    if (terra::is.factor(r)){
+      
+      r <- terra::aggregate(
+        r,
+        fact = fact,
+        fun = "modal",
+        na.rm = TRUE
+      )
+      
+    }else{
+      
+      r <- terra::aggregate(
+        r,
+        fact = fact,
+        fun = "mean",
+        na.rm = TRUE
+      )
+      
+    }
     
-    na.color="transparent"
+  }
+  
+  # ----------------------------------------------------------
+  # Detect categorical raster
+  # ----------------------------------------------------------
+  
+  is_cat <- terra::is.factor(r)
+  
+  if(!is_cat){
+    
+    f <- tryCatch(
+      terra::freq(r),
+      error=function(e) NULL
+    )
+    
+    if(!is.null(f)){
+      
+      if(nrow(f) <= 20){
+        
+        is_cat <- TRUE
+        
+      }
+      
+    }
+    
+  }
+  
+  # ==========================================================
+  # CONTINUOUS RASTER
+  # ==========================================================
+  
+  if(!is_cat){
+    
+    rng <- terra::minmax(r)
+    
+    pal <- leaflet::colorNumeric(
+      
+      palette = "viridis",
+      
+      domain = c(rng[1], rng[2]),
+      
+      na.color = "transparent"
+      
+    )
+    
+    return(
+      
+      leaflet::leaflet() |>
+        
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery
+        ) |>
+        
+        leaflet::addRasterImage(
+          
+          x = r,
+          
+          colors = pal,
+          
+          opacity = 0.8,
+          
+          project = FALSE
+          
+        ) |>
+        
+        leaflet::addLegend(
+          
+          pal = pal,
+          
+          values = c(rng[1], rng[2]),
+          
+          title = title
+          
+        )
+      
+    )
+    
+  }
+  
+  # ==========================================================
+  # CATEGORICAL RASTER
+  # ==========================================================
+  
+  rat <- tryCatch(
+    terra::levels(r)[[1]],
+    error=function(e) NULL
+  )
+  
+  if(!is.null(rat)){
+    
+    value_col <- names(rat)[1]
+    
+    label_col <- names(rat)[2]
+    
+    values <- rat[[value_col]]
+    
+    labels <- as.character(rat[[label_col]])
+    
+  }else{
+    
+    freq <- terra::freq(r)
+    
+    values <- freq[,1]
+    
+    labels <- as.character(values)
+    
+  }
+  
+  pal <- leaflet::colorFactor(
+    
+    palette = RColorBrewer::brewer.pal(
+      max(3,min(8,length(labels))),
+      "Set2"
+    ),
+    
+    domain = labels,
+    
+    ordered = FALSE
     
   )
   
-  leaflet() |>
+  color_fun <- function(x){
     
-    addProviderTiles(
-      providers$Esri.WorldImagery
+    idx <- match(x, values)
+    
+    cols <- rep("#00000000", length(idx))
+    
+    ok <- !is.na(idx)
+    
+    cols[ok] <- pal(labels[idx[ok]])
+    
+    cols
+    
+  }
+  
+  leaflet::leaflet() |>
+    
+    leaflet::addProviderTiles(
+      leaflet::providers$Esri.WorldImagery
     ) |>
     
-    addRasterImage(
+    leaflet::addRasterImage(
       
-      r,
+      x = r,
       
-      colors=pal,
+      colors = color_fun,
       
-      opacity=.8
+      opacity = 0.8,
+      
+      project = FALSE
       
     ) |>
     
-    addLegend(
+    leaflet::addLegend(
       
-      pal=pal,
+      colors = pal(labels),
       
-      values=terra::values(r),
+      labels = labels,
       
-      title=title
+      title = title,
+      
+      opacity = 1
       
     )
   
@@ -250,40 +482,67 @@ create_raster_map <- function(file,
 
 get_vector_metadata <- function(file){
   
-  v <- st_read(file,
-               quiet=TRUE)
+  library(sf)
+  library(htmltools)
+  
+  v <- st_read(file, quiet = TRUE)
   
   bb <- st_bbox(v)
   
-  data.frame(
+  fields <- setdiff(names(v), attr(v, "sf_column"))
+  
+  tags$div(
     
-    Properti=c(
-      
-      "Format",
-      
-      "Sistem Koordinat",
-      
-      "Bounding Box",
-      
-      "Geometry",
-      
-      "Jumlah Feature"
-      
+    class = "metadata-section",
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Format"),
+             tags$div(class="meta-value",toupper(tools::file_ext(file)))
     ),
     
-    Nilai=c(
-      
-      tools::file_ext(file),
-      
-      st_crs(v)$Name,
-      
-      paste(round(bb,5),
-            collapse=", "),
-      
-      unique(st_geometry_type(v)),
-      
-      nrow(v)
-      
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Geometry"),
+             tags$div(class="meta-value",
+                      as.character(unique(st_geometry_type(v))))
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Coordinate System"),
+             tags$div(class="meta-value",
+                      st_crs(v)$Name)
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Feature Count"),
+             tags$div(class="meta-value",
+                      format(nrow(v), big.mark=","))
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Extent"),
+             tags$div(class="meta-value",
+                      
+                      HTML(paste(
+                        sprintf("xmin : %.5f",bb["xmin"]),
+                        sprintf("ymin : %.5f",bb["ymin"]),
+                        sprintf("xmax : %.5f",bb["xmax"]),
+                        sprintf("ymax : %.5f",bb["ymax"]),
+                        sep="<br>"
+                      ))
+                      
+             )
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Fields"),
+             tags$div(class="meta-value",
+                      
+                      HTML(
+                        paste(fields,
+                              collapse="<br>")
+                      )
+                      
+             )
     )
     
   )
@@ -296,52 +555,75 @@ get_vector_metadata <- function(file){
 
 get_raster_metadata <- function(file){
   
+  library(terra)
+  library(htmltools)
+  
   r <- rast(file)
   
   e <- ext(r)
   
-  data.frame(
+  crs_info <- terra::crs(r, describe = TRUE)
+  
+  if (!is.null(crs_info) &&
+      !is.na(crs_info$code) &&
+      nzchar(crs_info$name)) {
     
-    Properti=c(
-      
-      "Format",
-      
-      "Sistem Koordinat",
-      
-      "Bounding Box",
-      
-      "Resolusi",
-      
-      "Jumlah Layer"
-      
+    crs_text <- sprintf("%s (EPSG:%s)",
+                        crs_info$name,
+                        crs_info$code)
+    
+  } else {
+    
+    crs_text <- terra::crs(r, proj = FALSE)
+    
+  }
+  
+  tags$div(
+    
+    class="metadata-section",
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Format"),
+             tags$div(class="meta-value",toupper(tools::file_ext(file)))
     ),
     
-    Nilai=c(
-      
-      tools::file_ext(file),
-      
-      crs(r),
-      
-      paste(
-        
-        round(c(
-          
-          e$xmin,
-          e$ymin,
-          e$xmax,
-          e$ymax
-          
-        ),5),
-        
-        collapse=", "
-        
-      ),
-      
-      paste(res(r),
-            collapse=" x "),
-      
-      nlyr(r)
-      
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Coordinate System"),
+             tags$div(class="meta-value",crs_text)
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Layer"),
+             tags$div(class="meta-value",nlyr(r))
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Resolution"),
+             tags$div(class="meta-value",
+                      
+                      paste0(
+                        res(r)[1],
+                        " × ",
+                        res(r)[2]
+                      )
+                      
+             )
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Extent"),
+             
+             tags$div(class="meta-value",
+                      
+                      HTML(paste(
+                        sprintf("xmin : %.5f",e$xmin),
+                        sprintf("ymin : %.5f",e$ymin),
+                        sprintf("xmax : %.5f",e$xmax),
+                        sprintf("ymax : %.5f",e$ymax),
+                        sep="<br>"
+                      ))
+                      
+             )
     )
     
   )
@@ -353,6 +635,8 @@ get_raster_metadata <- function(file){
 # ============================================================
 
 get_table_metadata <- function(file){
+  
+  library(htmltools)
   
   ext <- tools::file_ext(file)
   
@@ -366,33 +650,39 @@ get_table_metadata <- function(file){
     
   }
   
-  data.frame(
+  tags$div(
     
-    Properti=c(
-      
-      "Format",
-      
-      "Jumlah Baris",
-      
-      "Jumlah Kolom",
-      
-      "Nama Kolom"
-      
+    class="metadata-section",
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Format"),
+             tags$div(class="meta-value",toupper(ext))
     ),
     
-    Nilai=c(
-      
-      toupper(ext),
-      
-      nrow(x),
-      
-      ncol(x),
-      
-      paste(
-        names(x),
-        collapse=", "
-      )
-      
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Rows"),
+             tags$div(class="meta-value",
+                      format(nrow(x),big.mark=","))
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Columns"),
+             tags$div(class="meta-value",ncol(x))
+    ),
+    
+    tags$div(class="meta-row",
+             tags$div(class="meta-name","Fields"),
+             
+             tags$div(class="meta-value",
+                      
+                      HTML(
+                        paste(
+                          names(x),
+                          collapse="<br>"
+                        )
+                      )
+                      
+             )
     )
     
   )
@@ -405,6 +695,9 @@ get_table_metadata <- function(file){
 
 check_vector <- function(file){
   
+  library(sf)
+  library(htmltools)
+  
   v <- sf::st_read(file, quiet = TRUE)
   
   status <- c(
@@ -414,44 +707,74 @@ check_vector <- function(file){
     !any(duplicated(v))
   )
   
-  data.frame(
+  result <- c(
+    ifelse(status[1], "✔ Passed", "✖ Failed"),
+    ifelse(status[2], "✔ Passed", "✖ Failed"),
+    ifelse(status[3], "✔ Passed", "✖ Failed"),
+    ifelse(status[4], "✔ Passed", "✖ Failed")
+  )
+  
+  description <- c(
     
-    Pemeriksaan = c(
-      "CRS",
-      "Geometry",
-      "Missing Value",
-      "Duplikasi"
-    ),
+    if (status[1]) {
+      paste("CRS tersedia:", sf::st_crs(v)$Name)
+    } else {
+      "CRS belum didefinisikan."
+    },
     
-    Status = ifelse(status, "✔", "✖"),
+    if (status[2]) {
+      "Seluruh geometri valid."
+    } else {
+      paste(sum(!sf::st_is_valid(v)), "geometri tidak valid.")
+    },
     
-    Keterangan = c(
-      if (status[1]) {
-        paste("CRS tersedia:", sf::st_crs(v)$Name)
-      } else {
-        "CRS belum didefinisikan."
-      },
+    if (status[3]) {
+      "Tidak terdapat nilai kosong (NA)."
+    } else {
+      paste(sum(is.na(v)), "nilai kosong (NA) ditemukan.")
+    },
+    
+    if (status[4]) {
+      "Tidak terdapat fitur duplikat."
+    } else {
+      paste(sum(duplicated(v)), "fitur duplikat ditemukan.")
+    }
+    
+  )
+  
+  tags$div(
+    
+    class = "metadata-section",
+    
+    lapply(seq_along(result), function(i){
       
-      if (status[2]) {
-        "Seluruh geometri valid."
-      } else {
-        paste(sum(!sf::st_is_valid(v)), "geometri tidak valid.")
-      },
+      tags$div(
+        
+        class = "meta-row",
+        
+        tags$div(
+          class = "meta-name",
+          c("CRS",
+            "Geometry",
+            "Missing Value",
+            "Duplicate Feature")[i]
+        ),
+        
+        tags$div(
+          
+          class = "meta-value",
+          
+          tags$b(result[i]),
+          
+          tags$br(),
+          
+          description[i]
+          
+        )
+        
+      )
       
-      if (status[3]) {
-        "Tidak terdapat nilai kosong (NA)."
-      } else {
-        paste(sum(is.na(v)), "nilai kosong (NA) ditemukan.")
-      },
-      
-      if (status[4]) {
-        "Tidak terdapat fitur duplikat."
-      } else {
-        paste(sum(duplicated(v)), "fitur duplikat ditemukan.")
-      }
-    ),
-    
-    check.names = FALSE
+    })
     
   )
   
@@ -463,6 +786,9 @@ check_vector <- function(file){
 
 check_raster <- function(file){
   
+  library(terra)
+  library(htmltools)
+  
   r <- terra::rast(file)
   
   status <- c(
@@ -472,52 +798,80 @@ check_raster <- function(file){
     TRUE
   )
   
-  data.frame(
+  result <- c(
+    ifelse(status[1], "✔ Passed", "✖ Failed"),
+    ifelse(status[2], "✔ Passed", "✖ Failed"),
+    ifelse(status[3], "✔ Passed", "✖ Failed"),
+    ifelse(status[4], "✔ Passed", "✖ Failed")
+  )
+  
+  description <- c(
     
-    Pemeriksaan = c(
-      "CRS",
-      "Extent",
-      "Resolution",
-      "Missing Value"
-    ),
+    if (status[1]) {
+      "Coordinate Reference System tersedia."
+    } else {
+      "Coordinate Reference System belum tersedia."
+    },
     
-    Status = ifelse(status, "✔", "✖"),
+    if (status[2]) {
+      paste(
+        "Bounding Box:",
+        paste(round(as.vector(terra::ext(r)), 4), collapse = ", ")
+      )
+    } else {
+      "Extent tidak tersedia."
+    },
     
-    Keterangan = c(
+    if (status[3]) {
+      paste(
+        "Resolution:",
+        paste(terra::res(r), collapse = " × ")
+      )
+    } else {
+      "Resolusi raster tidak valid."
+    },
+    
+    if (status[4]) {
+      "Pemeriksaan nilai NoData belum dilakukan."
+    } else {
+      "Terdapat nilai NoData."
+    }
+    
+  )
+  
+  tags$div(
+    
+    class = "metadata-section",
+    
+    lapply(seq_along(result), function(i){
       
-      if (status[1]) {
-        "Coordinate Reference System tersedia."
-      } else {
-        "Coordinate Reference System belum tersedia."
-      },
-      
-      if (status[2]) {
-        paste(
-          "Bounding Box:",
-          paste(round(as.vector(terra::ext(r)), 4), collapse = ", ")
+      tags$div(
+        
+        class = "meta-row",
+        
+        tags$div(
+          class = "meta-name",
+          c("CRS",
+            "Extent",
+            "Resolution",
+            "Missing Value")[i]
+        ),
+        
+        tags$div(
+          
+          class = "meta-value",
+          
+          tags$b(result[i]),
+          
+          tags$br(),
+          
+          description[i]
+          
         )
-      } else {
-        "Extent tidak tersedia."
-      },
+        
+      )
       
-      if (status[3]) {
-        paste(
-          "Resolusi:",
-          paste(terra::res(r), collapse = " × ")
-        )
-      } else {
-        "Resolusi raster tidak valid."
-      },
-      
-      if (status[4]) {
-        "Pemeriksaan nilai NoData belum dilakukan."
-      } else {
-        "Terdapat nilai NoData."
-      }
-      
-    ),
-    
-    check.names = FALSE
+    })
     
   )
   
@@ -544,6 +898,8 @@ preview_table <- function(file){
     stop("Format tidak didukung.")
     
   )
+  
+  tbl <- head(tbl,20)
   
   DT::datatable(
     
