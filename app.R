@@ -218,6 +218,10 @@ landing_page <- tabPanel(
 ui <- page_sidebar(
   useShinyjs(), 
   
+  tags$head(
+    tags$link(rel = "icon", type = "image/png", href = "pur_icon.png")
+  ),
+  
   title = "Land & Sea Planning Unit Reconcilliation (LaSPUR)",
   
   theme = bs_theme(
