@@ -6,7 +6,7 @@
 source("R/functions.R")
 source("R/helpers.R")
 
-# ── small UI helpers ────────────────────────────────────────────
+# ── small UI helpers ──────────────────────────────────────────────────────────
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(
     class = "alert alert-secondary mb-0",
@@ -28,7 +28,7 @@ source("R/helpers.R")
   )
 }
 
-# ── UI ──────────────────────────────────────────────────────────
+# ── UI ──────────────────────────────────────────────────────────────────────
 padu_rtp_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -44,7 +44,7 @@ padu_rtp_ui <- function(id) {
     fluidRow(
       class = "g-3",
       
-      # ── Left column: Wizard (1/3) ─────────────────────────────
+      # ── Left column: Wizard (1/3) ────────────────────────────────────────
       column(
         width = 4,
         card(
@@ -71,7 +71,7 @@ padu_rtp_ui <- function(id) {
         )
       ),
       
-      # ── Right column: Output & Hasil (2/3) ────────────────────
+      # ── Right column: Output & Hasil (2/3) ──────────────────────────────
       column(
         width = 8,
         card(
@@ -113,12 +113,12 @@ padu_rtp_ui <- function(id) {
   )
 }
 
-# ── Server ──────────────────────────────────────────────────────
+# ── Server ──────────────────────────────────────────────────────────────────
 padu_rtp_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # ── Reactive values ──────────────────────────────────────────
+    # ── Reactive values ────────────────────────────────────────────────────
     rv <- reactiveValues(
       unlocked = 1,
       
@@ -140,7 +140,7 @@ padu_rtp_server <- function(id, output_dir) {
       accordion_panel_set(id = "wizard", values = value, session = session)
     }
     
-    # ── Robust helper to extract shapefile path ────────────────
+    # ── Robust helper to extract shapefile path ──────────────────────────
     extract_shp_path <- function(file_input) {
       shp_row <- file_input[grepl("\\.shp$", file_input$name, ignore.case = TRUE), ]
       validate(need(
@@ -158,19 +158,19 @@ padu_rtp_server <- function(id, output_dir) {
       file.path(temp_dir, paste0(base_name, ".shp"))
     }
     
-    # ── Helper to extract vector path (gpkg or shp) ─────────────
+    # ── Helper to extract vector path (gpkg or shp) ──────────────────────
     extract_vector_path <- function(file_input) {
       gpkg_row <- file_input[grepl("\\.gpkg$", file_input$name, ignore.case = TRUE), ]
       if (nrow(gpkg_row) == 1) return(gpkg_row$datapath)
       extract_shp_path(file_input)
     }
     
-    # ── Log helper ──────────────────────────────────────────────
+    # ── Log helper ────────────────────────────────────────────────────────
     append_log <- function(msg) {
       rv$log_messages <- paste0(rv$log_messages, format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
     }
     
-    # ── Dynamic UI for Step 1 ─────────────────────────────────
+    # ── Dynamic UI for Step 1 ─────────────────────────────────────────────
     output$step1_ui <- renderUI({
       tagList(
         tags$p(tags$i(class = "bi bi-info-circle me-1"), "Peta Indeks SERASI (.gpkg atau .shp)",
@@ -191,9 +191,9 @@ padu_rtp_server <- function(id, output_dir) {
                      selected = "raster",
                      inline = FALSE),
         uiOutput(ns("ui_ind_file")),
-
+        
         hr(),
-
+        
         tags$p(tags$i(class = "bi bi-water me-1"), "2. Peta Jarak ke Alur Pelayaran",
                style = "font-weight: 600; margin-bottom: 4px;"),
         radioButtons(ns("pel_input_type"), label = NULL,
@@ -202,8 +202,9 @@ padu_rtp_server <- function(id, output_dir) {
                      selected = "raster",
                      inline = FALSE),
         uiOutput(ns("ui_pel_file")),
-
+        
         hr(),
+        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
     })
     
@@ -224,7 +225,7 @@ padu_rtp_server <- function(id, output_dir) {
                   accept = c(".tif"), multiple = FALSE)
       }
     })
-
+    
     output$ui_pel_file <- renderUI({
       ns <- session$ns
       if (input$pel_input_type == "vector") {
@@ -242,8 +243,8 @@ padu_rtp_server <- function(id, output_dir) {
                   accept = c(".tif"), multiple = FALSE)
       }
     })
-
-    # ── Load SERASI map ─────────────────────────────────────────
+    
+    # ── Load SERASI map ──────────────────────────────────────────────────
     observeEvent(input$idx_serasi_file, {
       req(input$idx_serasi_file)
       tryCatch({
@@ -266,7 +267,7 @@ padu_rtp_server <- function(id, output_dir) {
       })
     })
     
-    # ── Process industry data ──────────────────────────────────
+    # ── Process industry data ─────────────────────────────────────────────
     # Store loaded vector in rv so button handler can access it
     observeEvent(input$ind_file_vect, {
       req(input$ind_file_vect)
@@ -279,7 +280,7 @@ padu_rtp_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat shapefile industri:", e$message), type = "error")
       })
     })
-
+    
     observeEvent(input$btn_calc_ind_dist, {
       if (is.null(rv$idx_serasi_map)) {
         showNotification(
@@ -300,6 +301,14 @@ padu_rtp_server <- function(id, output_dir) {
             rv$idx_serasi_map,
             resolution = input$ind_calc_resolution
           )
+          
+          # Save industry distance raster
+          if (!is.null(rv$industry_euc_dist)) {
+            industry_raster_path <- file.path(output_dir(), "industry_euc_dist.tif")
+            terra::writeRaster(rv$industry_euc_dist, industry_raster_path, overwrite = TRUE)
+            append_log(paste("Raster jarak industri disimpan →", industry_raster_path))
+          }
+          
           incProgress(1, detail = "Selesai!")
           showNotification("Raster jarak industri berhasil dihitung.", type = "message")
         }, error = function(e) {
@@ -308,14 +317,14 @@ padu_rtp_server <- function(id, output_dir) {
         })
       })
     })
-
+    
     output$ind_dist_status <- renderUI({
       if (!is.null(rv$industry_euc_dist)) {
         div(class = "alert alert-success mt-2 mb-0 py-1 px-2", style = "font-size: 0.85rem;",
             tags$i(class = "bi bi-check-circle me-1"), "Peta jarak industri siap.")
       }
     })
-
+    
     observeEvent(input$ind_file_rast, {
       req(input$ind_input_type == "raster", input$ind_file_rast)
       tryCatch({
@@ -326,8 +335,8 @@ padu_rtp_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat raster industri:", e$message), type = "error")
       })
     })
-
-    # ── Process shipping lane data ─────────────────────────────
+    
+    # ── Process shipping lane data ──────────────────────────────────────
     # Store loaded vector in rv so button handler can access it
     observeEvent(input$pel_file_vect, {
       req(input$pel_file_vect)
@@ -340,7 +349,7 @@ padu_rtp_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat shapefile alur pelayaran:", e$message), type = "error")
       })
     })
-
+    
     observeEvent(input$btn_calc_pel_dist, {
       if (is.null(rv$idx_serasi_map)) {
         showNotification(
@@ -361,6 +370,14 @@ padu_rtp_server <- function(id, output_dir) {
             rv$idx_serasi_map,
             resolution = input$pel_calc_resolution
           )
+          
+          # Save shipping lane distance raster
+          if (!is.null(rv$pelayaran_euc_dist)) {
+            pelayaran_raster_path <- file.path(output_dir(), "pelayaran_euc_dist.tif")
+            terra::writeRaster(rv$pelayaran_euc_dist, pelayaran_raster_path, overwrite = TRUE)
+            append_log(paste("Raster jarak alur pelayaran disimpan →", pelayaran_raster_path))
+          }
+          
           incProgress(1, detail = "Selesai!")
           showNotification("Raster jarak alur pelayaran berhasil dihitung.", type = "message")
         }, error = function(e) {
@@ -369,14 +386,14 @@ padu_rtp_server <- function(id, output_dir) {
         })
       })
     })
-
+    
     output$pel_dist_status <- renderUI({
       if (!is.null(rv$pelayaran_euc_dist)) {
         div(class = "alert alert-success mt-2 mb-0 py-1 px-2", style = "font-size: 0.85rem;",
             tags$i(class = "bi bi-check-circle me-1"), "Peta jarak alur pelayaran siap.")
       }
     })
-
+    
     observeEvent(input$pel_file_rast, {
       req(input$pel_input_type == "raster", input$pel_file_rast)
       tryCatch({
@@ -388,7 +405,7 @@ padu_rtp_server <- function(id, output_dir) {
       })
     })
     
-    # ── Step 1 -> Step 2 ──────────────────────────────────────
+    # ── Step 1 -> Step 2 ──────────────────────────────────────────────────
     observeEvent(input$btn_next_1, {
       # Validate SERASI map
       if (is.null(rv$idx_serasi_map)) {
@@ -426,7 +443,7 @@ padu_rtp_server <- function(id, output_dir) {
       go_to_panel("step2")
     })
     
-    # ── Step 2 UI ──────────────────────────────────────────────
+    # ── Step 2 UI ──────────────────────────────────────────────────────────
     output$step2_ui <- renderUI({
       if (rv$unlocked < 2) return(.locked_panel())
       
@@ -465,7 +482,7 @@ padu_rtp_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis (with progress) ──────────────────────────────────────
     observeEvent(input$btn_run, {
       
       # Check output directory 
@@ -542,7 +559,7 @@ padu_rtp_server <- function(id, output_dir) {
       }) # end withProgress
     })
     
-    # ── Status box ─────────────────────────────────────────────
+    # ── Status box ─────────────────────────────────────────────────────────
     output$status_box <- renderUI({
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
@@ -559,7 +576,7 @@ padu_rtp_server <- function(id, output_dir) {
       }
     })
     
-    # ── Map output (leaflet) ──────────────────────────────────
+    # ── Map output (leaflet) ─────────────────────────────────────────────
     output$result_map <- renderLeaflet({
       req(rv$analysis_result)
       
@@ -609,7 +626,7 @@ padu_rtp_server <- function(id, output_dir) {
         )
     })
     
-    # ── Table output ───────────────────────────────────────────
+    # ── Table output ──────────────────────────────────────────────────────
     output$result_table <- DT::renderDT({
       req(rv$analysis_result)
       
@@ -640,13 +657,13 @@ padu_rtp_server <- function(id, output_dir) {
         )
     })
     
-    # ── Validation log ─────────────────────────────────────────
+    # ── Validation log ────────────────────────────────────────────────────
     output$validation_log <- renderPrint({
       invalidateLater(100, session)
       cat(rv$log_messages)
     })
     
-    # ── Download handlers ──────────────────────────────────────
+    # ── Download handlers ──────────────────────────────────────────────────
     output$dl_gpkg <- downloadHandler(
       filename = function() "idx_padu_rtp.gpkg",
       content = function(file) {
