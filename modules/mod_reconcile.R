@@ -1,6 +1,5 @@
 # ============================================================
-#  MODULE: Reconcile (RTRW & RZWP3K) – CORRECTED VERSION
-#  Fixes: Step 1 GEOMETRYCOLLECTION, Step 2 CRS NA, DT tables
+#  MODULE: Reconcile (RTRW & RZWP3K)
 # ============================================================
 
 source("R/functions.R")
@@ -32,12 +31,10 @@ source("R/helpers.R")
 .read_spatial_input <- function(file_df) {
   if (is.null(file_df)) return(NULL)
   
-  # Check if Geopackage
   if (nrow(file_df) == 1 && grepl("\\.gpkg$", file_df$name[1], ignore.case = TRUE)) {
     return(sf::st_read(file_df$datapath[1], quiet = TRUE))
   }
   
-  # Handle Shapefile Multi-file Upload (.shp, .shx, .dbf, .prj)
   temp_dir <- tempdir()
   for (i in 1:nrow(file_df)) {
     file.copy(file_df$datapath[i], file.path(temp_dir, file_df$name[i]), overwrite = TRUE)
@@ -51,16 +48,7 @@ source("R/helpers.R")
   sf::st_read(file.path(temp_dir, shp_file[1]), quiet = TRUE)
 }
 
-# ── Safe Display-Layer Builder (used by BOTH Step 1 and Step 2) ──
-# This is the single place that prepares any sf object for Leaflet: repairs
-# geometry, flattens collections, drops empties. It does NOT rbind anything -
-# Step 1 shows one dataset (final_map) colored by its own category column,
-# and Step 2 keeps RTRW/RZWP3K as two independent layers, so each is prepared
-# on its own with a single pass through this function (no split+rbind).
-#
-# Use `category_col` when the sf object already carries the category you want
-# to color by (e.g. Step 1's `stat_pu_final`). Use `layer_name` when you just
-# want every row tagged with one fixed label (e.g. Step 2's separate layers).
+# ── Safe Display-Layer Builder ──────────────────────────────────
 .prepare_map_display <- function(sf_obj, layer_name = NULL, category_col = NULL, keep_cols = character(0)) {
   if (is.null(sf_obj) || nrow(sf_obj) == 0) return(NULL)
   
@@ -70,25 +58,13 @@ source("R/helpers.R")
     sf_obj$origin_layer <- if (!is.null(layer_name)) layer_name else "Layer"
   }
   
-  # Repair invalid geometries (self-intersections etc.) that can survive
-  # earlier overlay operations (union/intersection/difference) upstream.
   sf_obj <- sf::st_make_valid(sf_obj)
   
-  # Flatten any GEOMETRYCOLLECTION down to its POLYGON/MULTIPOLYGON parts.
-  # IMPORTANT: this must run on the whole sf object at once, never looped
-  # per-feature/per-geometry - looping causes R to dispatch to
-  # st_collection_extract.sfg on a single sfg, which is exactly what throws:
-  # "Don't know how to get polygon data from object of class
-  #  XY,GEOMETRYCOLLECTION,sfg"
   sf_obj <- tryCatch(
     sf::st_collection_extract(sf_obj, "POLYGON", warn = FALSE),
     error = function(e) sf_obj
   )
   
-  # Drop empty/degenerate geometries left behind by st_make_valid() /
-  # st_collection_extract() or by upstream overlay ops. Empty geometries are
-  # a common hidden cause of Leaflet erroring downstream with
-  # "missing value where TRUE/FALSE needed".
   sf_obj <- sf_obj[!sf::st_is_empty(sf_obj), ]
   if (nrow(sf_obj) == 0) return(NULL)
   
@@ -96,11 +72,6 @@ source("R/helpers.R")
   sf_obj[, cols_keep]
 }
 
-# ── Safe CRS-to-WGS84 Helper (used by the Leaflet renderer) ──────
-# st_is_longlat() can return NA (not just TRUE/FALSE) for a malformed CRS
-# (common with .shp uploads missing/broken .prj), which is what caused the
-# Step 2 "missing value where TRUE/FALSE needed" crash. NA is handled
-# explicitly here instead of relying on `!is_longlat`.
 .to_leaflet_crs <- function(sf_obj) {
   crs <- sf::st_crs(sf_obj)
   if (is.na(crs)) {
@@ -112,8 +83,6 @@ source("R/helpers.R")
     sf_obj <- tryCatch(
       sf::st_transform(sf_obj, crs = 4326),
       error = function(e) {
-        # CRS too broken to reproject - fall back to treating the existing
-        # coordinates as EPSG:4326 rather than crashing the map render.
         sf::st_crs(sf_obj) <- 4326
         sf_obj
       }
@@ -138,7 +107,6 @@ reconcile_ui <- function(id) {
     fluidRow(
       class = "g-3",
       
-      # ── Left column: Input & Parameter (1/3) ────────────────
       column(
         width = 4,
         card(
@@ -165,16 +133,12 @@ reconcile_ui <- function(id) {
         )
       ),
       
-      # ── Right column: Output & Hasil (2/3) ──────────────────
       column(
         width = 8,
         card(
           card_header("Output & Hasil"),
-          
           uiOutput(ns("status_box")),
-          
           hr(),
-          
           navset_tab(
             nav_panel(
               "Peta",
@@ -195,7 +159,6 @@ reconcile_ui <- function(id) {
               )
             )
           ),
-          
           div(
             style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
             uiOutput(ns("download_buttons_container"))
@@ -211,41 +174,34 @@ reconcile_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # Reactive states
     rv <- reactiveValues(
       unlocked = 1,
       detected_step = NULL,
       
-      # Objects loaded in Step 1
       recon_map = NULL,
       rtrw_vect = NULL,
       rzwp3k_vect = NULL,
       rtrw_prioritas = NULL,
       rzwp3k_prioritas = NULL,
+      serasi_matrix = NULL,
       
-      # Generated template track
       template_path = NULL,
       
-      # Final resolved maps (used for tables/downloads in both steps)
       resolved_rtrw = NULL,
       resolved_rzwp3k = NULL,
+      resolved_integrated = NULL,
       
-      # Map display layers - kept separate per step on purpose:
-      # Step 1 -> one dataset (final_map), colored by its own category column
-      # Step 2 -> two independent layers (never rbound together)
-      display_step1 = NULL,
       display_rtrw = NULL,
       display_rzwp3k = NULL,
+      display_integrated = NULL,
       
       final_log = NULL
     )
     
     go_to_panel <- function(value) accordion_panel_set(id = "wizard", values = value, session = session)
     
-    # Any output available yet? (used to gate status/table/download UI,
-    # regardless of which step produced it or how the map layers are stored)
     have_results <- reactive({
-      !is.null(rv$resolved_rtrw) || !is.null(rv$resolved_rzwp3k)
+      !is.null(rv$resolved_rtrw) || !is.null(rv$resolved_rzwp3k) || !is.null(rv$resolved_integrated)
     })
     
     # ── Step 1 UI ──────────────────────────────────────────────
@@ -254,9 +210,9 @@ reconcile_server <- function(id, output_dir) {
         fileInput(ns("recon_map_file"), "Pilih Peta Rekomendasi (.gpkg)", accept = ".gpkg"),
         fileInput(ns("rtrw_file"), "Pilih Peta RTRW (.shp/.gpkg)", accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"), multiple = TRUE),
         fileInput(ns("rzwp3k_file"), "Pilih Peta RZWP3K (.shp/.gpkg)", accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"), multiple = TRUE),
-        fileInput(ns("rtrw_priority_file"), "Tabel Prioritas RTRW (.xlsx)", accept = ".xlsx"),
-        fileInput(ns("rzwp3k_priority_file"), "Tabel Prioritas RZWP3K (.xlsx)", accept = ".xlsx"),
-        
+        fileInput(ns("rtrw_priority_file"), "Tabel Acuan Pola RTRW (.xlsx)", accept = ".xlsx"),
+        fileInput(ns("rzwp3k_priority_file"), "Tabel Acuan Pola RZWP3K (.xlsx)", accept = ".xlsx"),
+        fileInput(ns("serasi_matrix_file"), "Matriks SERASI (.xlsx)", accept = ".xlsx"),
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;",
           actionButton(ns("btn_make_template"),
@@ -269,7 +225,7 @@ reconcile_server <- function(id, output_dir) {
       )
     })
     
-    # Detect step level dynamically
+    # Detect step
     observeEvent(input$recon_map_file, {
       req(input$recon_map_file)
       rv$template_path <- NULL
@@ -290,7 +246,7 @@ reconcile_server <- function(id, output_dir) {
           showNotification("Peta Rekomendasi terdeteksi sebagai STEP 2 (Adjacent).", type = "message")
         } else {
           rv$recon_map <- NULL
-          stop("Kolom penanda struktural (stat_pu/id_rtrw/id_rzwp3k untuk Step 1 atau length untuk Step 2) tidak ditemukan pada berkas.")
+          stop("Kolom penanda struktural tidak ditemukan.")
         }
       }, error = function(e) {
         rv$recon_map <- NULL
@@ -299,28 +255,41 @@ reconcile_server <- function(id, output_dir) {
       })
     })
     
-    # Template Generation Worker
+    # Load inputs
+    observeEvent(input$rtrw_file, {
+      req(input$rtrw_file)
+      rv$rtrw_vect <- .read_spatial_input(input$rtrw_file)
+    })
+    observeEvent(input$rzwp3k_file, {
+      req(input$rzwp3k_file)
+      rv$rzwp3k_vect <- .read_spatial_input(input$rzwp3k_file)
+    })
+    observeEvent(input$rtrw_priority_file, {
+      req(input$rtrw_priority_file)
+      rv$rtrw_prioritas <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
+    })
+    observeEvent(input$rzwp3k_priority_file, {
+      req(input$rzwp3k_priority_file)
+      rv$rzwp3k_prioritas <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
+    })
+    observeEvent(input$serasi_matrix_file, {
+      req(input$serasi_matrix_file)
+      rv$serasi_matrix <- load_validate_matrix_table(input$serasi_matrix_file$datapath, title = "serasi")
+    })
+    
+    # Template Generation
     observeEvent(input$btn_make_template, {
-      
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur.", type = "error", duration = 5)
         return()
       }
       
-      req(rv$recon_map, rv$detected_step, input$rtrw_priority_file, input$rzwp3k_priority_file)
+      req(rv$recon_map, rv$detected_step, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
       rv$template_path <- NULL
       
       withProgress(message = "Membuat Templat Rekonsiliasi", value = 0, {
         tryCatch({
-          incProgress(0.2, detail = "Memuat tabel prioritas...")
-          rtrw_prioritas <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
-          rzwp3k_prioritas <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
-          
+          incProgress(0.2, detail = "Memuat tabel acuan pola...")
           out_dir_step <- file.path(output_dir(), paste0("step", rv$detected_step))
           dir.create(out_dir_step, recursive = TRUE, showWarnings = FALSE)
           
@@ -329,8 +298,8 @@ reconcile_server <- function(id, output_dir) {
           incProgress(0.5, detail = "Menjalankan pembuat templat...")
           generate_reconciliation_excel(
             recon_map        = rv$recon_map,
-            rtrw_prioritas   = rtrw_prioritas,
-            rzwp3k_prioritas = rzwp3k_prioritas,
+            rtrw_prioritas   = rv$rtrw_prioritas,
+            rzwp3k_prioritas = rv$rzwp3k_prioritas,
             output_dir       = out_dir_step,
             step             = rv$detected_step,
             file_name        = file_name
@@ -338,12 +307,9 @@ reconcile_server <- function(id, output_dir) {
           
           incProgress(0.8, detail = "Verifikasi berkas templat...")
           generated_path <- file.path(out_dir_step, file_name)
-          if (!file.exists(generated_path)) stop("File templat gagal dibuat oleh sistem core script.")
+          if (!file.exists(generated_path)) stop("File templat gagal dibuat.")
           
           rv$template_path <- generated_path
-          rv$rtrw_prioritas <- rtrw_prioritas
-          rv$rzwp3k_prioritas <- rzwp3k_prioritas
-          
           showNotification("Templat Rekonsiliasi Berhasil Dibuat.", type = "message")
           incProgress(1.0, detail = "Selesai!")
         }, error = function(e) {
@@ -370,17 +336,24 @@ reconcile_server <- function(id, output_dir) {
     )
     
     observeEvent(input$btn_next_1, {
-      # Require at least the recommendation map to have been loaded; the
-      # template itself is optional if the user already has a filled table.
       if (is.null(rv$recon_map)) {
         showNotification("Harap unggah Peta Rekomendasi terlebih dahulu.", type = "warning")
         return()
       }
+      if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect)) {
+        showNotification("Harap unggah Peta RTRW dan RZWP3K (raw shapefile) terlebih dahulu.", type = "warning")
+        return()
+      }
+      if (is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
+        showNotification("Harap unggah tabel acuan pola RTRW dan RZWP3K.", type = "warning")
+        return()
+      }
+      if (is.null(rv$serasi_matrix)) {
+        showNotification("Harap unggah Matriks SERASI (.xlsx).", type = "warning")
+        return()
+      }
       if (is.null(rv$template_path)) {
-        showNotification(
-          "Templat belum dibuat. Jika sudah memiliki tabel rekonsiliasi yang sudah diisi, Anda tetap dapat melanjutkan.",
-          type = "message", duration = 5
-        )
+        showNotification("Templat belum dibuat. Jika sudah memiliki tabel rekonsiliasi yang sudah diisi, Anda tetap dapat melanjutkan.", type = "message", duration = 5)
       }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
@@ -391,14 +364,11 @@ reconcile_server <- function(id, output_dir) {
       if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("recon_table_filled_file"), "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)", accept = ".xlsx"),
-        
-        # Check output directory
-        if (is.null(output_dir()) || !nzchar(output_dir())) {
+        if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
               "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
         },
-        
         div(
           style = "margin-top: 10px;",
           actionButton(ns("btn_run_reconcile"),
@@ -411,108 +381,123 @@ reconcile_server <- function(id, output_dir) {
     
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
-    # Core Reconciliation Execution Engine
+    # ── Core Reconciliation Execution ──────────────────────────
     observeEvent(input$btn_run_reconcile, {
-      
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur.", type = "error", duration = 5)
         return()
       }
-      
-      req(input$recon_table_filled_file, input$rtrw_file, input$rzwp3k_file)
+      req(input$recon_table_filled_file)
+      req(rv$recon_map, rv$rtrw_vect, rv$rzwp3k_vect)
+      req(rv$rtrw_prioritas, rv$rzwp3k_prioritas, rv$serasi_matrix)
       
       rv$resolved_rtrw <- NULL
       rv$resolved_rzwp3k <- NULL
-      rv$display_step1 <- NULL
+      rv$resolved_integrated <- NULL
       rv$display_rtrw <- NULL
       rv$display_rzwp3k <- NULL
+      rv$display_integrated <- NULL
       log_lines <- character(0)
       
       showNotification("Menjalankan proses rekonstruksi spasial rekonsiliasi...", type = "message", id = "recon_progress", duration = NULL)
       
       withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
         tryCatch({
-          incProgress(0.1, detail = "Membaca berkas input...")
-          # Context Parsing
-          rtrw_vect <- .read_spatial_input(input$rtrw_file)
-          rzwp3k_vect <- .read_spatial_input(input$rzwp3k_file)
-          recon_table_path <- input$recon_table_filled_file$datapath
-          
-          out_base_dir <- file.path(output_dir(), paste0("step", rv$detected_step))
-          dir.create(out_base_dir, recursive = TRUE, showWarnings = FALSE)
+          get_compat <- function(x, y) {
+            if (is.na(x) || is.na(y)) return(NA_real_)
+            val <- rv$serasi_matrix %>%
+              filter(class1 == x, class2 == y) %>%
+              pull(idx_serasi)
+            if (length(val) == 0) NA_real_ else val
+          }
           
           if (rv$detected_step == 1) {
-            incProgress(0.3, detail = "Menjalankan rekonsiliasi Overlaps...")
-            # STEP 1 Execution Flow
-            recon_table <- load_and_validate_table(recon_table_path)
+            # --- Step 1 ---
+            incProgress(0.1, detail = "Membaca tabel keputusan...")
+            recon_table <- load_and_validate_table(input$recon_table_filled_file$datapath) %>%
+              select(id_pu, user_decision)
             
-            rtrw <- rtrw_vect %>% dplyr::mutate(id_rtrw = dplyr::row_number())
-            rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id_rzwp3k = dplyr::row_number())
+            incProgress(0.2, detail = "Menggabungkan dengan peta rekomendasi...")
+            overlaps_map <- rv$recon_map %>%
+              left_join(recon_table, by = "id_pu") %>%
+              mutate(user_decision = user_decision)
             
-            union_layer <- identify_overlaps_union(rtrw, rzwp3k)
-            final_map <- reconcile_map(
-              step             = 1,
-              union            = union_layer,
-              recon_table      = recon_table,
-              rtrw_prioritas   = rv$rtrw_prioritas,
-              rzwp3k_prioritas = rv$rzwp3k_prioritas
+            incProgress(0.4, detail = "Menjalankan rekonsiliasi Overlaps...")
+            result <- reconciliation_step1(
+              rtrw_base = rv$rtrw_vect,
+              rzwp3k_base = rv$rzwp3k_vect,
+              overlaps_map = overlaps_map,
+              rtrw_priority = rv$rtrw_prioritas,
+              rzwp3k_priority = rv$rzwp3k_prioritas,
+              alpha = 0.5
             )
             
-            rtrw_final <- final_map[final_map$stat_pu_final == "RTRW", ]
-            rzwp3k_final <- final_map[final_map$stat_pu_final == "RZWP3K", ]
+            rv$resolved_rtrw <- result$rtrw
+            rv$resolved_rzwp3k <- result$rzwp3k
+            rv$resolved_integrated <- NULL
             
-            rv$resolved_rtrw <- rtrw_final
-            rv$resolved_rzwp3k <- rzwp3k_final
-            
-            incProgress(0.7, detail = "Mempersiapkan visualisasi peta...")
-            # Display final_map as-is: one pass through the safe-display
-            # pipeline, colored by its own stat_pu_final column. No need to
-            # split it into RTRW/RZWP3K and rbind them back together just to
-            # render it - that was pure wasted computation on ~6k features.
-            rv$display_step1 <- .prepare_map_display(final_map, category_col = "stat_pu_final")
+            rv$display_rtrw <- .prepare_map_display(
+              result$rtrw, 
+              layer_name = "RTRW", 
+              category_col = "Reconcile",
+              keep_cols = names(result$rtrw)
+            )
+            rv$display_rzwp3k <- .prepare_map_display(
+              result$rzwp3k, 
+              layer_name = "RZWP3K", 
+              category_col = "Reconcile",
+              keep_cols = names(result$rzwp3k)
+            )
+            rv$display_integrated <- NULL
             
             log_lines <- c(
               log_lines,
               "--- LOG REKONSILIASI KASUS STEP 1 (OVERLAPS) ---",
-              sprintf("Jumlah Feature RTRW Hasil Resolusi: %d", nrow(rtrw_final)),
-              sprintf("Jumlah Feature RZWP3K Hasil Resolusi: %d", nrow(rzwp3k_final))
+              sprintf("Jumlah Feature RTRW Hasil Resolusi: %d", nrow(result$rtrw)),
+              sprintf("Jumlah Feature RZWP3K Hasil Resolusi: %d", nrow(result$rzwp3k)),
+              sprintf("RTRW Reconcile=Yes: %d, No: %d", 
+                      sum(result$rtrw$Reconcile == "Yes", na.rm = TRUE),
+                      sum(result$rtrw$Reconcile == "No", na.rm = TRUE)),
+              sprintf("RZWP3K Reconcile=Yes: %d, No: %d",
+                      sum(result$rzwp3k$Reconcile == "Yes", na.rm = TRUE),
+                      sum(result$rzwp3k$Reconcile == "No", na.rm = TRUE))
             )
             
-          } else {
-            incProgress(0.3, detail = "Menjalankan rekonsiliasi Bertetangga...")
-            # STEP 2 Execution Flow
-            rtrw <- rtrw_vect %>% dplyr::mutate(id = dplyr::row_number())
-            rzwp3k <- rzwp3k_vect %>% dplyr::mutate(id = dplyr::row_number())
+          } else if (rv$detected_step == 2) {
+            # --- Step 2 ---
+            incProgress(0.2, detail = "Menjalankan rekonsiliasi Bertetangga...")
+            result <- reconcilliation_step2(
+              recon_table_path = input$recon_table_filled_file$datapath,
+              adjacent_recom_map = rv$recon_map,
+              rtrw_vect = rv$rtrw_vect,
+              rzwp3k_vect = rv$rzwp3k_vect,
+              matriks_serasi = rv$serasi_matrix,
+              alpha = 0.5
+            )
             
-            # The function reads the Excel file internally, pass the path
-            rtrw_resolved <- reconcile_map(step = 2, sf_obj = rtrw,   recon_table = recon_table_path, class_type = "RTRW")
-            rzwp3k_resolved <- reconcile_map(step = 2, sf_obj = rzwp3k, recon_table = recon_table_path, class_type = "RZWP3K")
+            rv$resolved_integrated <- result
+            rv$resolved_rtrw <- NULL
+            rv$resolved_rzwp3k <- NULL
             
-            rv$resolved_rtrw <- rtrw_resolved
-            rv$resolved_rzwp3k <- rzwp3k_resolved
-            
-            incProgress(0.7, detail = "Mempersiapkan visualisasi peta...")
-            # Keep RTRW and RZWP3K as two independent map layers instead of
-            # rbinding them into one object. rbinding two ~6k-feature layers
-            # was expensive and unnecessary - Leaflet can draw two polygon
-            # layers on the same canvas (with a toggle) without merging the
-            # underlying data, and each still goes through the same safe-
-            # display pipeline (geometry repair/flatten/empty-drop) that fixed
-            # the earlier "missing value where TRUE/FALSE needed" crash.
-            rv$display_rtrw <- .prepare_map_display(rtrw_resolved, layer_name = "RTRW Adjacent Resolved")
-            rv$display_rzwp3k <- .prepare_map_display(rzwp3k_resolved, layer_name = "RZWP3K Adjacent Resolved")
+            rv$display_integrated <- .prepare_map_display(
+              result, 
+              layer_name = "Integrated", 
+              category_col = "Reconcile",
+              keep_cols = names(result)
+            )
+            rv$display_rtrw <- NULL
+            rv$display_rzwp3k <- NULL
             
             log_lines <- c(
               log_lines,
               "--- LOG REKONSILIASI KASUS STEP 2 (ADJACENT) ---",
-              sprintf("Jumlah Feature RTRW Berhasil Diselaraskan: %d", nrow(rtrw_resolved)),
-              sprintf("Jumlah Feature RZWP3K Berhasil Diselaraskan: %d", nrow(rzwp3k_resolved))
+              sprintf("Jumlah Feature Hasil Integrasi: %d", nrow(result)),
+              sprintf("Reconcile=Yes: %d, No: %d",
+                      sum(result$Reconcile == "Yes", na.rm = TRUE),
+                      sum(result$Reconcile == "No", na.rm = TRUE))
             )
+          } else {
+            stop("Step tidak dikenali.")
           }
           
           incProgress(0.9, detail = "Menyelesaikan log...")
@@ -527,7 +512,7 @@ reconcile_server <- function(id, output_dir) {
       })
     })
     
-    # ── Right Panel Context Displays ───────────────────────────
+    # ── Right Panel ─────────────────────────────────────────────
     output$status_box <- renderUI({
       if (have_results()) {
         div(class = "alert alert-success mb-0",
@@ -546,175 +531,219 @@ reconcile_server <- function(id, output_dir) {
       if (!is.null(rv$final_log)) rv$final_log else "Sistem siap melakukan rekonsiliasi spasial."
     })
     
-    # ── Table Results (now with DT) ───────────────────────────
+    # ── Table Results ───────────────────────────────────────────
     output$table_view_panel <- renderUI({
       if (!have_results()) {
         return(tags$p("Belum ada ringkasan spasial untuk dievaluasi."))
       }
       
-      accordion(
-        id = ns("table_summary_accordion"),
-        multiple = TRUE,
-        accordion_panel(
-          title = "Pratinjau Data Geometri RTRW Rekonsiliasi",
-          value = "rtrw_tab",
-          icon = tags$i(class = "bi bi-table"),
-          div(style = "overflow-x: auto;", DT::DTOutput(ns("rtrw_preview_render")))
-        ),
-        accordion_panel(
-          title = "Pratinjau Data Geometri RZWP3K Rekonsiliasi",
-          value = "rzwp3k_tab",
-          icon = tags$i(class = "bi bi-table"),
-          div(style = "overflow-x: auto;", DT::DTOutput(ns("rzwp3k_preview_render")))
+      if (!is.null(rv$resolved_integrated)) {
+        accordion(
+          id = ns("table_summary_accordion"),
+          multiple = TRUE,
+          accordion_panel(
+            title = "Pratinjau Data Hasil Integrasi (Step 2)",
+            value = "integrated_tab",
+            icon = tags$i(class = "bi bi-table"),
+            div(style = "overflow-x: auto;", DT::DTOutput(ns("integrated_preview_render")))
+          )
         )
-      )
+      } else {
+        accordion(
+          id = ns("table_summary_accordion"),
+          multiple = TRUE,
+          accordion_panel(
+            title = "Pratinjau Data Geometri RTRW Rekonsiliasi",
+            value = "rtrw_tab",
+            icon = tags$i(class = "bi bi-table"),
+            div(style = "overflow-x: auto;", DT::DTOutput(ns("rtrw_preview_render")))
+          ),
+          accordion_panel(
+            title = "Pratinjau Data Geometri RZWP3K Rekonsiliasi",
+            value = "rzwp3k_tab",
+            icon = tags$i(class = "bi bi-table"),
+            div(style = "overflow-x: auto;", DT::DTOutput(ns("rzwp3k_preview_render")))
+          )
+        )
+      }
     })
     
+    # DT renderers
     output$rtrw_preview_render <- DT::renderDT({
       req(rv$resolved_rtrw)
-      DT::datatable(
-        sf::st_drop_geometry(rv$resolved_rtrw),
-        options = list(pageLength = 10, scrollX = TRUE)
-      )
+      DT::datatable(sf::st_drop_geometry(rv$resolved_rtrw), options = list(pageLength = 10, scrollX = TRUE))
     })
-    
     output$rzwp3k_preview_render <- DT::renderDT({
       req(rv$resolved_rzwp3k)
-      DT::datatable(
-        sf::st_drop_geometry(rv$resolved_rzwp3k),
-        options = list(pageLength = 10, scrollX = TRUE)
-      )
+      DT::datatable(sf::st_drop_geometry(rv$resolved_rzwp3k), options = list(pageLength = 10, scrollX = TRUE))
+    })
+    output$integrated_preview_render <- DT::renderDT({
+      req(rv$resolved_integrated)
+      DT::datatable(sf::st_drop_geometry(rv$resolved_integrated), options = list(pageLength = 10, scrollX = TRUE))
     })
     
     # ── Leaflet Map ─────────────────────────────────────────────
-    # Step 1: renders final_map directly, colored by stat_pu_final.
-    # Step 2: renders RTRW and RZWP3K as two separate, toggleable layers on
-    # the same canvas (never rbound into one object - see .prepare_map_display
-    # call sites above).
     output$reconcile_map_view <- renderLeaflet({
       
-      # ── STEP 1: single dataset ──
-      if (identical(rv$detected_step, 1)) {
-        req(rv$display_step1)
-        map_sf <- rv$display_step1
-        if (nrow(map_sf) == 0) {
-          return(leaflet() %>% addControl("Data kosong setelah filter dilakukan.", position = "topright"))
+      # Helper to dynamically build comprehensive popup from all columns
+      make_popup <- function(sf_obj) {
+        if (is.null(sf_obj) || nrow(sf_obj) == 0) return(NULL)
+        df <- sf::st_drop_geometry(sf_obj)
+        popups <- sapply(1:nrow(df), function(i) {
+          row_data <- df[i, , drop = FALSE]
+          lines <- sapply(names(row_data), function(col) {
+            if (col == "origin_layer") return(NULL)
+            val <- row_data[[1, col]]
+            if (length(val) == 0 || is.na(val) || is.null(val)) val <- "N/A"
+            paste0("<b>", col, ":</b> ", as.character(val))
+          })
+          lines <- unlist(lines)
+          paste(lines, collapse = "<br/>")
+        })
+        lapply(popups, htmltools::HTML)
+      }
+      
+      make_label <- function(sf_obj) {
+        if (is.null(sf_obj) || nrow(sf_obj) == 0) return(NULL)
+        df <- sf::st_drop_geometry(sf_obj)
+        z_old <- if ("Zoning_Old" %in% names(df)) ifelse(is.na(df$Zoning_Old), "N/A", df$Zoning_Old) else "N/A"
+        z_new <- if ("Zoning_New" %in% names(df)) ifelse(is.na(df$Zoning_New), "N/A", df$Zoning_New) else "N/A"
+        labels <- paste0("<strong>", z_old, " ➜ ", z_new, "</strong>")
+        lapply(labels, htmltools::HTML)
+      }
+      
+      # Color palette: "No" maps to Gray, "Yes" maps to Blue 
+      pal_reconcile <- colorFactor(
+        palette = c("#BDBDBD", "#2B8CBE"), 
+        domain = c("No", "Yes"),
+        na.color = "#808080"
+      )
+      
+      # Step 1: Overlaps processing
+      if (!is.null(rv$display_rtrw) && nrow(rv$display_rtrw) > 0 ||
+          !is.null(rv$display_rzwp3k) && nrow(rv$display_rzwp3k) > 0) {
+        
+        m <- leaflet() %>% addProviderTiles(providers$CartoDB.Positron)
+        available_groups <- character(0)
+        
+        if (!is.null(rv$display_rtrw) && nrow(rv$display_rtrw) > 0) {
+          rtrw_map <- .to_leaflet_crs(rv$display_rtrw)
+          popup_rtrw <- make_popup(rtrw_map)
+          label_rtrw <- make_label(rtrw_map)
+          m <- m %>% addPolygons(
+            data = rtrw_map,
+            group = "RTRW Reconciled",
+            fillColor = ~pal_reconcile(Reconcile),
+            fillOpacity = 0.7,
+            weight = 1,
+            color = "#333333",
+            label = label_rtrw,
+            popup = popup_rtrw,
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+          )
+          available_groups <- c(available_groups, "RTRW Reconciled")
         }
         
-        map_sf <- .to_leaflet_crs(map_sf)
+        if (!is.null(rv$display_rzwp3k) && nrow(rv$display_rzwp3k) > 0) {
+          rzwp3k_map <- .to_leaflet_crs(rv$display_rzwp3k)
+          popup_rzwp3k <- make_popup(rzwp3k_map)
+          label_rzwp3k <- make_label(rzwp3k_map)
+          m <- m %>% addPolygons(
+            data = rzwp3k_map,
+            group = "RZWP3K Reconciled",
+            fillColor = ~pal_reconcile(Reconcile),
+            fillOpacity = 0.7,
+            weight = 1,
+            color = "#333333",
+            label = label_rzwp3k,
+            popup = popup_rzwp3k,
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+          )
+          available_groups <- c(available_groups, "RZWP3K Reconciled")
+        }
         
-        pal <- colorFactor(
-          palette = c("#2b8cbe", "#a6bddb", "#fdae61", "#66c2a5"),
-          domain = unique(map_sf$origin_layer),
-          na.color = "#808080"
-        )
+        if (length(available_groups) == 0) {
+          return(leaflet() %>% addControl("Tidak ada data untuk ditampilkan.", position = "topright"))
+        }
         
-        return(
-          leaflet(map_sf) %>%
-            addProviderTiles(providers$CartoDB.Positron) %>%
-            addPolygons(
-              fillColor = ~pal(origin_layer),
-              fillOpacity = 0.6,
-              weight = 1,
-              color = "#333333",
-              label = ~paste("<b>Status:</b>", origin_layer) %>% lapply(htmltools::HTML),
-              highlightOptions = highlightOptions(
-                weight = 3, color = "#ff0000", fillOpacity = 0.8
-              )
-            ) %>%
-            addLegend(
-              position = "bottomright",
-              pal = pal,
-              values = ~origin_layer,
-              title = "Status Rekonsiliasi (Final Map)",
-              opacity = 0.7
-            )
-        )
+        m %>%
+          addLayersControl(
+            overlayGroups = available_groups,
+            options = layersControlOptions(collapsed = FALSE)
+          ) %>%
+          addLegend(
+            position = "bottomright",
+            colors = c("#2B8CBE", "#BDBDBD"),
+            labels = c("Reconcile = Yes", "Reconcile = No"),
+            title = "Status Rekonsiliasi",
+            opacity = 0.7
+          )
+        
+      } else if (!is.null(rv$display_integrated) && nrow(rv$display_integrated) > 0) {
+        # Step 2: Adjacent processing
+        map_sf <- .to_leaflet_crs(rv$display_integrated)
+        popup_int <- make_popup(map_sf)
+        label_int <- make_label(map_sf)
+        
+        leaflet(map_sf) %>%
+          addProviderTiles(providers$CartoDB.Positron) %>%
+          addPolygons(
+            fillColor = ~pal_reconcile(Reconcile),
+            fillOpacity = 0.7,
+            weight = 1,
+            color = "#333333",
+            label = label_int,
+            popup = popup_int,
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+          ) %>%
+          addLegend(
+            position = "bottomright",
+            colors = c("#2B8CBE", "#BDBDBD"), 
+            labels = c("Reconcile = Yes", "Reconcile = No"),
+            title = "Status Rekonsiliasi",
+            opacity = 0.7
+          )
+        
+      } else {
+        leaflet() %>% addControl("Belum ada hasil rekonsiliasi atau data kosong.", position = "topright")
       }
-      
-      # ── STEP 2: two independent layers, same canvas ──
-      req(!is.null(rv$display_rtrw) || !is.null(rv$display_rzwp3k))
-      
-      m <- leaflet() %>% addProviderTiles(providers$CartoDB.Positron)
-      layer_colors <- c("RTRW Adjacent Resolved" = "#2b8cbe", "RZWP3K Adjacent Resolved" = "#a6bddb")
-      available_groups <- character(0)
-      
-      if (!is.null(rv$display_rtrw) && nrow(rv$display_rtrw) > 0) {
-        rtrw_map <- .to_leaflet_crs(rv$display_rtrw)
-        m <- m %>% addPolygons(
-          data = rtrw_map,
-          group = "RTRW Adjacent Resolved",
-          fillColor = layer_colors[["RTRW Adjacent Resolved"]],
-          fillOpacity = 0.6,
-          weight = 1,
-          color = "#333333",
-          label = ~paste("<b>Layer Sumber:</b>", origin_layer) %>% lapply(htmltools::HTML),
-          highlightOptions = highlightOptions(weight = 3, color = "#ff0000", fillOpacity = 0.8)
-        )
-        available_groups <- c(available_groups, "RTRW Adjacent Resolved")
-      }
-      
-      if (!is.null(rv$display_rzwp3k) && nrow(rv$display_rzwp3k) > 0) {
-        rzwp3k_map <- .to_leaflet_crs(rv$display_rzwp3k)
-        m <- m %>% addPolygons(
-          data = rzwp3k_map,
-          group = "RZWP3K Adjacent Resolved",
-          fillColor = layer_colors[["RZWP3K Adjacent Resolved"]],
-          fillOpacity = 0.6,
-          weight = 1,
-          color = "#333333",
-          label = ~paste("<b>Layer Sumber:</b>", origin_layer) %>% lapply(htmltools::HTML),
-          highlightOptions = highlightOptions(weight = 3, color = "#ff0000", fillOpacity = 0.8)
-        )
-        available_groups <- c(available_groups, "RZWP3K Adjacent Resolved")
-      }
-      
-      if (length(available_groups) == 0) {
-        return(leaflet() %>% addControl("Data kosong setelah filter dilakukan.", position = "topright"))
-      }
-      
-      m %>%
-        addLayersControl(
-          overlayGroups = available_groups,
-          options = layersControlOptions(collapsed = FALSE)
-        ) %>%
-        addLegend(
-          position = "bottomright",
-          colors = unname(layer_colors[available_groups]),
-          labels = available_groups,
-          title = "Layer Rekonsiliasi (Step 2)",
-          opacity = 0.7
-        )
     })
     
-    # ── Downloader Generators ──────────────────────────────────
+    # ── Download Buttons ────────────────────────────────────────
     output$download_buttons_container <- renderUI({
-      req(have_results())
-      tagList(
-        downloadButton(ns("dl_rtrw_final"), "Unduh Hasil RTRW (.gpkg)", class = "btn-outline-primary btn-sm"),
-        downloadButton(ns("dl_rzwp3k_final"), "Unduh Hasil RZWP3K (.gpkg)", class = "btn-outline-info btn-sm")
-      )
+      if (!have_results()) return(NULL)
+      
+      if (!is.null(rv$resolved_integrated)) {
+        # Step 2: one button
+        downloadButton(ns("dl_integrated_final"), "Unduh Hasil Integrasi (.gpkg)", class = "btn-outline-primary btn-sm")
+      } else {
+        # Step 1: two buttons
+        tagList(
+          downloadButton(ns("dl_rtrw_final"), "Unduh Hasil RTRW (.gpkg)", class = "btn-outline-primary btn-sm"),
+          downloadButton(ns("dl_rzwp3k_final"), "Unduh Hasil RZWP3K (.gpkg)", class = "btn-outline-info btn-sm")
+        )
+      }
     })
     
     output$dl_rtrw_final <- downloadHandler(
-      filename = function() {
-        suffix <- if (rv$detected_step == 1) "Resolved_Overlaps.gpkg" else "Resolved_Adjacent.gpkg"
-        paste0("ST_RTRW_", suffix)
-      },
+      filename = function() { "ST_RTRW_Resolved_Overlaps.gpkg" },
       content = function(file) {
         req(rv$resolved_rtrw)
         sf::st_write(rv$resolved_rtrw, file, delete_dsn = TRUE, quiet = TRUE)
       }
     )
-    
     output$dl_rzwp3k_final <- downloadHandler(
-      filename = function() {
-        suffix <- if (rv$detected_step == 1) "Resolved_Overlaps.gpkg" else "Resolved_Adjacent.gpkg"
-        paste0("ST_RZWP3K_", suffix)
-      },
+      filename = function() { "ST_RZWP3K_Resolved_Overlaps.gpkg" },
       content = function(file) {
         req(rv$resolved_rzwp3k)
         sf::st_write(rv$resolved_rzwp3k, file, delete_dsn = TRUE, quiet = TRUE)
+      }
+    )
+    output$dl_integrated_final <- downloadHandler(
+      filename = function() { "ST_Integrated_Resolved_Adjacent.gpkg" },
+      content = function(file) {
+        req(rv$resolved_integrated)
+        sf::st_write(rv$resolved_integrated, file, delete_dsn = TRUE, quiet = TRUE)
       }
     )
   })
