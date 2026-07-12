@@ -66,7 +66,7 @@ source("R/helpers.R")
   missing_cols <- setdiff(required_cols, names(tbl))
   if (length(missing_cols) > 0) {
     return(list(ok = FALSE, msg = sprintf(
-      "Kolom wajib tidak ditemukan pada tabel prioritas %s: %s",
+      "Kolom wajib tidak ditemukan pada tabel acuan pola %s: %s",
       zone_col, paste(missing_cols, collapse = ", ")
     )))
   }
@@ -553,8 +553,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
       tagList(
         layout_column_wrap(
           width = 1/2,
-          fileInput(ns("rtrw_priority_file"), "Tabel Prioritas RTRW (.xlsx)", accept = ".xlsx"),
-          fileInput(ns("rzwp3k_priority_file"), "Tabel Prioritas RZWP3K (.xlsx)", accept = ".xlsx")
+          fileInput(ns("rtrw_priority_file"), "Tabel Acuan Pola RTRW (.xlsx)", accept = ".xlsx"),
+          fileInput(ns("rzwp3k_priority_file"), "Tabel Acuan Pola RZWP3K (.xlsx)", accept = ".xlsx")
         ),
         hr(),
         layout_column_wrap(
@@ -600,7 +600,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
       rv$final_result <- NULL
       withProgress(message = "Membuat Rekomendasi Tumpang Tindih", value = 0, {
         tryCatch({
-          incProgress(0.2, detail = "Memuat tabel prioritas...")
+          incProgress(0.2, detail = "Memuat tabel acuan pola...")
           rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
           rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
           
