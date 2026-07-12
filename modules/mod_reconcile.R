@@ -403,14 +403,6 @@ reconcile_server <- function(id, output_dir) {
       
       withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
         tryCatch({
-          get_compat <- function(x, y) {
-            if (is.na(x) || is.na(y)) return(NA_real_)
-            val <- rv$serasi_matrix %>%
-              filter(class1 == x, class2 == y) %>%
-              pull(idx_serasi)
-            if (length(val) == 0) NA_real_ else val
-          }
-          
           if (rv$detected_step == 1) {
             # --- Step 1 ---
             incProgress(0.1, detail = "Membaca tabel keputusan...")
@@ -429,6 +421,7 @@ reconcile_server <- function(id, output_dir) {
               overlaps_map = overlaps_map,
               rtrw_priority = rv$rtrw_prioritas,
               rzwp3k_priority = rv$rzwp3k_prioritas,
+              matriks_serasi = rv$serasi_matrix,
               alpha = 0.5
             )
             

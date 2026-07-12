@@ -131,21 +131,21 @@ identify_overlaps <- function(x, y) {
 identify_overlaps_union <- function(x, y) {
   if (!inherits(x, "sf")) stop("x must be an sf object")
   if (!inherits(y, "sf")) stop("y must be an sf object")
-
+  
   geom_type <- c("POLYGON", "MULTIPOLYGON")
   if (!all(sf::st_geometry_type(x, by_geometry = FALSE) %in% geom_type))
     stop("x must contain polygons or multipolygons")
   if (!all(sf::st_geometry_type(y, by_geometry = FALSE) %in% geom_type))
     stop("y must contain polygons or multipolygons")
-
+  
   x_v <- terra::vect(x) |> terra::makeValid()
   y_v <- terra::vect(y) |> terra::makeValid()
-
+  
   if (!terra::same.crs(x_v, y_v)) {
     warning("CRS differ. Reprojecting y to the CRS of x.")
     y_v <- terra::project(y_v, terra::crs(x_v))
   }
-
+  
   # Intersection
   intersect_v <- terra::intersect(x_v, y_v)
   if (terra::nrow(intersect_v) == 0) {
@@ -154,7 +154,7 @@ identify_overlaps_union <- function(x, y) {
     intersect_sf <- sf::st_as_sf(intersect_v)
     intersect_sf$stat_pu <- "intersection"
   }
-
+  
   # X only
   x_only_v <- terra::erase(x_v, y_v)
   if (terra::nrow(x_only_v) == 0) {
@@ -165,7 +165,7 @@ identify_overlaps_union <- function(x, y) {
     y_attr <- setdiff(names(y_v), names(x_only_sf))
     for (col in y_attr) x_only_sf[[col]] <- NA
   }
-
+  
   # Y only
   y_only_v <- terra::erase(y_v, x_v)
   if (terra::nrow(y_only_v) == 0) {
@@ -176,18 +176,18 @@ identify_overlaps_union <- function(x, y) {
     x_attr <- setdiff(names(x_v), names(y_only_sf))
     for (col in x_attr) y_only_sf[[col]] <- NA
   }
-
+  
   # Combine
   result <- dplyr::bind_rows(x_only_sf, y_only_sf, intersect_sf)
   all_cols <- unique(c(names(x_v), names(y_v), "stat_pu"))
   for (col in all_cols) if (!col %in% names(result)) result[[col]] <- NA
-
+  
   result <- result[, c(all_cols[all_cols != "geometry"], "geometry")]
   result <- result[!sf::st_is_empty(result), ]
   result <- result |>
     dplyr::mutate(id_pu = dplyr::row_number()) |>
     dplyr::select(id_pu, stat_pu, dplyr::everything())
-
+  
   return(result)
 }
 
@@ -393,8 +393,8 @@ identify_adjacent <- function(rtrw,
                               batch_progress_interval = 250,
                               show_detailed_progress = TRUE,
                               m_precision = 1
-                              ) {
-
+) {
+  
   # Input validation
   if (!inherits(rtrw, "sf")) stop("rtrw harus berupa objek sf")
   if (!inherits(rzwp, "sf")) stop("rzwp harus berupa objek sf")
@@ -953,7 +953,7 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
       return(sf_obj)
     }
   }
-
+  
   sf_keys <- sf::st_drop_geometry(sf_obj)[, c(rtrw_col, rzpw_col)]
   sf_keys$key <- paste(sf_keys[[1]], sf_keys[[2]], sep = "||")
   lookup_keys <- paste(lookup_table[[1]], lookup_table[[2]], sep = "||")
@@ -1066,7 +1066,7 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
   if (nrows >= 2 && ncols >= 2) {
     
     body_dims <- paste0(int2col(2), "2:", int2col(ncols), nrows)
-
+    
     wb$
       add_fill(dims = body_dims, color = wb_color(hex = "FFF5F5DC"))$
       add_border(
@@ -1084,7 +1084,7 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
         vertical = "center",
         wrap_text = TRUE
       )
-
+    
     dark_gray <- wb_color(hex = "FF595959")
     
     for (i in seq_len(n)) {
@@ -1475,7 +1475,7 @@ calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
       adj_index = .data$idx_padu_ke
     )
   # names(matriks_padu_ke_id) <- c("class_id1", "class_id2", "adj_index")
-
+  
   lulc_adjacencies <- lulc_adjacencies %>%
     mutate(
       Class_A = as.integer(as.character(Class_A)),
@@ -1519,7 +1519,7 @@ calculate_padu_ke <- function(matriks_padu_ke, lulc_ref, lulc_adjacencies,
   idx_padu_ke_map <- idx_serasi_map %>%
     mutate(id_pu = as.character(id_pu)) %>%
     left_join(idx_padu_ke, by = "id_pu")
-
+  
   list(idx_padu_ke = idx_padu_ke, idx_padu_ke_map = idx_padu_ke_map)
 }
 
@@ -1588,16 +1588,16 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100, clip_to_p
   # Input validation
   if (!inherits(vector_obj, "sf")) stop("vector_obj must be an sf object")
   if (!inherits(pu, "sf")) stop("pu must be an sf object")
-
+  
   vector_obj <- sf::st_make_valid(vector_obj)
   pu <- sf::st_make_valid(pu)
-
+  
   # Harmonise CRS
   if (!identical(sf::st_crs(vector_obj), sf::st_crs(pu))) {
     message("Reprojecting vector_obj to CRS of pu")
     vector_obj <- sf::st_transform(vector_obj, sf::st_crs(pu))
   }
-
+  
   # Optionally clip vector_obj to pu extent; fall back to full vector if
   # intersection yields nothing (e.g. estuaries that border but don't overlap).
   if (clip_to_pu) {
@@ -1610,7 +1610,7 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100, clip_to_p
       },
       error = function(e) sf::st_sf(geometry = sf::st_sfc(crs = sf::st_crs(pu)))
     )
-
+    
     # Fall back to unclipped vector if intersection is empty
     if (nrow(vector_clipped) == 0) {
       message("Intersection with pu yielded no features; using full vector_obj extent for distance calculation.")
@@ -1619,7 +1619,7 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100, clip_to_p
   } else {
     vector_clipped <- vector_obj
   }
-
+  
   # Create raster template from pu bounding box
   bb <- sf::st_bbox(pu)
   r_template <- terra::rast(
@@ -1628,15 +1628,15 @@ calculate_euclidean_dist <- function(vector_obj, pu, resolution = 100, clip_to_p
     resolution = resolution,
     crs = sf::st_crs(pu)$wkt
   )
-
+  
   # Calculate euclidean distance
   source_vect <- terra::vect(vector_clipped)
   dist_raster <- terra::distance(r_template, source_vect)
-
+  
   # Mask to pu
   pu_vect <- terra::vect(pu)
   dist_raster <- terra::mask(dist_raster, pu_vect)
-
+  
   return(dist_raster)
 }
 
@@ -1787,7 +1787,7 @@ calculate_padu_hs <- function(idx_serasi_map,
     id_col = id_col,
     new_col = "tss_mean"
   )
-
+  
   tss_to_merge <- tss_extracted %>%
     sf::st_drop_geometry() %>%
     dplyr::select(dplyr::all_of(c(id_col, "tss_mean")))
@@ -1823,7 +1823,7 @@ calculate_padu_hs <- function(idx_serasi_map,
       filter_estuari = pmax(0, pmin(1,
                                     1 - pmin(abs(.data$estuari_dist_mean) / max_dist_val, 1)
       )),
-
+      
       tss_norm = dplyr::case_when(
         is.na(.data$tss_mean) ~ NA_real_,
         tss_constant ~ 1.0, 
@@ -3063,7 +3063,7 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
   # Try reversed order
   match_row <- serasi_df[serasi_df$class1 == class_b & serasi_df$class2 == class_a, ]
   if (nrow(match_row) == 1) return(match_row$idx_serasi)
-
+  
   return(NA_real_)
 }
 
@@ -3358,7 +3358,7 @@ calculate_economic_npv <- function(
   if (length(missing) > 0) {
     stop("alt_map_with_decision missing columns: ", paste(missing, collapse = ", "))
   }
-
+  
   # Filter planning units with non-NA zone assignments
   pu_rtrw <- alt_map_with_decision %>%
     dplyr::filter(!is.na(RTRW)) %>%
@@ -3672,7 +3672,7 @@ generate_reconciliation_excel <- function(recon_map,
     Kelompok = c(
       rep("Kolom Identitas", 4),
       rep("Kolom Zona", 3),
-      rep("Kolom Indeks SERASI & PADU", 8),
+      rep("Kolom Indeks SERASI & PADU", 9),
       rep("Kolom Indeks PADAN", 1),
       rep("Kolom Alternatif Zona", 2),
       rep("Kolom Indeks Alternatif", 4),
@@ -3683,7 +3683,7 @@ generate_reconciliation_excel <- function(recon_map,
       "id_pu", "stat_pu", "id_rtrw", "id_rzwp3k",
       "RTRW", "RZWP3K", "area_ha",
       "idx_serasi", "idx_padu_hs", "idx_padu_ke", "idx_padu_kh",
-      "idx_padu_ki", "idx_padu_kl", "idx_padu_rtp", "idx_padu_final",
+      "idx_padu_ki", "idx_padu_kl", "idx_padu_se", "idx_padu_rtp", "idx_padu_final",
       "idx_padan",
       "alt_RTRW", "alt_RZWP3K",
       "idx_serasi_rtrw_alt", "idx_serasi_rzwp3k_alt",
@@ -4014,6 +4014,14 @@ reconcilliation_step2 <- function(recon_table_path,
                                   matriks_serasi,
                                   alpha = 0.5) {
   
+  get_compat <- function(x, y) {
+    if (is.na(x) || is.na(y)) return(NA_real_)
+    val <- matriks_serasi %>%
+      dplyr::filter(class1 == x, class2 == y) %>%
+      dplyr::pull(idx_serasi)
+    if (length(val) == 0) NA_real_ else val[1]
+  }
+  
   # Read reconciliation table
   recon_table <- read_xlsx(recon_table_path)
   
@@ -4103,7 +4111,7 @@ reconcilliation_step2 <- function(recon_table_path,
                                 idx_padan_new - idx_padan,
                                 NA_real_)
     )
-
+  
   return(integrated_map_idx)
 }
 
@@ -4147,10 +4155,18 @@ reconcilliation_step2 <- function(recon_table_path,
 #' rzwp3k_final_idx <- result$rzwp3k
 #' }
 reconciliation_step1 <- function(rtrw_base, rzwp3k_base, overlaps_map,
-                                 rtrw_priority, rzwp3k_priority, alpha = 0.5) {
+                                 rtrw_priority, rzwp3k_priority, matriks_serasi, alpha = 0.5) {
   
-  if (!exists("get_compat", mode = "function")) {
-    stop("Function 'get_compat' must be defined in the environment.")
+  if (missing(matriks_serasi) || is.null(matriks_serasi)) {
+    stop("'matriks_serasi' must be provided (the loaded compatibility matrix).")
+  }
+  
+  get_compat <- function(x, y) {
+    if (is.na(x) || is.na(y)) return(NA_real_)
+    val <- matriks_serasi %>%
+      dplyr::filter(class1 == x, class2 == y) %>%
+      dplyr::pull(idx_serasi)
+    if (length(val) == 0) NA_real_ else val[1]
   }
   
   init_cols <- function(df) {
