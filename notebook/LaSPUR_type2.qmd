@@ -939,7 +939,7 @@ generate_reconciliation_excel(
 )
 ```
 
-```{r}
+```{r reconcile-step 2}
 # Read the reconciliation table
 recon_table_path <- "D:/step2_sulteng/adjacent_reconcilliation_table_filled.xlsx"
 

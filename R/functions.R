@@ -4093,80 +4093,147 @@ reconcilliation_step2 <- function(recon_table_path,
 reconciliation_step1 <- function(rtrw_base, rzwp3k_base, overlaps_map,
                                  rtrw_priority, rzwp3k_priority, alpha = 0.5) {
   
-  # Ensure get_compat exists
   if (!exists("get_compat", mode = "function")) {
     stop("Function 'get_compat' must be defined in the environment.")
   }
   
-  # Clean geometries and prepare base maps 
   init_cols <- function(df) {
-    df %>% mutate(
-      id_pu = if("id_pu" %in% names(.)) id_pu else NA_real_,
-      idx_serasi = if("idx_serasi" %in% names(.)) idx_serasi else NA_real_,
-      idx_padu_final = if("idx_padu_final" %in% names(.)) idx_padu_final else NA_real_,
-      idx_padan = if("idx_padan" %in% names(.)) idx_padan else NA_real_
-    )
+    df %>%
+      mutate(
+        id_pu = if ("id_pu" %in% names(.)) id_pu else NA_real_,
+        idx_serasi = if ("idx_serasi" %in% names(.)) idx_serasi else NA_real_,
+        idx_padu_final = if ("idx_padu_final" %in% names(.)) idx_padu_final else NA_real_,
+        idx_padan = if ("idx_padan" %in% names(.)) idx_padan else NA_real_
+      )
   }
   
-  rtrw_base <- st_zm(rtrw_base, drop = TRUE) %>% init_cols()
-  rzwp3k_base <- st_zm(rzwp3k_base, drop = TRUE) %>% init_cols()
-  overlaps_map <- st_zm(overlaps_map, drop = TRUE)
+  normalize_geometry <- function(x) {
+    geom_col <- attr(x, "sf_column")
+    
+    if (!is.null(geom_col) && geom_col != "geometry") {
+      names(x)[names(x) == geom_col] <- "geometry"
+      st_geometry(x) <- "geometry"
+    }
+    
+    x
+  }
   
-  # Determine winners based on priority
+  # Clean geometries
+  rtrw_base <- st_zm(rtrw_base, drop = TRUE) %>%
+    init_cols() %>%
+    normalize_geometry()
+  
+  rzwp3k_base <- st_zm(rzwp3k_base, drop = TRUE) %>%
+    init_cols() %>%
+    normalize_geometry()
+  
+  overlaps_map <- st_zm(overlaps_map, drop = TRUE) %>%
+    normalize_geometry()
+  
+  # Standardize geometry column name
+  geom_col <- attr(overlaps_map, "sf_column")
+  if (geom_col != "geometry") {
+    names(overlaps_map)[names(overlaps_map) == geom_col] <- "geometry"
+    st_geometry(overlaps_map) <- "geometry"
+  }
+  
+  # Determine winners
   overlaps_map <- overlaps_map %>%
-    mutate(winner = case_when(
-      user_decision %in% rtrw_priority$RTRW ~ "RTRW",
-      user_decision %in% rzwp3k_priority$RZWP3K ~ "RZWP3K",
-      TRUE ~ "None"
-    ))
+    mutate(
+      winner = case_when(
+        user_decision %in% rtrw_priority$RTRW ~ "RTRW",
+        user_decision %in% rzwp3k_priority$RZWP3K ~ "RZWP3K",
+        TRUE ~ "None"
+      )
+    )
   
-  # Cutout non‑overlapping parts
+  # Remove overlap from base maps
   overlap_union <- st_union(st_make_valid(overlaps_map))
   
   rtrw_cutout <- st_difference(rtrw_base, overlap_union) %>%
-    mutate(Zoning_Old = RTRW, Zoning_New = RTRW, Overlap = "No", Reconcile = "No") %>%
-    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
-           idx_serasi, idx_padu_final, idx_padan)
+    mutate(
+      Zoning_Old = RTRW,
+      Zoning_New = RTRW,
+      Overlap = "No",
+      Reconcile = "No"
+    ) %>%
+    select(
+      id_pu, Zoning_Old, Zoning_New,
+      Overlap, Reconcile,
+      idx_serasi, idx_padu_final, idx_padan
+    )
   
   rzwp3k_cutout <- st_difference(rzwp3k_base, overlap_union) %>%
-    mutate(Zoning_Old = RZWP3K, Zoning_New = RZWP3K, Overlap = "No", Reconcile = "No") %>%
-    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
-           idx_serasi, idx_padu_final, idx_padan)
+    mutate(
+      Zoning_Old = RZWP3K,
+      Zoning_New = RZWP3K,
+      Overlap = "No",
+      Reconcile = "No"
+    ) %>%
+    select(
+      id_pu, Zoning_Old, Zoning_New,
+      Overlap, Reconcile,
+      idx_serasi, idx_padu_final, idx_padan
+    )
   
-  # Winning overlap polygons
-  rtrw_wins <- overlaps_map %>% filter(winner == "RTRW") %>%
-    mutate(Zoning_Old = RTRW, Zoning_New = user_decision, Overlap = "Yes", 
-           Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")) %>%
-    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
-           idx_serasi, idx_padu_final, idx_padan)
+  # Winning polygons
+  rtrw_wins <- overlaps_map %>%
+    filter(winner == "RTRW") %>%
+    mutate(
+      Zoning_Old = RTRW,
+      Zoning_New = user_decision,
+      Overlap = "Yes",
+      Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")
+    ) %>%
+    select(
+      id_pu, Zoning_Old, Zoning_New,
+      Overlap, Reconcile,
+      idx_serasi, idx_padu_final, idx_padan
+    )
   
-  rzwp3k_wins <- overlaps_map %>% filter(winner == "RZWP3K") %>%
-    mutate(Zoning_Old = RZWP3K, Zoning_New = user_decision, Overlap = "Yes", 
-           Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")) %>%
-    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
-           idx_serasi, idx_padu_final, idx_padan)
+  rzwp3k_wins <- overlaps_map %>%
+    filter(winner == "RZWP3K") %>%
+    mutate(
+      Zoning_Old = RZWP3K,
+      Zoning_New = user_decision,
+      Overlap = "Yes",
+      Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")
+    ) %>%
+    select(
+      id_pu, Zoning_Old, Zoning_New,
+      Overlap, Reconcile,
+      idx_serasi, idx_padu_final, idx_padan
+    )
   
-  # Combine into final data frames 
-  rtrw_final <- bind_rows(rtrw_cutout, rtrw_wins) %>% st_make_valid()
-  rzwp3k_final <- bind_rows(rzwp3k_cutout, rzwp3k_wins) %>% st_make_valid()
+  rtrw_final <- rbind(rtrw_cutout, rtrw_wins) %>%
+    st_make_valid()
   
-  # Add overlap compatibility indices
+  rzwp3k_final <- rbind(rzwp3k_cutout, rzwp3k_wins) %>%
+    st_make_valid()
+  
   lookup <- overlaps_map %>%
     st_drop_geometry() %>%
     select(id_pu, RTRW, RZWP3K) %>%
     distinct(id_pu, .keep_all = TRUE)
   
-  # RTRW final: Overlap_Pair = RZWP3K
+  # RTRW output
   rtrw_idx <- rtrw_final %>%
-    left_join(lookup %>% select(id_pu, RZWP3K), by = "id_pu") %>%
+    left_join(
+      lookup %>% select(id_pu, RZWP3K),
+      by = "id_pu"
+    ) %>%
     mutate(
-      Overlap_Pair   = if_else(Overlap == "Yes", RZWP3K, NA_character_),
+      Overlap_Pair = if_else(
+        Overlap == "Yes",
+        RZWP3K,
+        NA_character_
+      ),
       idx_serasi_new = if_else(
         Overlap == "Yes",
         map2_dbl(Zoning_New, RZWP3K, get_compat),
         NA_real_
       ),
-      idx_padan_new  = if_else(
+      idx_padan_new = if_else(
         Overlap == "Yes",
         alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
         NA_real_
@@ -4179,17 +4246,24 @@ reconciliation_step1 <- function(rtrw_base, rzwp3k_base, overlaps_map,
     ) %>%
     select(-RZWP3K)
   
-  # RZWP3K final: Overlap_Pair = RTRW
+  # RZWP3K output
   rzwp3k_idx <- rzwp3k_final %>%
-    left_join(lookup %>% select(id_pu, RTRW), by = "id_pu") %>%
+    left_join(
+      lookup %>% select(id_pu, RTRW),
+      by = "id_pu"
+    ) %>%
     mutate(
-      Overlap_Pair   = if_else(Overlap == "Yes", RTRW, NA_character_),
+      Overlap_Pair = if_else(
+        Overlap == "Yes",
+        RTRW,
+        NA_character_
+      ),
       idx_serasi_new = if_else(
         Overlap == "Yes",
         map2_dbl(RTRW, Zoning_New, get_compat),
         NA_real_
       ),
-      idx_padan_new  = if_else(
+      idx_padan_new = if_else(
         Overlap == "Yes",
         alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
         NA_real_
@@ -4202,12 +4276,22 @@ reconciliation_step1 <- function(rtrw_base, rzwp3k_base, overlaps_map,
     ) %>%
     select(-RTRW)
   
-  common_cols <- c("id_pu", "Zoning_Old", "Zoning_New", "Overlap_Pair", "Overlap", "Reconcile",
-                   "idx_serasi", "idx_padu_final", "idx_padan", "idx_serasi_new", "idx_padan_new", 
-                   "delta_idx_padan", "geometry")
+  common_cols <- c(
+    "id_pu", "Zoning_Old", "Zoning_New", "Overlap_Pair",
+    "Overlap", "Reconcile",
+    "idx_serasi", "idx_padu_final", "idx_padan",
+    "idx_serasi_new", "idx_padan_new",
+    "delta_idx_padan", "geometry"
+  )
   
-  rtrw_clean <- rtrw_idx %>% select(all_of(common_cols))
-  rzwp3k_clean <- rzwp3k_idx %>% select(all_of(common_cols))
-
-  return(list(rtrw = rtrw_clean, rzwp3k = rzwp3k_clean))
+  rtrw_clean <- rtrw_idx %>%
+    select(all_of(common_cols))
+  
+  rzwp3k_clean <- rzwp3k_idx %>%
+    select(all_of(common_cols))
+  
+  list(
+    rtrw = rtrw_clean,
+    rzwp3k = rzwp3k_clean
+  )
 }
