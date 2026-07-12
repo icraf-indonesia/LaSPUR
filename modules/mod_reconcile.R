@@ -399,7 +399,7 @@ reconcile_server <- function(id, output_dir) {
       rv$display_integrated <- NULL
       log_lines <- character(0)
       
-      showNotification("Menjalankan proses rekonstruksi spasial rekonsiliasi...", type = "message", id = "recon_progress", duration = NULL)
+      showNotification("Menjalankan proses rekonsiliasi...", type = "message", id = "recon_progress", duration = 10)
       
       withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
         tryCatch({
@@ -523,7 +523,7 @@ reconcile_server <- function(id, output_dir) {
             tags$i(class = "bi bi-exclamation-triangle-fill me-2"),
             "Gagal mengeksekusi rekonsiliasi. Lihat rincian log kesalahan.")
       } else {
-        div(class = "alert alert-secondary mb-0", "Menunggu eksekusi parameter komparasi peta...")
+        div(class = "alert alert-secondary mb-0", "Menunggu hasil rekonsiliasi...")
       }
     })
     
@@ -568,18 +568,79 @@ reconcile_server <- function(id, output_dir) {
       }
     })
     
-    # DT renderers
+    # ── Helper to format and render reconciliation tables ──────────────
+    format_reconcile_table <- function(df, type = c("rtrw", "rzwp3k", "integrated")) {
+      type <- match.arg(type)
+      
+      base_map <- c(
+        "fid"             = "FID",
+        "id_pu"           = "ID PU",
+        "Zoning_Old"      = "Kelas Lama",
+        "Zoning_New"      = "Kelas Baru",
+        "Reconcile"       = "Rekonsiliasi?",
+        "idx_serasi"      = "Indeks SERASI",
+        "idx_padu_final"  = "Indeks PADU",
+        "idx_padan"       = "Indeks PADAN",
+        "idx_serasi_new"  = "Indeks SERASI Baru",
+        "idx_padan_new"   = "Indeks PADAN Baru",
+        "delta_idx_padan" = "Selisih Indeks PADAN"
+      )
+      
+      if (type %in% c("rtrw", "rzwp3k")) {
+        extra_map <- c(
+          "Overlap_Pair" = "Pasangan Tumpang Tindih",
+          "Overlap"      = "Tumpang Tindih?"
+        )
+      } else {
+        extra_map <- c(
+          "Source"   = "Sumber",
+          "Adjacent" = "Bertetangga?"
+        )
+      }
+      
+      col_map <- c(base_map, extra_map)
+      existing <- intersect(names(df), names(col_map))
+      names(df)[match(existing, names(df))] <- col_map[existing]
+      
+      numeric_cols <- names(df)[sapply(df, is.numeric)]
+      # Exclude ID columns from rounding
+      numeric_cols <- setdiff(numeric_cols, c("FID", "fid", "id_pu"))
+      
+      DT::datatable(
+        df,
+        extensions = c('FixedColumns', 'FixedHeader'),
+        options = list(
+          pageLength   = 10,
+          scrollX      = TRUE,
+          scrollY      = "400px",
+          dom          = 'Bfrtip',
+          fixedColumns = list(leftColumns = 4),
+          fixedHeader  = TRUE
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      ) %>%
+        DT::formatRound(columns = numeric_cols, digits = 2)
+    }
+    
+    # ── Table renderers ─────────────────────────
+    
     output$rtrw_preview_render <- DT::renderDT({
       req(rv$resolved_rtrw)
-      DT::datatable(sf::st_drop_geometry(rv$resolved_rtrw), options = list(pageLength = 10, scrollX = TRUE))
+      df <- sf::st_drop_geometry(rv$resolved_rtrw)
+      format_reconcile_table(df, "rtrw")
     })
+    
     output$rzwp3k_preview_render <- DT::renderDT({
       req(rv$resolved_rzwp3k)
-      DT::datatable(sf::st_drop_geometry(rv$resolved_rzwp3k), options = list(pageLength = 10, scrollX = TRUE))
+      df <- sf::st_drop_geometry(rv$resolved_rzwp3k)
+      format_reconcile_table(df, "rzwp3k")
     })
+    
     output$integrated_preview_render <- DT::renderDT({
       req(rv$resolved_integrated)
-      DT::datatable(sf::st_drop_geometry(rv$resolved_integrated), options = list(pageLength = 10, scrollX = TRUE))
+      df <- sf::st_drop_geometry(rv$resolved_integrated)
+      format_reconcile_table(df, "integrated")
     })
     
     # ── Leaflet Map ─────────────────────────────────────────────

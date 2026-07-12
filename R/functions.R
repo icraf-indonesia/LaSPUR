@@ -1064,17 +1064,54 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
   
   # Matrix body (from B2 to bottom-right)
   if (nrows >= 2 && ncols >= 2) {
+    
     body_dims <- paste0(int2col(2), "2:", int2col(ncols), nrows)
+
     wb$
       add_fill(dims = body_dims, color = wb_color(hex = "FFF5F5DC"))$
-      add_border(dims = body_dims,
-                 top_border = "thin", top_color = black,
-                 bottom_border = "thin", bottom_color = black,
-                 left_border = "thin", left_color = black,
-                 right_border = "thin", right_color = black,
-                 inner_hgrid = "thin", inner_hcolor = black,
-                 inner_vgrid = "thin", inner_vcolor = black)$
-      add_cell_style(dims = body_dims, horizontal = "center", vertical = "center", wrap_text = TRUE)
+      add_border(
+        dims = body_dims,
+        top_border = "thin", top_color = black,
+        bottom_border = "thin", bottom_color = black,
+        left_border = "thin", left_color = black,
+        right_border = "thin", right_color = black,
+        inner_hgrid = "thin", inner_hcolor = black,
+        inner_vgrid = "thin", inner_vcolor = black
+      )$
+      add_cell_style(
+        dims = body_dims,
+        horizontal = "center",
+        vertical = "center",
+        wrap_text = TRUE
+      )
+
+    dark_gray <- wb_color(hex = "FF595959")
+    
+    for (i in seq_len(n)) {
+      if (i < n) {
+        for (j in (i + 1):n) {
+          
+          # +1 because column A is the class column
+          excel_col <- j + 1
+          
+          # +1 because row 1 is the header
+          excel_row <- i + 1
+          
+          cell <- paste0(int2col(excel_col), excel_row)
+          
+          wb$
+            add_fill(
+              dims = cell,
+              color = dark_gray
+            )$
+            add_font(
+              dims = cell,
+              color = white,
+              bold = TRUE
+            )
+        }
+      }
+    }
   }
   
   wb$freeze_pane(first_row = TRUE, first_col = TRUE)  
@@ -1315,6 +1352,24 @@ calculate_lulc_adjacency.sf <- function(lulc,
       
       if (!all(sf::st_is_valid(lulc_clip))) {
         lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
+      }
+      
+      safe_extract_polygons <- function(x) {
+        # Extract polygons from any GEOMETRYCOLLECTIONs
+        if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
+          x <- sf::st_collection_extract(x, "POLYGON", warn = FALSE)
+        }
+        if (is.null(x) || nrow(x) == 0)
+          return(NULL)
+        
+        # Keep only polygon geometries
+        x <- x[sf::st_geometry_type(x) %in% c("POLYGON", "MULTIPOLYGON"), ]
+        if (nrow(x) == 0)
+          return(NULL)
+        x <- x[!sf::st_is_empty(x), ]
+        if (nrow(x) == 0)
+          return(NULL)
+        x
       }
       
       lulc_clip <- safe_extract_polygons(lulc_clip)
@@ -3015,7 +3070,7 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
 #' Determine alternative zones and create an Excel workbook with dropdowns
 #'
 #' @param idx_padan_map_filter sf object. For step = "step2", must contain
-#'   columns: id, id_pu, RTRW, RZWP3K, area_ha, length, idx_serasi. For
+#'   columns: id, id_pu, RTRW, RZWP3K, admin, area_ha, length, idx_serasi. For
 #'   step = "step1", must contain columns: id_pu, id_rtrw, id_rzwp3k, RTRW,
 #'   RZWP3K, area_ha, idx_serasi. The row order matters for step2's
 #'   lead/lag operations.
@@ -3034,9 +3089,8 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
 #' @return A list with two components:
 #'   \item{workbook}{The openxlsx workbook object (for further customization).}
 #'   \item{data}{The final cleaned data frame (without the temporary alternative
-#'     columns).}
+#'      columns).}
 #'
-#' @details ... (as before)
 determine_alternative_zones <- function(idx_padan_map_filter,
                                         serasi_matrix,
                                         step = c("step2", "step1"),
@@ -3065,11 +3119,11 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   
   # Required columns and base export columns differ by step
   if (step == "step2") {
-    required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi")
-    base_cols     <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi")
+    required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
+    base_cols     <- c("id", "id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
   } else {
-    required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
-    base_cols     <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+    required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")
+    base_cols     <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")
   }
   
   missing <- setdiff(required_cols, names(idx_padan_map_filter))
@@ -3125,9 +3179,10 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     
   }
   
-  # Prepare data frame for export
+  # Prepare data frame for export and remove empty rows
   df_export <- idx_padan_map_alt %>%
     st_drop_geometry() %>%
+    filter(!is.na(id_pu) & id_pu != "") %>%  
     select(all_of(base_cols), starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
     mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
     select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
@@ -3162,7 +3217,7 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   addWorksheet(wb, "Validation_Lists")
   writeData(wb, "Data", df_export_clean, startRow = 1, startCol = 1)
   writeData(wb, "Validation_Lists", df_validation_lists, startRow = 1, startCol = 1)
-
+  
   unique_pu <- unique(df_export_clean$id_pu)
   if (length(unique_pu) > 0) {
     color1 <- "#DCE6F1"  # light blue
@@ -3223,7 +3278,7 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     )
   }
   
-  # Colour "No alternative" cells black (overrides group colours on those cells)
+  # Colour "No alternative" cells black 
   black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
   black_rows_rtrw <- which(df_lists_rtrw[, 1] == "No alternative") + 1
   black_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] == "No alternative") + 1
@@ -3646,23 +3701,24 @@ generate_reconciliation_excel <- function(recon_map,
       "Luas unit perencanaan dalam satuan hektar (ha).",
       "Indeks SERASI — mengukur tingkat kesesuaian/kompatibilitas antara kelas RTRW dan RZWP3K berdasarkan matriks serasi. Rentang 0–1, semakin tinggi semakin serasi.",
       "Indeks PADU-HS (Hidrologi dan Sedimentasi) — menilai kepaduan lingkungan berdasarkan kedekatan terhadap estuari dan tingkat TSS.",
-      "Indeks PADU-KE (Konektivitas Ekologis) — menilai kepaduan berdasarkan ketetanggaan kelas tutupan lahan.",
+      "Indeks PADU-KE (Keterpaduan Penggunaan Lahan dan Perairan) — menilai kepaduan berdasarkan ketetanggaan kelas tutupan/penggunaan lahan dan perairan.",
       "Indeks PADU-KH (Komposisi Habitat) — menilai kepaduan berdasarkan persentase tutupan habitat pesisir (mangrove, terumbu karang, lamun).",
       "Indeks PADU-KI (Ketahanan Iklim) — menilai kepaduan berdasarkan tingkat risiko bencana pada unit perencanaan.",
-      "Indeks PADU-KL (Kualitas Lingkungan) — menilai kepaduan berdasarkan kondisi kualitas lingkungan perairan.",
+      "Indeks PADU-KL (Kawasan Lindung) — menilai kepaduan berdasarkan kondisi kualitas lingkungan perairan.",
+      "Indeks PADU-SE (Sosial & Ekonomi) — menilai kepaduan berdasarkan aktivitas manusia yang mengindikasikan adanya nilai ekonomi dan sosial.",
       "Indeks PADU-RTp (Risiko dan Tekanan) — menilai kepaduan berdasarkan jarak ke sumber tekanan (industri dan alur pelayaran).",
       "Indeks PADU gabungan — hasil pembobotan dari seluruh komponen PADU (KE, HS, KL, KH, RTp, SE, KI). Rentang 0–1.",
       "Indeks PADAN eksisting — nilai integrasi tata ruang darat-laut saat ini, dihitung dari kombinasi indeks SERASI dan PADU: `(α × idx_serasi) + ((1−α) × idx_padu_final)`.",
-      "Zona RTRW alternatif yang direkomendasikan untuk menggantikan zona RTRW eksisting guna meningkatkan integrasi.",
-      "Zona RZWP3K alternatif yang direkomendasikan untuk menggantikan zona RZWP3K eksisting guna meningkatkan integrasi.",
+      "Kawasan/Zona RTRW alternatif yang direkomendasikan untuk menggantikan kawasan/zona RTRW eksisting guna meningkatkan integrasi (Indeks SERASI).",
+      "Kawasan/Zona RZWP3K alternatif yang direkomendasikan untuk menggantikan kawasan/zona RZWP3K eksisting guna meningkatkan integrasi (Indeks SERASI).",
       "Indeks SERASI yang dihitung jika zona RTRW diganti dengan `alt_RTRW` (berpasangan dengan RZWP3K eksisting).",
       "Indeks SERASI yang dihitung jika zona RZWP3K diganti dengan `alt_RZWP3K` (berpasangan dengan RTRW eksisting).",
       "Indeks PADAN proyeksi jika zona RTRW diganti dengan `alt_RTRW`.",
       "Indeks PADAN proyeksi jika zona RZWP3K diganti dengan `alt_RZWP3K`.",
-      "Rekomendasi awal dari sistem berdasarkan logika prioritas zona dan perbandingan indeks PADAN alternatif. Nilai tipikal: `Ubah_RTRW`, `Ubah_RZWP3K`, `Koordinasi`.",
-      "Keputusan akhir sistem — hasil evaluasi apakah penggantian zona benar-benar meningkatkan indeks PADAN. Nilai tipikal: `Ubah RTRW ke [zona]`, `Ubah RZWP3K ke [zona]`, `Tetap/Koordinasi`.",
+      "Rekomendasi awal dari sistem berdasarkan logika prioritas zona dan perbandingan indeks PADAN alternatif.",
+      "Keputusan akhir sistem — hasil evaluasi apakah penggantian zona benar-benar meningkatkan indeks PADAN.",
       "Indeks PADAN setelah keputusan diterapkan. Jika keputusan adalah `Tetap/Koordinasi`, nilai ini sama dengan `idx_padan` eksisting.",
-      "**Kolom yang diisi oleh pengguna.** Keputusan rekonsiliasi akhir yang dipilih secara manual untuk setiap unit perencanaan. Nilai yang valid adalah salah satu dari: zona RTRW baru, zona RZWP3K baru, atau `Tetap/Koordinasi`. Kolom ini menjadi input utama untuk proses rekonsiliasi spasial di modul berikutnya."
+      "Kolom yang diisi oleh pengguna. Keputusan rekonsiliasi akhir yang dipilih berdasarkan keputusan pengguna untuk setiap unit perencanaan. Nilai yang valid adalah salah satu dari: zona RTRW baru, zona RZWP3K baru, atau `Tetap/Koordinasi`. Kolom ini menjadi input utama untuk proses rekonsiliasi spasial di modul berikutnya."
     ),
     stringsAsFactors = FALSE
   )
