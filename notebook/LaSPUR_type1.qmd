@@ -32,49 +32,56 @@ Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam forma
 #| include: true
 
 # Main input data for SERASI index calculation
-rtrw_path <- "data/vector/serasi/step1/Step1_RTRW_Palu-Parigi_Explode.shp"
-rzwp3k_path <- "data/vector/serasi/step1/Step1_RZWP3K_Palu-Parigi_Explode.shp"
-rtrw_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RTRW.xlsx"
-rzwp3k_prioritas_path <- "data/tabular/tabel_acuan_prioritas_RZWP3K.xlsx"
-matriks_serasi_path <- "data/tabular/matriks_serasi.xlsx"
-admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/vector/serasi/admin/gadm41_IDN_3_kecamatan.shp"
-
-# PADU_KE input data
-lulc_vect_path <- "data/vector/padu_ke/PL2024_Coral_Seagrass_Union_Palu-Parigi.shp"
-lulc_ref_path <- "data/tabular/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
-matriks_padu_ke_path <- "data/tabular/matriks_padu_ke_klhk.xlsx"
-
-# PADU-HS input data
-estuari_vect_path <- "data/vector/padu_hs/ST_Estuari_PT_Palu-Parigi.shp"
-tss_rast_path <- "data/raster/padu_hs/TSS_Palu-Parigi.tif"
-
-# PADU-KL input data
-protected_area_vect_path <- "data/vector/padu_kl/ST_Kawasan_Lindung_Palu-Parigi.shp"
-
-# PADU-KH input data
-coral_vect_path <- "data/vector/padu_kh/AC_Coral_Palu-Parigi.shp"
-seagrass_vect_path <- "data/vector/padu_kh/AC_Seagrass_Palu-Parigi.shp"
-mangrove_vect_path <- "data/vector/padu_kh/Mangrove_Palu-Parigi.shp"
-
-# PADU-RTp input data
-industry_vect_path <- "data/vector/padu_rtp/ST_Industri_Palu-Parigi.shp"
-industry_euc_dist_path <- "data/raster/padu_rtp/EuDist_Industri_Palu-Parigi.tif"
-pelayaran_vect_path <- "data/vector/padu_rtp/ST_AlurPelayaran_Palu-Parigi.shp"
-pelayaran_euc_dist_path <- "data/raster/padu_rtp/EUDist_AlurPl_Palu-Parigi.tif"
-
-# PADU-SE input data
-ntl_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/NTL_2023_100m_VIIRS.tif"
-popdens_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/raster/padu_se/Popdens_2025_100m_Worldpop.tif"
-
-# PADU-KI input data
-disaster_risk_vect_path <- "data/vector/padu_ki/ST_KRB_climate_Palu-Parigi.shp"
-
-# Parameterization
-padu_idx_weight_path <- "data/tabular/tabel_acuan_bobot_PADU.xlsx"
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 1 (Tumpang Tindih)/step1_RTRW_sulteng_v1.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 1 (Tumpang Tindih)/step1_RZWP3K_sulteng_v1.shp"
 
 # Output directory
-output_dir <- "output/"
+output_dir <- "D:/step1_sulteng/"
 
+# Input analisis SERASI
+rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_pola_RTRW.xlsx"
+rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_pola_RZWP3K.xlsx"
+matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_serasi.xlsx"
+admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/Administrasi/gadm41_IDN_3_kecamatan.shp"
+
+# PADU_KE input data
+lulc_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KE/penutup_lahan_darat-laut_sulteng_2024_v1.shp"
+lulc_ref_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
+matriks_padu_ke_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/matriks_padu_ke_klhk.xlsx"
+
+# PADU-HS input data
+estuari_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-HS/titik_estuari_sulteng_v1.shp"
+tss_rast_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-HS/total_suspended_solids_sulteng_v1.tif"
+estuari_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-HS/jarak_ke_estuari_sulteng_v1a.tif"
+
+# PADU-KL input data
+protected_area_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KL/kawasan_lindung_sulteng_v1.shp"
+
+# PADU-KH input data
+coral_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/terumbu_karang_sulteng_v1.shp"
+seagrass_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/padang_lamun_sulteng_v1.shp"
+mangrove_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/hutan_mangrove_sulteng_v1.shp"
+
+# PADU-RTp input data
+industry_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-RTp/kawasan_peruntukan_industri_sulteng_v1.shp"
+industry_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-RTp/jarak_ke_industri_sulteng_v1a.tif"
+pelayaran_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-RTp/alur_pelayaran_sulteng_v1.shp"
+pelayaran_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-RTp/jarak_ke_alur_pelayaran_sulteng_v1a.tif"
+
+# PADU-SE input data
+ntl_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-SE/night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+popdens_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-SE/population_density_sulteng_2025_100m_Worldpop_v1.tif"
+
+# PADU-KI input data
+disaster_risk_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KI/kerawanan_bencana_sulteng_v1.shp"
+
+# Parameterization
+padu_idx_weight_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_bobot_PADU.xlsx"
+
+# Economics input data
+npv_lulc_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_npv_penutupan_lahan.xlsx"
+matriks_land_distribution_rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_land_distribution_rtrw.xlsx"
+matriks_land_distribution_rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_land_distribution_rzwp3k.xlsx"
 ```
 
 # Tahap 1. Identifikasi area tumpang tindih
@@ -125,8 +132,8 @@ Matriks yang dimuat akan dikonversi ke dalam bentuk *long format matrix*.
 #| include: true
 
 # Generate matrix serasi template to be filled
-matrix_serasi_template <- generate_matrix_serasi(sf_1 = rtrw_vect, sf_2 = rzwp3k_vect)
-openxlsx::write.xlsx(matrix_serasi_template, "output/step1/matriks_serasi_template.xlsx", overwrite = TRUE)
+out_path_serasi <- file.path(output_dir, "matriks_serasi.xlsx")
+generate_matrix_serasi(rtrw_vect, rzwp3k_vect, file_path = out_path_serasi)
 
 # Load a filled matrix serasi & RTRW-RZWP3K priority reference table
 matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
@@ -218,8 +225,8 @@ lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
 matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
 
 # Generate PADU-KE for KLHK data
-matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref)
-write.xlsx(matriks_padu_ke_template, "output/matriks_padu_ke_klhk.xlsx", overwrite = TRUE)
+out_path_padu_ke <- file.path(output_dir, "matriks_padu_ke.xlsx")
+matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref, file_path = out_path_padu_ke)
 ```
 
 ### Tahap 3.1.2. Perhitungan ketetanggaan tutupan/penggunaan lahan dan indeks PADU-KE
@@ -919,30 +926,31 @@ generate_reconciliation_excel(
 #| message: true
 #| include: true
 
-# Read the reconciliation table path
-recon_table_path <- "output/step1/AOI_Palu-Parigi/overlaps_reconcilliation_table_filled.xlsx"
-recon_table <- load_and_validate_table(recon_table_path)
+# Read the input
+recon_table_path <- "D:/step1_sulteng/overlaps_reconcilliation_table_filled.xlsx"
+recon_table <- load_and_validate_table(recon_table_path) %>% 
+  select(id_pu, user_decision)
+matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+alpha <- 0.5
 
-# Prepare RTRW and RZWP3K map
-rtrw <- rtrw_vect %>% dplyr::mutate(
-  id_rtrw = dplyr::row_number())
-rzwp3k <- rzwp3k_vect %>% dplyr::mutate(
-  id_rzwp3k = dplyr::row_number())
+# Merge the user_decision to reconcilliation map
+overlaps_reconcilliation_map <- overlaps_recom_map %>%
+  left_join(recon_table, by = "id_pu") %>%
+  mutate(user_decision = user_decision) 
 
-# Union overlaps
-union <- identify_overlaps_union(rtrw, rzwp3k)
-final_map <- reconcile_map(
-  step = 1,
-  union = union,
-  recon_table  = recon_table,
-  rtrw_prioritas = rtrw_prioritas,
-  rzwp3k_prioritas = rzwp3k_prioritas
+# Run the reconciliation
+result <- reconciliation_step1(
+  rtrw_base   = rtrw_vect,
+  rzwp3k_base = rzwp3k_vect,
+  overlaps_map = overlaps_reconcilliation_map,
+  rtrw_priority = rtrw_prioritas,
+  rzwp3k_priority  = rzwp3k_prioritas,
+  alpha       = alpha
 )
 
-rtrw_final <- final_map[final_map$stat_pu_final == "RTRW", ]
-rzwp3k_final <- final_map[final_map$stat_pu_final == "RZWP3K", ]
-
-# Write the resolved map
-write_sf(rtrw_final, paste0(output_dir, "step1/AOI_Palu-Parigi/ST_Union_Resolved_Overlaps.gpkg"))
-write_sf(rzwp3k_final, paste0(output_dir, "step1/AOI_Palu-Parigi/ST_RZWP3K_Resolved_Overlaps.gpkg"))
+# Access the two layers separately
+rtrw_final_idx   <- result$rtrw
+rzwp3k_final_idx <- result$rzwp3k
 ```

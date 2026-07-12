@@ -1020,7 +1020,7 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
     return(result)
   }
   
-  # --------------------- write styled Excel ----------------------------
+  # write styled Excel 
   if (!requireNamespace("openxlsx2", quietly = TRUE)) {
     stop("Package 'openxlsx2' is required but not installed.")
   }
@@ -1081,7 +1081,7 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
   wb$set_col_widths(cols = 1, width = 30)
   if (ncols >= 2) wb$set_col_widths(cols = 2:ncols, width = 25)
   
-  # --------------------- instruction box ------------------------------
+  # instruction box
   instr_row <- nrows + 4
   
   instr_lines <- c(
@@ -3687,180 +3687,6 @@ generate_reconciliation_excel <- function(recon_map,
   invisible(NULL)
 }
 
-#' Reconcile land-use data using either overlap reconciliation or simple class reconciliation
-#'
-#' This is a combined function that dispatches to two original reconciliation workflows
-#' based on the value of `step`. When `step = 1`, it runs the overlap reconciliation
-#' logic (originally `reconcile_map_overlap`). When `step = 2`, it runs the simple
-#' class reconciliation using an Excel decision table (originally `reconcile_map`).
-#'
-#' The returned `sf` object includes an additional character column `reconcile`
-#' indicating whether the row was changed (`"Yes"`) or not (`"No"`).
-#'
-#' @param step Integer; `1` for overlap reconciliation, `2` for simple reconciliation.
-#' @param sf_obj For `step = 2`: an `sf` object with an `id` column and either
-#'   `RTRW` or `RZWP3K` column.
-#' @param recon_table For `step = 2`: path to Excel file with sheet "Data" containing
-#'   `id`, `user_decision_rtrw`, and `user_decision_rzwp3k`.
-#' @param class_type For `step = 2`: either `"RTRW"` or `"RZWP3K"`.
-#' @param union For `step = 1`: an `sf` object with columns `id_pu`, `stat_pu`,
-#'   `RTRW`, `RZWP3K`, `id_rtrw`, `id_rzwp3k`, and geometry.
-#' @param recon_table For `step = 1`: data frame with columns `id_rtrw`, `id_rzwp3k`,
-#'   `user_decision`.
-#' @param rtrw_prioritas For `step = 1`: data frame with a column `RTRW` containing
-#'   priority class names (non‑NA values used).
-#' @param rzwp3k_prioritas For `step = 1`: data frame with a column `RZWP3K` containing
-#'   priority class names (non‑NA values used).
-#'
-#' @return An `sf` object with all original columns plus the new `reconcile` column.
-#'
-#' @importFrom readxl read_excel
-#' @importFrom dplyr left_join mutate case_when
-#' @importFrom sf st_as_sf
-#' @export
-reconcile_map <- function(step,
-                          sf_obj = NULL, class_type = NULL, #RTRW or #RZWP3K
-                          union = NULL, recon_table = NULL,
-                          rtrw_prioritas = NULL, rzwp3k_prioritas = NULL) {
-  
-  if (step == 1) {
-    if (is.null(union)) stop("'union' must be provided for step = 1")
-    if (is.null(recon_table)) stop("'recon_table' must be provided for step = 1")
-    if (is.null(rtrw_prioritas)) stop("'rtrw_prioritas' must be provided for step = 1")
-    if (is.null(rzwp3k_prioritas)) stop("'rzwp3k_prioritas' must be provided for step = 1")
-    
-    if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
-    if (!requireNamespace("dplyr", quietly = TRUE)) stop("package 'dplyr' is required.")
-    
-    required_union <- c("id_pu", "stat_pu", "RTRW", "RZWP3K", "id_rtrw", "id_rzwp3k")
-    if (!all(required_union %in% colnames(union))) {
-      stop("'union' must contain columns: ", paste(required_union, collapse = ", "))
-    }
-    required_recon <- c("id_rtrw", "id_rzwp3k", "user_decision")
-    if (!all(required_recon %in% colnames(recon_table))) {
-      stop("'recon_table' must contain columns: ", paste(required_recon, collapse = ", "))
-    }
-    rtrw_classes <- as.character(rtrw_prioritas$RTRW)
-    rtrw_classes <- rtrw_classes[!is.na(rtrw_classes)]
-    rzwp3k_classes <- as.character(rzwp3k_prioritas$RZWP3K)
-    rzwp3k_classes <- rzwp3k_classes[!is.na(rzwp3k_classes)]
-    
-    all_classes <- unique(c(rtrw_classes, rzwp3k_classes))
-    source_map <- setNames(
-      sapply(all_classes, function(cls) {
-        in_rtrw <- cls %in% rtrw_classes
-        in_rzwp3k <- cls %in% rzwp3k_classes
-        if (in_rtrw && in_rzwp3k) "BOTH"
-        else if (in_rtrw) "RTRW"
-        else if (in_rzwp3k) "RZWP3K"
-        else NA_character_
-      }),
-      all_classes
-    )
-    
-    union$id_rtrw <- as.character(union$id_rtrw)
-    union$id_rzwp3k <- as.character(union$id_rzwp3k)
-    recon_table$id_rtrw <- as.character(recon_table$id_rtrw)
-    recon_table$id_rzwp3k <- as.character(recon_table$id_rzwp3k)
-
-    union_with_decision <- dplyr::left_join(
-      union,
-      recon_table[, c("id_rtrw", "id_rzwp3k", "user_decision")],
-      by = c("id_rtrw", "id_rzwp3k")
-    )
-
-    missing_dec <- union_with_decision[
-      union_with_decision$stat_pu == "intersection" & is.na(union_with_decision$user_decision),
-    ]
-    if (nrow(missing_dec) > 0) {
-      warning("Intersection polygons with missing user_decision (id_pu = ",
-              paste(missing_dec$id_pu, collapse = ", "), ") will have NA in final_class and stat_pu_final.")
-    }
-
-    final_sf <- dplyr::mutate(
-      union_with_decision,
-      final_class = dplyr::case_when(
-        stat_pu == "intersection" ~ user_decision,
-        stat_pu == "RTRW" ~ RTRW,
-        stat_pu == "RZWP3K" ~ RZWP3K,
-        TRUE ~ NA_character_
-      ),
-      stat_pu_final = dplyr::case_when(
-        stat_pu == "RTRW" ~ "RTRW",
-        stat_pu == "RZWP3K" ~ "RZWP3K",
-        stat_pu == "intersection" & is.na(user_decision) ~ NA_character_,
-        stat_pu == "intersection" & !is.na(user_decision) ~ source_map[user_decision],
-        TRUE ~ NA_character_
-      )
-    )
-
-    both_cases <- final_sf[
-      final_sf$stat_pu == "intersection" & final_sf$stat_pu_final == "BOTH",
-    ]
-    if (nrow(both_cases) > 0) {
-      warning("Some intersection polygons have decisions that appear in BOTH priority lists (id_pu = ",
-              paste(both_cases$id_pu, collapse = ", "), "). Set to 'BOTH'.")
-    }
-    neither_cases <- final_sf[
-      final_sf$stat_pu == "intersection" & is.na(final_sf$stat_pu_final) & !is.na(final_sf$user_decision),
-    ]
-    if (nrow(neither_cases) > 0) {
-      warning("Some intersection polygons have decisions that appear in NEITHER priority list (id_pu = ",
-              paste(neither_cases$id_pu, collapse = ", "), "). Set to NA.")
-    }
-    
-    final_sf$reconcile <- ifelse(final_sf$stat_pu == "intersection" & !is.na(final_sf$user_decision),
-                                 "Yes", "No")
-    
-    return(sf::st_as_sf(final_sf))
-    
-  } else if (step == 2) {
-    if (is.null(sf_obj)) stop("'sf_obj' must be provided for step = 2")
-    if (is.null(recon_table)) stop("'recon_table' must be provided for step = 2")
-    
-    class_type <- match.arg(class_type, choices = c("RTRW", "RZWP3K"))
-    decision_col <- paste0("user_decision_", tolower(class_type))
-    orig_col <- class_type
-    
-    if (!requireNamespace("readxl", quietly = TRUE)) {
-      stop("package 'readxl' is required for step = 2.")
-    }
-    
-    xlsx_data <- readxl::read_excel(recon_table, sheet = "Data")
-    update_data <- xlsx_data[
-      !is.na(xlsx_data[[decision_col]]) & xlsx_data[[decision_col]] != "",
-    ]
-    
-    if (!orig_col %in% names(sf_obj)) {
-      stop("Column '", orig_col, "' not found in the input sf object.")
-    }
-
-    orig_vals <- sf_obj[[orig_col]]
-    new_vals <- orig_vals 
-    
-    for (i in seq_len(nrow(update_data))) {
-      id_val <- update_data$id[i]
-      new_val <- update_data[[decision_col]][i]
-      match_idx <- which(sf_obj$id == id_val)
-      if (length(match_idx) > 0) {
-        new_vals[match_idx] <- new_val
-      }
-    }
-    sf_obj[[orig_col]] <- new_vals
-
-    changed <- !(
-      (is.na(new_vals) & is.na(orig_vals)) |
-        (!is.na(new_vals) & !is.na(orig_vals) & new_vals == orig_vals)
-    )
-    sf_obj$reconcile <- ifelse(changed, "Yes", "No")
-    
-    return(sf_obj)
-    
-  } else {
-    stop("step must be 1 or 2")
-  }
-}
-
 #' Dissolve paired RTRW and RZWP3K polygons by `id_pu`
 #'
 #' This function takes an `sf` object where each `id_pu` groups exactly two 
@@ -3970,4 +3796,418 @@ dissolve_id_pu <- function(sf_obj) {
   
   st_crs(result) <- st_crs(sf_obj)
   return(result)
+}
+
+# Look up compatibility
+get_compat <- function(x, y) {
+  if (is.na(x) || is.na(y)) return(NA_real_)
+  val <- matriks_serasi %>%
+    filter(class1 == x, class2 == y) %>%
+    pull(idx_serasi)
+  if (length(val) == 0) NA_real_ else val
+}
+
+#' Reconcile spatial layer with update and exclusion mask (Step 2)
+#'
+#' This function integrates an updated spatial layer into a base map, using an exclusion mask
+#' to prevent updates from extending into protected areas. It trims the updates, removes the
+#' updated footprint from the base map, and combines the unchanged base areas with the updated
+#' polygons. The result includes attributes indicating whether each polygon was reconciled,
+#' whether it originated from the update layer (adjacent), and carries forward relevant identifiers.
+#'
+#' @param base_map An `sf` object representing the base map. Must contain an `id` column and a column
+#'   named after `layer_name` (the original class column). If any of the required additional columns
+#'   (`id_pu`, `idx_serasi`, `idx_padu_final`, `idx_padan`) are missing, they will be added as `NA`.
+#' @param exclusion_mask An `sf` object containing polygons that define areas where updates should
+#'   be excluded (e.g., protected areas). These areas are subtracted from the update polygons.
+#' @param update_layer An `sf` object containing the updated polygons. Must contain columns named
+#'   `layer_name` (original class) and `paste0("user_decision_", layer_name)` (new class).
+#'   It may also contain `id`, `id_pu`, and the index columns; if missing, `NA` will be used.
+#' @param layer_name A character string naming the thematic layer being processed (e.g., `"rtrw"`).
+#'   This is used to construct column names.
+#'
+#' @return An `sf` object with `MULTIPOLYGON` geometry. The output includes the following columns:
+#'   \item{id_pu}{Original polygon identifier.}
+#'   \item{\{layer_name\}_old}{Original class values.}
+#'   \item{\{layer_name\}_new}{New class values (named as `user_decision_{layer_name}`).}
+#'   \item{Reconcile}{Character flag: `"Yes"` if the polygon was updated (class change), otherwise `"No"`.}
+#'   \item{adjacent}{Character flag: `"Yes"` if the polygon originated from the update layer, `"No"` if it originated from the base map.}
+#'   \item{idx_serasi}{Index value from base map (unchanged) or update layer (updated).}
+#'   \item{idx_padu_final}{Likewise.}
+#'   \item{idx_padan}{Likewise.}
+#'   \item{geometry}{`MULTIPOLYGON` geometry.}
+#'
+#' @details The function performs several steps:
+#' \enumerate{
+#'   \item Ensures the required columns exist in both `base_map` and `update_layer`.
+#'   \item Prepares the update layer, assigning `adjacent = "Yes"`.
+#'   \item Trims the update polygons using [sf::st_difference()] against the exclusion mask.
+#'   \item Subtracts the update footprint from the base map, assigning `adjacent = "No"` to the preserved base areas.
+#'   \item Binds the layers and determines `Reconcile` status.
+#' }
+#'
+#' @import sf dplyr rlang
+#' @export
+reconcile_map_step2 <- function(base_map, exclusion_mask, update_layer, layer_name) {
+  col_orig <- layer_name
+  col_new <- tolower(paste0("user_decision_", layer_name))
+  col_old_output <- paste0(layer_name, "_old")
+  
+  # Columns to preserve
+  id_cols <- c("id_pu")
+  idx_cols <- c("idx_serasi", "idx_padu_final", "idx_padan")
+  all_extra_cols <- c(id_cols, idx_cols)
+  
+  for (col in all_extra_cols) {
+    if (!col %in% names(base_map)) base_map[[col]] <- NA
+    if (!col %in% names(update_layer)) update_layer[[col]] <- NA
+  }
+  
+  message(paste("Processing integration for:", layer_name, "..."))
+  max_base_id <- max(base_map$id, na.rm = TRUE)
+  
+  # Prepare update layer
+  update_prep <- update_layer %>%
+    filter(!st_is_empty(geom)) %>%  
+    filter(!is.na(!!sym(col_new))) %>%    
+    select(Old = !!sym(col_orig), New = !!sym(col_new), 
+           all_of(id_cols), all_of(idx_cols)) %>%  
+    mutate(id = as.integer(max_base_id + row_number()),
+           Adjacent = "Yes") %>%
+    rename(geometry = geom) %>%
+    st_make_valid()
+  
+  message("  > Generating exclusion mask...")
+  mask_geom <- st_combine(st_make_valid(exclusion_mask))
+  
+  message("  > Trimming update boundaries...")
+  update_trimmed <- st_difference(update_prep, mask_geom) %>%
+    st_collection_extract("POLYGON")
+  
+  update_footprint <- st_union(update_trimmed)
+  
+  message("  > Updating base geometries...")
+  base_cutout <- st_difference(st_make_valid(base_map), update_footprint) %>%
+    rename(Old = !!sym(col_orig)) %>%
+    mutate(New = Old,
+           Adjacent = "No")
+  
+  message("  > Finalizing attributes...")
+  final_map <- bind_rows(base_cutout, update_trimmed) %>%
+    mutate(
+      Reconcile = if_else(coalesce(Old, "") == coalesce(New, ""), "No", "Yes")
+    ) %>%
+    rename(!!sym(col_old_output) := Old,
+           !!sym(col_new) := New) %>%
+    select(id_pu, all_of(id_cols), all_of(col_old_output), all_of(col_new), 
+           Reconcile, Adjacent, all_of(idx_cols), geometry) %>%
+    st_make_valid() %>%
+    st_cast("MULTIPOLYGON")
+  
+  message(paste("Success! Integrated map for", layer_name, "generated."))
+  return(final_map)
+}
+
+#' Step 2 of reconciliation: process and integrate RTRW/RZWP3K with compatibility
+#'
+#' This function reads a reconciliation table, computes majority decisions,
+#' joins them to a spatial layer, reconciles two base maps using a custom
+#' reconciliation function, standardizes and merges the results, then computes
+#' compatibility indices and updates the spatial data frame.
+#'
+#' @param recon_table_path Path to the Excel reconciliation table.
+#' @param adjacent_recom_map An sf object containing the adjacent reconciliation polygons.
+#'   Must have columns `id`, `id_pu`, and geometry.
+#' @param rtrw_vect RTRW base map (spatial object) accepted by `reconcile_map_step2`.
+#' @param rzwp3k_vect RZWP3K base map (spatial object) accepted by `reconcile_map_step2`.
+#' @param matriks_serasi A pre-loaded compatibility matrix (as returned by
+#'   `load_validate_matrix_table`). This matrix is used by `get_compat`.
+#' @param alpha Numeric weight for the new compatibility index (default 0.5).
+#'
+#' @return An sf object `integrated_map_idx` with columns including
+#'   `id_pu`, `Source`, `Zoning_Old`, `Zoning_New`, `Adjacent`, `Reconcile`,
+#'   `idx_serasi`, `idx_padu_final`, `idx_padan`, `idx_serasi_new`,
+#'   `idx_padan_new`, `delta_idx_padan`, and geometry.
+#'
+#' @details This function depends on the following external functions that must
+#'   be defined in the calling environment:
+#'   - `reconcile_map_step2(base_map, exclusion_mask, update_layer, layer_name)`
+#'   - `get_compat(z_a, z_b)` – uses the loaded compatibility matrix (`matriks_serasi`).
+#'
+#'   The compatibility matrix is expected to be loaded externally (e.g., via
+#'   `load_validate_matrix_table`) and passed as an argument to avoid reloading.
+#'
+#'   It also requires the following packages: `dplyr`, `tidyr`, `sf`, `readxl`, `purrr`.
+#'
+#' @examples
+#' \dontrun{
+#' matriks <- load_validate_matrix_table("path/to/matriks_serasi.xlsx", title = "serasi")
+#' result <- reconcilliation_step2(
+#'   recon_table_path = "D:/step2_sulteng/adjacent_reconcilliation_table_filled.xlsx",
+#'   adjacent_recom_map = my_adjacent_map,
+#'   rtrw_vect = rtrw_spatial,
+#'   rzwp3k_vect = rzwp3k_spatial,
+#'   matriks_serasi = matriks,
+#'   alpha = 0.5
+#' )
+#' }
+reconcilliation_step2 <- function(recon_table_path,
+                                  adjacent_recom_map,
+                                  rtrw_vect,
+                                  rzwp3k_vect,
+                                  matriks_serasi,
+                                  alpha = 0.5) {
+  
+  # Read reconciliation table
+  recon_table <- read_xlsx(recon_table_path)
+  
+  # Most common RTRW decision per (id, id_pu)
+  decision_rtrw <- recon_table %>%
+    filter(!is.na(user_decision_rtrw), user_decision_rtrw != "") %>%
+    group_by(id, id_pu) %>%
+    summarise(
+      user_decision_rtrw = names(sort(table(user_decision_rtrw), decreasing = TRUE))[1],
+      .groups = "drop"
+    )
+  
+  # Most common RZWP3K decision per (id, id_pu)
+  decision_rzwp3k <- recon_table %>%
+    filter(!is.na(user_decision_rzwp3k), user_decision_rzwp3k != "") %>%
+    group_by(id, id_pu) %>%
+    summarise(
+      user_decision_rzwp3k = names(sort(table(user_decision_rzwp3k), decreasing = TRUE))[1],
+      .groups = "drop"
+    )
+  
+  # Merge decisions into a clean table (one row per pair)
+  recon_table_clean <- recon_table %>%
+    distinct(id, id_pu, .keep_all = TRUE) %>%
+    select(id, id_pu) %>%
+    left_join(decision_rtrw, by = c("id", "id_pu")) %>%
+    left_join(decision_rzwp3k, by = c("id", "id_pu"))
+  
+  # Join decisions to the spatial adjacent reconciliation layer
+  adjacent_reconcile_map <- adjacent_recom_map %>%
+    left_join(recon_table_clean, by = c("id", "id_pu"))
+  
+  # Reconcile RTRW and RZWP3K using the custom reconciliation function
+  rtrw_reconciled <- reconcile_map_step2(
+    base_map = rtrw_vect,
+    exclusion_mask = rzwp3k_vect,
+    update_layer = adjacent_reconcile_map,
+    layer_name = "RTRW"
+  )
+  
+  rzwp3k_reconciled <- reconcile_map_step2(
+    base_map = rzwp3k_vect,
+    exclusion_mask = rtrw_vect,
+    update_layer = adjacent_reconcile_map,
+    layer_name = "RZWP3K"
+  )
+  
+  # Standardise column names and select relevant columns
+  rtrw_clean <- rtrw_reconciled %>%
+    rename(Zoning_Old = RTRW_old,
+           Zoning_New = user_decision_rtrw) %>%
+    mutate(Source = "RTRW") %>%
+    select(id_pu, Source, Zoning_Old, Zoning_New, Adjacent, Reconcile,
+           idx_serasi, idx_padu_final, idx_padan, geometry)
+  
+  rzwp3k_clean <- rzwp3k_reconciled %>%
+    rename(Zoning_Old = RZWP3K_old,
+           Zoning_New = user_decision_rzwp3k) %>%
+    mutate(Source = "RZWP3K") %>%
+    select(id_pu, Source, Zoning_Old, Zoning_New, Adjacent, Reconcile,
+           idx_serasi, idx_padu_final, idx_padan, geometry)
+  
+  # Merge both layers into one integrated map
+  integrated_map <- bind_rows(rtrw_clean, rzwp3k_clean) %>%
+    st_make_valid()
+  
+  # Compute new compatibility indices for adjacent polygons
+  compatibility_lookup <- integrated_map %>%
+    filter(Adjacent == "Yes") %>%
+    group_by(id_pu) %>%
+    summarize(z_a = first(Zoning_New), z_b = last(Zoning_New), .groups = "drop") %>%
+    st_drop_geometry() %>%
+    mutate(idx_serasi_new = map2_dbl(z_a, z_b, get_compat)) %>%
+    select(id_pu, idx_serasi_new)
+  
+  # Add new indices to the integrated map
+  integrated_map_idx <- integrated_map %>%
+    left_join(compatibility_lookup, by = "id_pu") %>%
+    mutate(
+      idx_serasi_new = as.numeric(idx_serasi_new),
+      idx_padu_final = as.numeric(idx_padu_final),
+      idx_padan      = as.numeric(idx_padan),
+      idx_padan_new  = if_else(Adjacent == "Yes",
+                               (alpha * idx_serasi_new) + ((1 - alpha) * idx_padu_final),
+                               NA_real_),
+      delta_idx_padan = if_else(Adjacent == "Yes",
+                                idx_padan_new - idx_padan,
+                                NA_real_)
+    )
+
+  return(integrated_map_idx)
+}
+
+#' Step 1 of reconciliation: process overlaps with priority-based decisions
+#'
+#' This function reconciles overlapping RTRW and RZWP3K polygons using priority
+#' lists, computes compatibility indices for the chosen decisions, and returns
+#' the two reconciled layers separately (not merged).
+#'
+#' @param rtrw_base   sf object of the original RTRW layer (must have columns
+#'                    `id_pu`, `RTRW`, `idx_serasi`, `idx_padu_final`, `idx_padan`)
+#' @param rzwp3k_base sf object of the original RZWP3K layer (similar columns)
+#' @param overlaps_map sf object of overlapping polygons, with columns
+#'                     `id_pu`, `RTRW`, `RZWP3K`, `user_decision`
+#' @param rtrw_priority    data frame of RTRW priority classes (column `RTRW`)
+#' @param rzwp3k_priority  data frame of RZWP3K priority classes (column `RZWP3K`)
+#' @param alpha       numeric weight for new compatibility (default 0.5)
+#'
+#' @return A list with two `sf` objects:
+#'   - `rtrw`: reconciled RTRW layer with new indices
+#'   - `rzwp3k`: reconciled RZWP3K layer with new indices
+#'
+#'   Each has columns: `id_pu`, `Zoning_Old`, `Zoning_New`, `Overlap`, `Reconcile`,
+#'   `idx_serasi`, `idx_padu_final`, `idx_padan`,
+#'   `Overlap_Pair`, `idx_serasi_new`, `idx_padan_new`, `delta_idx_padan`,
+#'   and `geometry`.
+#'
+#' @details Requires `get_compat` to be defined in the calling environment.
+#'
+#' @examples
+#' \dontrun{
+#' result <- reconciliation_step1(
+#'   rtrw_base   = rtrw_vect,
+#'   rzwp3k_base = rzwp3k_vect,
+#'   overlaps_map = overlaps_reconcilliation_map,
+#'   rtrw_priority    = rtrw_priority_table,
+#'   rzwp3k_priority  = rzwp3k_priority_table,
+#'   alpha       = 0.5
+#' )
+#' rtrw_final_idx   <- result$rtrw
+#' rzwp3k_final_idx <- result$rzwp3k
+#' }
+reconciliation_step1 <- function(rtrw_base, rzwp3k_base, overlaps_map,
+                                 rtrw_priority, rzwp3k_priority, alpha = 0.5) {
+  
+  # Ensure get_compat exists
+  if (!exists("get_compat", mode = "function")) {
+    stop("Function 'get_compat' must be defined in the environment.")
+  }
+  
+  # Clean geometries and prepare base maps 
+  init_cols <- function(df) {
+    df %>% mutate(
+      id_pu = if("id_pu" %in% names(.)) id_pu else NA_real_,
+      idx_serasi = if("idx_serasi" %in% names(.)) idx_serasi else NA_real_,
+      idx_padu_final = if("idx_padu_final" %in% names(.)) idx_padu_final else NA_real_,
+      idx_padan = if("idx_padan" %in% names(.)) idx_padan else NA_real_
+    )
+  }
+  
+  rtrw_base <- st_zm(rtrw_base, drop = TRUE) %>% init_cols()
+  rzwp3k_base <- st_zm(rzwp3k_base, drop = TRUE) %>% init_cols()
+  overlaps_map <- st_zm(overlaps_map, drop = TRUE)
+  
+  # Determine winners based on priority
+  overlaps_map <- overlaps_map %>%
+    mutate(winner = case_when(
+      user_decision %in% rtrw_priority$RTRW ~ "RTRW",
+      user_decision %in% rzwp3k_priority$RZWP3K ~ "RZWP3K",
+      TRUE ~ "None"
+    ))
+  
+  # Cutout non‑overlapping parts
+  overlap_union <- st_union(st_make_valid(overlaps_map))
+  
+  rtrw_cutout <- st_difference(rtrw_base, overlap_union) %>%
+    mutate(Zoning_Old = RTRW, Zoning_New = RTRW, Overlap = "No", Reconcile = "No") %>%
+    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
+           idx_serasi, idx_padu_final, idx_padan)
+  
+  rzwp3k_cutout <- st_difference(rzwp3k_base, overlap_union) %>%
+    mutate(Zoning_Old = RZWP3K, Zoning_New = RZWP3K, Overlap = "No", Reconcile = "No") %>%
+    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
+           idx_serasi, idx_padu_final, idx_padan)
+  
+  # Winning overlap polygons
+  rtrw_wins <- overlaps_map %>% filter(winner == "RTRW") %>%
+    mutate(Zoning_Old = RTRW, Zoning_New = user_decision, Overlap = "Yes", 
+           Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")) %>%
+    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
+           idx_serasi, idx_padu_final, idx_padan)
+  
+  rzwp3k_wins <- overlaps_map %>% filter(winner == "RZWP3K") %>%
+    mutate(Zoning_Old = RZWP3K, Zoning_New = user_decision, Overlap = "Yes", 
+           Reconcile = if_else(Zoning_Old == Zoning_New, "No", "Yes")) %>%
+    select(id_pu, Zoning_Old, Zoning_New, Overlap, Reconcile, 
+           idx_serasi, idx_padu_final, idx_padan)
+  
+  # Combine into final data frames 
+  rtrw_final <- bind_rows(rtrw_cutout, rtrw_wins) %>% st_make_valid()
+  rzwp3k_final <- bind_rows(rzwp3k_cutout, rzwp3k_wins) %>% st_make_valid()
+  
+  # Add overlap compatibility indices
+  lookup <- overlaps_map %>%
+    st_drop_geometry() %>%
+    select(id_pu, RTRW, RZWP3K) %>%
+    distinct(id_pu, .keep_all = TRUE)
+  
+  # RTRW final: Overlap_Pair = RZWP3K
+  rtrw_idx <- rtrw_final %>%
+    left_join(lookup %>% select(id_pu, RZWP3K), by = "id_pu") %>%
+    mutate(
+      Overlap_Pair   = if_else(Overlap == "Yes", RZWP3K, NA_character_),
+      idx_serasi_new = if_else(
+        Overlap == "Yes",
+        map2_dbl(Zoning_New, RZWP3K, get_compat),
+        NA_real_
+      ),
+      idx_padan_new  = if_else(
+        Overlap == "Yes",
+        alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
+        NA_real_
+      ),
+      delta_idx_padan = if_else(
+        Overlap == "Yes",
+        idx_padan_new - idx_padan,
+        NA_real_
+      )
+    ) %>%
+    select(-RZWP3K)
+  
+  # RZWP3K final: Overlap_Pair = RTRW
+  rzwp3k_idx <- rzwp3k_final %>%
+    left_join(lookup %>% select(id_pu, RTRW), by = "id_pu") %>%
+    mutate(
+      Overlap_Pair   = if_else(Overlap == "Yes", RTRW, NA_character_),
+      idx_serasi_new = if_else(
+        Overlap == "Yes",
+        map2_dbl(RTRW, Zoning_New, get_compat),
+        NA_real_
+      ),
+      idx_padan_new  = if_else(
+        Overlap == "Yes",
+        alpha * idx_serasi_new + (1 - alpha) * idx_padu_final,
+        NA_real_
+      ),
+      delta_idx_padan = if_else(
+        Overlap == "Yes",
+        idx_padan_new - idx_padan,
+        NA_real_
+      )
+    ) %>%
+    select(-RTRW)
+  
+  common_cols <- c("id_pu", "Zoning_Old", "Zoning_New", "Overlap_Pair", "Overlap", "Reconcile",
+                   "idx_serasi", "idx_padu_final", "idx_padan", "idx_serasi_new", "idx_padan_new", 
+                   "delta_idx_padan", "geometry")
+  
+  rtrw_clean <- rtrw_idx %>% select(all_of(common_cols))
+  rzwp3k_clean <- rzwp3k_idx %>% select(all_of(common_cols))
+
+  return(list(rtrw = rtrw_clean, rzwp3k = rzwp3k_clean))
 }
