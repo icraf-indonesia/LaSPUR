@@ -1,0 +1,128 @@
+---
+title: "PADU-RTP"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset PADU-RTP merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-RTP di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| EuDist Industri | GeoTIFF | Raster Euclidean Distance terhadap kawasan industri. |
+| EuDist Alur Pelayaran | GeoTIFF | Raster Euclidean Distance terhadap alur pelayaran. |
+
+---
+
+# Visualisasi
+
+## Euclidean Distance Industri
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_Industri_training.tif"
+  )
+)
+```
+
+## Euclidean Distance Alur Pelayaran
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_AlurPl_training.tif"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| PADU-RTP | CIFOR-ICRAF | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+## Euclidean Distance Industri
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_Industri_training.tif"
+  )
+)
+```
+
+## Euclidean Distance Alur Pelayaran
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_AlurPl_training.tif"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI | ✖ |
+| PADU-RTP | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+## Euclidean Distance Industri
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_Industri_training.tif"
+  )
+)
+```
+
+## Euclidean Distance Alur Pelayaran
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_rtp",
+    "EucD_AlurPl_training.tif"
+  )
+)
+```

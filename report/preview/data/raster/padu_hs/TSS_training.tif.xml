@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20260704</CreaDate><CreaTime>13221100</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Spatial Analyst Tools.tbx\ExtractByMask" Date="20260704" Time="132211">ExtractByMask tss_30m.tif AOI_traning_51s C:\ICRAF\LASSO\OUTPUT_3\LasPUR\Refine_Training_Data\raster\padu_hs\TSS_training.tif</Process></lineage></DataProperties></Esri></metadata>

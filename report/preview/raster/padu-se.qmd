@@ -1,0 +1,128 @@
+---
+title: "PADU-SE"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset PADU-SE merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-SE di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| EuDist Industri | GeoTIFF | Raster Euclidean Distance terhadap kawasan industri. |
+| EuDist Alur Pelayaran | GeoTIFF | Raster Euclidean Distance terhadap alur pelayaran. |
+
+---
+
+# Visualisasi
+
+## Night Time Light
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| PADU-SE | CIFOR-ICRAF | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+## Night Time Light
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI | ✖ |
+| PADU-SE | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+## Night Time Light
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```

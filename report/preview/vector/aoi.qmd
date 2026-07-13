@@ -1,0 +1,118 @@
+---
+title: "Area of Interest (AOI)"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset **Area of Interest (AOI)** merupakan data vektor yang digunakan untuk menentukan batas wilayah analisis pada modul LaSPUR. Dataset ini berfungsi sebagai area pemotongan (clipping), pembatas proses analisis, serta acuan dalam penyusunan seluruh keluaran spasial sehingga seluruh proses hanya dilakukan pada wilayah yang menjadi fokus kajian.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| AOI_training | Shapefile | Area of Interest pada sistem koordinat geografis. |
+| AOI_training_51S | Shapefile | Area of Interest pada sistem koordinat proyeksi UTM Zona 51S. |
+
+---
+
+# Visualisasi
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "aoi",
+    "AOI_training.shp"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Area of Interest (AOI) | Hasil penyusunan wilayah studi | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+## AOI_training.shp
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "aoi",
+    "AOI_training.shp"
+  )
+)
+```
+
+<br>
+
+## AOI_training_51S.shp
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "aoi",
+    "AOI_training_51S.shp"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| Analisis SERASI | ✔ |
+| Analisis PADU | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+## AOI_training.shp
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "aoi",
+    "AOI_training.shp"
+  )
+)
+```
+
+<br>
+
+## AOI_training_51S.shp
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "aoi",
+    "AOI_training_51S.shp"
+  )
+)
+```

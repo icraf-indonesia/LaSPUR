@@ -1,0 +1,126 @@
+---
+title: "Panduan Penggunaan"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+Halaman ini menyediakan seluruh dokumen pendukung yang diperlukan untuk melakukan instalasi, memahami alur kerja, serta menjalankan analisis menggunakan **LaSPUR (Land & Sea Planning Unit Reconciliation)**.
+
+---
+
+# Panduan Penyiapan Modul
+
+Dokumen ini menjelaskan langkah-langkah menyiapkan Portable Module LaSPUR sebelum digunakan, mulai dari struktur folder, persiapan data, hingga menjalankan aplikasi.
+
+::: {.callout-tip}
+
+## Unduh Panduan Penyiapan Modul
+
+**Dokumen:**
+
+- Panduan Penyiapan Modul LaSPUR (.pdf)
+
+**Link Unduh**
+
+> Tambahkan tautan Google Drive / OneDrive / GitHub Release.
+
+:::
+
+---
+
+# Panduan Pengguna
+
+Panduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses impor data, menjalankan setiap modul analisis, hingga interpretasi hasil keluaran.
+
+::: {.callout-note}
+
+## Unduh Panduan Pengguna
+
+**Dokumen:**
+
+- User Manual LaSPUR (.pdf)
+
+**Link Unduh**
+
+> Tambahkan tautan menuju User Manual.
+
+:::
+
+---
+
+# Bahan Ajar
+
+Materi pelatihan yang digunakan pada kegiatan sosialisasi maupun pelatihan penggunaan LaSPUR.
+
+::: {.callout-important}
+
+## Unduh Bahan Ajar
+
+**Dokumen:**
+
+- Slide Presentasi LaSPUR (.pptx)
+- Modul Pelatihan (.pdf)
+- Contoh Studi Kasus (.pdf)
+
+**Link Unduh**
+
+> Tambahkan tautan menuju folder bahan ajar.
+
+:::
+
+---
+
+# Referensi
+
+Dokumen referensi yang menjadi dasar pengembangan metode analisis maupun penyusunan data pada LaSPUR.
+
+Referensi dapat berupa:
+
+- Peraturan perundang-undangan
+- Pedoman teknis
+- Publikasi ilmiah
+- Dokumen kebijakan
+- Bahan bacaan pendukung lainnya
+
+::: {.callout-tip}
+
+## Referensi
+
+### Regulasi
+
+- Undang-Undang
+- Peraturan Pemerintah
+- Peraturan Menteri
+- Peraturan Daerah
+
+### Pedoman Teknis
+
+- Pedoman Penyusunan RTRW
+- Pedoman Penyusunan RZWP3K
+- Pedoman Analisis Spasial
+
+### Publikasi
+
+- Artikel ilmiah
+- Buku
+- Technical Report
+- Working Paper
+
+### Link Unduh
+
+> Tambahkan tautan menuju folder referensi.
+
+:::
+
+---
+
+# Ringkasan Dokumen
+
+| Dokumen | Format | Keterangan |
+|----------|--------|------------|
+| Panduan Penyiapan Modul | PDF | Langkah instalasi dan konfigurasi aplikasi |
+| Panduan Pengguna | PDF | Petunjuk penggunaan seluruh fitur LaSPUR |
+| Bahan Ajar | PPTX / PDF | Materi pelatihan dan presentasi |
+| Referensi | PDF / URL | Regulasi, pedoman teknis, dan bahan bacaan pendukung |

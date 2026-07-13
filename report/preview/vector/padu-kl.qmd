@@ -1,0 +1,84 @@
+---
+title: "PADU-KL"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset PADU-KL merupakan data vektor kawasan lindung yang digunakan sebagai salah satu parameter pada analisis PADU-KL. Dataset ini berfungsi untuk mengidentifikasi kawasan yang memiliki fungsi perlindungan sehingga menjadi pertimbangan dalam proses rekonsiliasi tata ruang.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| ST_Kawasan_Lindung | Shapefile | Kawasan lindung yang digunakan pada analisis PADU-KL. |
+
+---
+
+# Visualisasi
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Kawasan Lindung | Pemerintah Daerah | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-KL | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```

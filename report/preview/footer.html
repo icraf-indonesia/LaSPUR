@@ -1,0 +1,52 @@
+<hr>
+
+<footer id="laspur-footer">
+
+    <div class="footer-left">
+        <img src="/images/logo_konsorsium.png" height="45">
+    </div>
+
+    <div class="footer-right">
+
+        <strong>LaSPUR</strong><br>
+
+        Updated on
+        <span id="build-time"></span>
+
+    </div>
+
+</footer>
+
+<style>
+
+#laspur-footer{
+
+    margin-top:60px;
+    padding:20px 0;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    border-top:1px solid #ddd;
+
+    color:#666;
+
+    font-size:14px;
+
+}
+
+#laspur-footer img{
+
+    max-height:45px;
+
+}
+
+</style>
+
+<script>
+
+document.getElementById("build-time").innerHTML =
+new Date().toLocaleString();
+
+</script>

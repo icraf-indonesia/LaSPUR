@@ -1,0 +1,956 @@
+---
+title: "LaSPUR Type 1 Implementation"
+author: "Faza Mahezs (PIC) - RG2 ICRAF Indonesia"
+format: html
+editor: visual
+---
+
+# LaSPUR Step 1 - Rekonsiliasi Area Tumpang Tindih
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+Sebagai bagian dari pengembangan modul, dokumen ini menjelaskan proses dan tahapan teknis hanya untuk penyelesaian kasus tipe 1, yakni rekonsilitasi area tumpang tindih antara peta RTRW dan RZWP3K dengan penambahan aspek konektivitas ekologis (KE) sebagai komponen yang dipertimbangkan.
+
+# Tahap 0. Memuat libraries, functions, & input data
+
+```{r load-libraries}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+source("./R/functions.R")
+source("./R/helpers.R")
+```
+
+Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam format shapefile, raster, maupun tabel. Pemuatan file baik untuk format shapefile, raster, maupun tabel menggunakan function yang telah dilengkapi tahap validasi format dan konten yang terkandung dalam setiap file dilakukan pada setiap tahap yang berkaitan dengan data tersebut.
+
+```{r input-data-paths}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Main input data for SERASI index calculation
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 1 (Tumpang Tindih)/step1_RTRW_sulteng_v1.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 1 (Tumpang Tindih)/step1_RZWP3K_sulteng_v1.shp"
+
+# Output directory
+output_dir <- "D:/step1_sulteng/"
+
+# Input analisis SERASI
+rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_pola_RTRW.xlsx"
+rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_pola_RZWP3K.xlsx"
+matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_serasi.xlsx"
+admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/Administrasi/gadm41_IDN_3_kecamatan.shp"
+
+# PADU_KE input data
+lulc_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KE/penutup_lahan_darat-laut_sulteng_2024_v1.shp"
+lulc_ref_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_penutupan_lahan_sulteng_klhk.xlsx"
+matriks_padu_ke_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/matriks_padu_ke_klhk.xlsx"
+
+# PADU-HS input data
+estuari_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-HS/titik_estuari_sulteng_v1.shp"
+tss_rast_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-HS/total_suspended_solids_sulteng_v1.tif"
+estuari_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-HS/jarak_ke_estuari_sulteng_v1a.tif"
+
+# PADU-KL input data
+protected_area_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KL/kawasan_lindung_sulteng_v1.shp"
+
+# PADU-KH input data
+coral_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/terumbu_karang_sulteng_v1.shp"
+seagrass_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/padang_lamun_sulteng_v1.shp"
+mangrove_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KH/hutan_mangrove_sulteng_v1.shp"
+
+# PADU-RTp input data
+industry_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-RTp/kawasan_peruntukan_industri_sulteng_v1.shp"
+industry_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-RTp/jarak_ke_industri_sulteng_v1a.tif"
+pelayaran_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-RTp/alur_pelayaran_sulteng_v1.shp"
+pelayaran_euc_dist_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-RTp/jarak_ke_alur_pelayaran_sulteng_v1a.tif"
+
+# PADU-SE input data
+ntl_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-SE/night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+popdens_map_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/03_Raster/PADU-SE/population_density_sulteng_2025_100m_Worldpop_v1.tif"
+
+# PADU-KI input data
+disaster_risk_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KI/kerawanan_bencana_sulteng_v1.shp"
+
+# Parameterization
+padu_idx_weight_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_bobot_PADU.xlsx"
+
+# Economics input data
+npv_lulc_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/tabel_acuan_npv_penutupan_lahan.xlsx"
+matriks_land_distribution_rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_land_distribution_rtrw.xlsx"
+matriks_land_distribution_rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 1 (Tumpang Tindih)/matriks_land_distribution_rzwp3k.xlsx"
+```
+
+# Tahap 1. Identifikasi area tumpang tindih
+
+Pada tahap ini modul akan melakukan serangkaian analisis SERASI untuk menilai tingkat kesesuaian ruang darat dan laut apabila bertumpang tindih ataupun berdampingan dalam rentang tertentu melalui matriks kompatibilitas.
+
+Area tumpang tindih diidentifikasi melalui proses *union* peta RTRW dan RZWP3K dengan function `identify_overlaps()` untuk menghasilkan daftar lokasi tumpang tindih yang unik. Area tumpang tindih yang dihasilkan akan menjadi "*AOI*" dalam analisis SERASI hingga PADU-KE.
+
+```{r identify-overlaps}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load the input data for SERASI index calculation
+rtrw_vect <- load_and_validate_shapefile(rtrw_path)
+rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
+
+# Set minimum area treshold
+threshold_ha = 156.25
+
+# Identify the overlaps area 
+union_sf <- identify_overlaps(rtrw_vect, rzwp3k_vect)
+filtered_union_sf <- filter_overlaps(union_sf, threshold_ha)
+
+# Filter only qualified overlaps with minimum area size of 156.25 ha
+# filtered_union_sf <- filtered_union_sf %>%
+#   filter(stat_pu == "intersection", area_flag == "luas terpenuhi")
+# plot(filtered_union_sf)
+```
+
+# Tahap 2. Analisis SERASI area tumpang tindih
+
+Sel pada matriks berisikan nilai kompatibilitas antara kategori zona dan pola ruang pada kolom dan baris terkait. Nilai yang diinput dapat berasal dari penilaian ahli atau kesepakatan parapihak dan dapat berupa:
+
+- 0 = Tidak kompatibel (konflik mendasar/harus dihindari)
+
+- 0.5 = Kompatibel bersyarat (dapat berdampingan dengan pengaturan/mitigasi)
+
+- 1 = Kompatibel (sangat sesuai/tidak menimbulkan gangguan)
+
+Matriks yang dimuat akan dikonversi ke dalam bentuk *long format matrix*.
+
+```{r generate_matrix_serasi}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Generate matrix serasi template to be filled
+out_path_serasi <- file.path(output_dir, "matriks_serasi.xlsx")
+generate_matrix_serasi(rtrw_vect, rzwp3k_vect, file_path = out_path_serasi)
+
+# Load a filled matrix serasi & RTRW-RZWP3K priority reference table
+matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+
+# Validate zone class with lookup table
+valid_class <- validate_zone_class(filtered_union_sf, rtrw_prioritas, rzwp3k_prioritas)
+```
+
+Tahap ini mengintegrasikan nilai indeks SERASI yang diperoleh dari matriks kompatibiltas/SERASI dari pengguna dengan area tumpang tindih yang berkorespondensi di dalam peta area tumpang tindih yang telah terfilter/terseleksi.
+
+```{r calculate_idx_serasi}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Merge serasi index to adjacent area just if the zone class name is matched
+if (length(valid_class$mismatch_col3) == 0 &&
+    length(valid_class$mismatch_col4) == 0) {
+  idx_serasi_map_raw <- merge_attributes_to_map(filtered_union_sf, matriks_serasi) 
+  idx_serasi_table <- as_tibble(idx_serasi_map_raw %>% sf::st_drop_geometry())
+  write_sf(idx_serasi_map_raw, "output/step1/idx_serasi_overlap.gpkg", overwrite = TRUE)
+  plot(idx_serasi_map_raw["idx_serasi"])
+  print(idx_serasi_table)
+  
+  message("All class names matched. Compatibility values merged successfully.")
+} else {
+  stop("Class name mismatch detected. Please check your input data.")
+}
+```
+
+# Tahap 3. Analisis Indeks PADU
+
+```{r prepare-idx-serasi-for-padu}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Merge adjacent map into single area
+admin <- load_and_validate_shapefile(admin_path)
+
+# Merge with administrative map
+admin_col_name <- "NAME_3"
+new_col_name <- "admin" 
+
+idx_serasi_map <- st_join(
+  idx_serasi_map_raw, 
+  admin[, admin_col_name],  
+  join = st_intersects, 
+  largest = TRUE
+) %>%
+  rename(!!new_col_name := !!sym(admin_col_name))
+```
+
+## Tahap 3.1. Analisis indeks PADU-KE
+
+Analisis PADU menilai skor integrasi antar ruang darat dan laut melalui penghitungan 7 Indeks Integrasi Lingkungan (IL). Pada dokumen ini, analisis PADU terbatas pada salah satu indeks IL, yakni PADU-KE (konektivitas ekologi) yang mengukur seberapa penting unit area tumpang tindaih dalam menjaga koneksi ekosistem darat–laut.
+
+Analisis PADU-KE melibatkan penilaian ketetanggaan/*adjacency* kelas tutupan/penggunaan lahan yang dapat mendukung fungsi ekologis lintas batas darat–laut, misalnya hutan mangrove yang berdampingan dengan padang lamun.
+
+### Tahap 3.1.1. Memuat indeks matriks PADU-KE
+
+Indeks PADU-KE dihasilkan melalui penilaian pengguna terhadap hubungan antar kelas tutupan/penggunaan lahan yang dinyatakan dalam bentuk matriks dengan rentang nilai 0-3, dengan interpretasi sebagai berikut:
+
+- *Konektivitas alami tinggi → 3*\
+  Contoh: Sungai/Estuari ↔ Mangrove, Mangrove ↔ Padang Lamun, Padang Lamun ↔ Terumbu Karang, Hutan Alam ↔ Hutan Pesisir, Nearshore ↔ Lamun/Karang.
+
+- *Bisa berdampingan dengan pengaturan → 2*\
+  Contoh: Pertanian/Agroforestry ↔ Mangrove (zona penyangga), Permukiman ↔ Sungai/Estuari (sem padang banjir), Perkebunan ↔ Hutan Pesisir (buffer).
+
+- *Kurang sesuai/risiko → 1*\
+  Contoh: Permukiman/Industri ↔ Terumbu Karang/Lamun, Pertanian basah ↔ Karang/Lamun (risiko sedimentasi/eutrofikasi).
+
+- *Tidak sesuai/terlarang → 0*\
+  Contoh: Alur Pelayaran ↔ Budidaya Rumput Laut/Marikultur padat, Kabel/Pipa melintasi zona inti konservasi sensitif (tanpa koridor yang jelas).
+
+```{r generate-load-input-padu-ke}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-KE input
+lulc_ref <- load_and_validate_table(lulc_ref_path)
+lulc_vect <- load_and_validate_shapefile(lulc_vect_path)
+matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
+
+# Generate PADU-KE for KLHK data
+out_path_padu_ke <- file.path(output_dir, "matriks_padu_ke.xlsx")
+matriks_padu_ke_template <- generate_matrix_padu_ke(lulc_ref, file_path = out_path_padu_ke)
+```
+
+### Tahap 3.1.2. Perhitungan ketetanggaan tutupan/penggunaan lahan dan indeks PADU-KE
+
+Pada tahap ini, untuk setiap unit tumpang tindih, akan dihitung jumlah sisi setiap unit kelas LULC (pixel/feature) yang berbatasan (*edge count*) secara berpasangan dengan kelas LULC yang bertetangga di sekitarnya. Perhitungan meliputi persentase jumlah *edge count* dalam setiap unit. Setiap pasangan kelas yang unik hanya dihitung satu kali (misalnya, pasangan Hutan–Semak dan Semak–Hutan diperlakukan sebagai kasus ketetanggaan yang sama, *edge count* = 1).
+
+Dalam hal ini, modul akan menyediakan 2 opsi format peta LULC yang dapat dihitung, yakni raster dan vector. Keduanya memiliki kekurangan dan kelebihan tersendiri. Format raster lebih unggul dalam kecepatan proses, namun resolusi spasial menjadi faktor pembatas untuk perhitungan *adjacency* bagi unit tumpang tindih yang berukuran lebih kecil dari pixelnya. Sementara format vector memungkinkan perhitungan *adjacency* bagi unit tumpang tindih yang kecil, namun memerlukan waktu proses yang lebih lama.
+
+Indeks PADU-KE dihitung sebagai rerata bobot perhitungan *adjacency* antar pasangan kelas LULC yang berdampingan. Nilai PADU-KE yang dihasilkan merupakan hasil normalisasi dengan rentang indeks 0-1.
+
+```{r calculate-padu-ke}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate adjacency for LULC vector input
+lulc_adjacencies <- calculate_lulc_adjacency(
+  lulc_vect,
+  idx_serasi_map,
+  id_col = "id_pu",
+  class_col = "ID", 
+  parallel = TRUE, 
+  workers = 4
+)
+
+# Calculate padu_ke
+padu_ke <- calculate_padu_ke(
+  matriks_padu_ke   = matriks_padu_ke,
+  lulc_ref          = lulc_ref,
+  lulc_adjacencies  = lulc_adjacencies,
+  idx_serasi_map    = idx_serasi_map,
+  normalize         = TRUE
+)
+
+idx_padu_ke <- padu_ke$idx_padu_ke %>% select(-idx_padu_ke_abs)
+idx_padu_ke_map <- padu_ke$idx_padu_ke_map
+
+plot(idx_padu_ke_map["idx_padu_ke"], border = 1)
+```
+
+## Tahap 3.2. Analisis indeks PADU-HS
+
+Analisis PADU-HS (Hidrologi Sedimentasi) melibatkan potensi pergerakan air, sedimen, dan nutrien dari darat ke laut di area bersebelahan sebagai pertimbangan dalam integrasi perencanaan ruang darat dan laut.
+
+### Tahap 3.2.1. Mengestrak data PADU-HS
+
+Pada tahap ini dihitung jarak menuju estuari dalam meter. Kemudian dihitung rerata jarak ke estuari dan nilai TSS untuk setiap unit tumpang tindih.
+
+```{r extract-data-padu-hs}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-HS input
+estuari_vect <- load_and_validate_shapefile(estuari_vect_path)
+tss_rast <- load_and_validate_raster(tss_rast_path)
+
+# Calculate euclidean distance
+estuari_euc_dist <- calculate_euclidean_dist(estuari_vect, idx_serasi_map, resolution = 30)
+```
+
+### Tahap 3.2.2. Perhitungan indeks PADU-HS
+
+```{r calculate-padu-hs}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate padu-hs
+padu_hs <- calculate_padu_hs(
+  idx_serasi_map    = idx_serasi_map,
+  estuari_euc_dist  = estuari_euc_dist,
+  tss_rast          = tss_rast,
+  max_dist          = NA
+)
+
+idx_padu_hs <- padu_hs$idx_padu_hs
+idx_padu_hs_map <- padu_hs$idx_padu_hs_map  
+
+plot(idx_padu_hs_map["idx_padu_hs"], border = 1)
+```
+
+## Tahap 3.3. Analisis indeks PADU-KL
+
+Indeks PADU-KL (Kawasan Lindung Terintegrasi) memberikan pertimbangan keserasian antara kawasan lindung darat (hutan lindung, suaka margasatwa) dengan kawasan konservasi laut pada area tumpang tindih RTRW dan RZWP3K. Nilai indeks padu dihitung berdasarkan persentase luas area kawasan lindung yang berada di dalam batas area unit tumpang tindih.
+
+```{r load-protected-area}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load PADU-KL input
+protected_area_vect <- load_and_validate_shapefile(protected_area_vect_path) %>% st_make_valid()
+
+# Calculate padu kl
+idx_padu_kl_map <- calculate_overlay_pct(
+  idx_serasi_map, 
+  protected_area_vect, 
+  title = "protected",
+  parallel = TRUE,
+  workers = 4
+) %>%
+  mutate(
+    idx_padu_kl = protected_pct/100
+  )
+
+idx_padu_kl <- as_tibble(idx_padu_kl_map %>% st_drop_geometry())
+
+plot(idx_padu_kl_map["idx_padu_kl"], border = 1)
+```
+
+## Tahap 3.4. Analisis indeks PADU-KH
+
+Analisis PADU-KH (Kualitas/Keberadaan Habitat) memberikan pertimbangan terkait kondisi/kehadiran habitat di zona pesisir yang berbatasan langsung dengan laut (mangrove, lamun, terumbu) dalam hal penyelesaian konflik tumpang tindih peta RTRW dan RZWP3K.
+
+Analisis ini melihat persentase luas area habitat yang berada di dalam batas area unit tumpang tindih. Area habitat pesisir yang digunakan dalam analisis PADU-KH dapat diperoleh setidaknya berdasarkan dua kondisi. Pertama, area mangrove, lamun, dan terumbu karang diambil dari peta LULC dengan melakukan subset pada ketiga kelas tersebut. Kedua, pengguna dapat menambahkan ketiga peta habitat secara mandiri satu persatu. Function `calculate_overlay_pct()` dapat mengakomodasi kedua kondisi sumber peta habitat pesisir.
+
+### Tahap 3.4.1. Memuat peta habitat
+
+```{r prepare-habitat-map}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Define source of habitat map
+habitat_from_lulc <- "Yes"
+id_column <- "ID" 
+
+# Define mangrove, seagrass, and coral class IDs
+habitat_id <- c(
+  5,  # primary mangrove
+  6,  # secondary mangrove
+  24, # coral
+  25  # seagrass
+)
+
+# Define habitat maps path file
+habitat_paths <- list(
+  coral    = coral_vect_path,
+  seagrass = seagrass_vect_path,
+  mangrove = mangrove_vect_path
+)
+
+if (habitat_from_lulc == "Yes") {
+  
+  # Combine habitat map
+  sf::sf_use_s2(FALSE)
+  coastal_habitat <- lulc_vect[lulc_vect[[id_column]] %in% as.numeric(habitat_id),] %>% 
+    sf::st_make_valid() %>% 
+    sf::st_combine() %>%       
+    sf::st_make_valid() %>% 
+    sf::st_as_sf()
+  sf::sf_use_s2(TRUE)
+  
+} else {
+  
+  # Load habitat maps
+  loaded_vects <- lapply(habitat_paths, load_and_validate_shapefile)
+  target_crs <- sf::st_crs(idx_serasi_map)
+  projected_vects <- lapply(loaded_vects, function(v) {
+    sf::st_transform(v, target_crs)
+  })
+  
+  # Combine habitat map
+  combined_vect <- dplyr::bind_rows(projected_vects)
+  sf::sf_use_s2(FALSE)
+  coastal_habitat <- combined_vect %>% 
+    sf::st_make_valid() %>% 
+    sf::st_combine() %>%    
+    sf::st_make_valid() %>%    
+    sf::st_as_sf()
+  sf::sf_use_s2(TRUE)
+}
+```
+
+### Tahap 3.4.2. Perhitungan indeks PADU-KH
+
+```{r calculate-padu-kh}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Calculate overlay
+coastal_habitat_map <- calculate_overlay_pct(
+  idx_serasi_map, 
+  coastal_habitat, 
+  title = "coastal_habitat",
+  parallel = TRUE,
+  workers = 6
+  )
+
+# Calculate idx padu kh
+idx_padu_kh_map <- coastal_habitat_map %>%
+  mutate(
+    idx_padu_kh = coastal_habitat_pct/100
+  )
+
+idx_padu_kh <- as_tibble(idx_padu_kh_map %>% st_drop_geometry())
+
+plot(idx_padu_kh_map["idx_padu_kh"], border = 1)
+```
+
+## Tahap 3.5. Analisis indeks PADU-RTp
+
+Analisis PADU-RTp (Risiko dan Tekanan) menggambarkan bagaimana tekanan aktivitas manusia (industri, tambak, pariwisata) berdampak terhadap bentang lahan darat dan laut di sekitarnya.
+
+### Tahap 3.5.1. Memuat data industri dan alur pelayaran
+
+```{r prepare-distance-map-padu-rtp}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+industry_vect <- load_and_validate_shapefile(industry_vect_path)
+pelayaran_vect <- load_and_validate_shapefile(pelayaran_vect_path)
+
+# Calculate euclidean distance
+# industry_euc_dist <- calculate_euclidean_dist(industry_vect, idx_serasi_map, resolution = 30)
+industry_euc_dist <- rast(industry_euc_dist_path)
+
+# pelayaran_euc_dist <- calculate_euclidean_dist(pelayaran_vect, idx_serasi_map, resolution = 30)
+pelayaran_euc_dist <- rast(pelayaran_euc_dist_path)
+```
+
+### Tahap 3.5.2. Perhitungan indeks PADU-RTp
+
+```{r calculate-padu-rtp}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+padu_rtp <- calculate_padu_rtp(
+  idx_serasi_map      = idx_serasi_map,
+  industry_euc_dist   = industry_euc_dist,
+  pelayaran_euc_dist  = pelayaran_euc_dist
+)
+
+idx_padu_rtp_map <- padu_rtp$idx_padu_rtp_map 
+idx_padu_rtp <- padu_rtp$idx_padu_rtp   
+
+plot(idx_padu_rtp_map["idx_padu_rtp"], border = 1)
+```
+
+## Tahap 3.6. Analisis indeks PADU-SE
+
+```{r extract-data-padu-se}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Read input
+ntl_map <- load_and_validate_raster(ntl_map_path)
+popdens_map <- load_and_validate_raster(popdens_map_path)
+id_col = "id_pu"
+
+# Extract raster to pu
+ntl_extracted <- extract_raster_to_sf(
+  pu = idx_serasi_map,
+  rast = ntl_map,
+  id_col = id_col,
+  new_col = "ntl"
+)
+
+popdens_extracted <- extract_raster_to_sf(
+  pu = idx_serasi_map,
+  rast = popdens_map,
+  id_col = id_col,
+  new_col = "popdens"
+)
+```
+
+```{r calculate-padu-se}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Normalize
+ntl_norm <- ntl_extracted %>%
+  mutate(ntl_norm = (ntl - min(ntl)) / (max(ntl) - min(ntl)))
+
+popdens_norm <- popdens_extracted %>%
+  mutate(popdens_norm = (popdens - min(popdens)) / (max(popdens) - min(popdens)))
+
+# Join the data
+popdens_subset <- popdens_norm %>%
+  dplyr::select(id_pu, popdens, popdens_norm) %>% 
+  sf::st_drop_geometry()
+
+idx_padu_se_map <- ntl_norm %>% 
+  dplyr::left_join(popdens_subset, by = "id_pu") %>% 
+  dplyr::mutate(
+    idx_padu_se = (ntl_norm + popdens_norm) / 2
+  )
+
+idx_padu_se <- as_tibble(idx_padu_se_map %>% st_drop_geometry())
+
+plot(idx_padu_se_map["idx_padu_se"], border = 1)
+```
+
+## Tahap 3.7. Analisis indeks PADU-KI
+
+Indeks PADU-KI (Ketahanan Iklim) menunjukkan daya tahan ruang terhadap dampak perubahan iklim (rob, abrasi, kenaikan muka laut).
+
+```{r calculate-padu-ki}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load input data
+disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_vect_path)
+
+padu_ki <- calculate_padu_ki(
+  idx_serasi_map      = idx_serasi_map,
+  disaster_risk_vect  = disaster_risk_vect,
+  value_col           = "Kerawanan",
+  parallel            = TRUE,
+  workers             = 6
+)
+
+idx_padu_ki_map <- padu_ki$idx_padu_ki_map
+idx_padu_ki <- padu_ki$idx_padu_ki       
+
+plot(idx_padu_ki_map["idx_padu_ki"], border = 1)
+```
+
+# Tahap 4. Analisis indeks PADU
+
+Tahapan ini menghitung nilai indeks PADU dari sejumlah analisi PADU yang dilakukan. Perhitungan rerata bobot (nilai bobot didefinisikan oleh pengguna) digunakan untuk menghasilkan index PADU gabungan dari 7 analisis PADU yang dilakukan.
+
+Jika terdapat komponen analisis PADU yang hilang, maka kalkulasi PADU dilakukan melalui perhitungan rata-rata nilai keseluruhan analisis yang tersedia.
+
+```{r calculate-padu-final}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Load weight reference lookup table
+padu_idx_weight <- load_and_validate_table(padu_idx_weight_path)
+weight_sum <- sum(padu_idx_weight[2])
+
+if (weight_sum == 1){
+  # Remove unecessary fields
+  idx_padu_map <- idx_serasi_map
+  
+  # List all PADU analysis
+  padu_list <- list(
+    idx_padu_ke,
+    idx_padu_hs,
+    idx_padu_kl,
+    idx_padu_kh,
+    idx_padu_rtp,
+    idx_padu_se,
+    idx_padu_ki
+  )
+  
+  # Calculate PADU index
+  idx_padu_map <- calculate_padu_index(
+    padu_list = padu_list,
+    idx_padu_map = idx_padu_map,
+    padu_idx_weight = padu_idx_weight
+  )
+  
+  st_write(idx_padu_map, "output/idx_padu_overlaps.gpkg", append=FALSE)
+  plot(idx_padu_map["idx_padu_final"], border = 1)
+} else {
+  stop("The sum of the PADU index weights is not equal to 1. Please check your PADU index weight table input.")
+}
+
+```
+
+# Tahap 5. Analisis indeks PADAN
+
+Analisis PADAN menghasilkan nilai akhir integrasi (N Final/Indeks PADAN) berdasarkan penggabungan nilai Indeks SERASI dan Indeks PADU. Indeks PADAN yang dihasilkan pada tahap ini berdasarkan analisis pada kondisi aktual.
+
+```{r calculate-padan}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+
+alpha <- 0.5
+
+idx_padan_map <- idx_padu_map %>%
+  mutate(
+    idx_padan = (alpha * idx_serasi) + ((1 - alpha) * idx_padu_final)
+  )
+```
+
+# Tahap 6. Perhitungan Rekomendasi
+
+Tahapan ini memungkinkan pengguna untuk memperoleh rekomendasi aksi pada setiap unit zona/pola ruang yang bertumpang tindih berdasarkan penentuan opsi keputusan penyelesaian konflik tumpang tindih sesuai pertimbangan pada analisis SERASI dan PADU.
+
+```{r filter-cases}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Set the filter criteria
+apply_area_ha <- TRUE  
+apply_idx    <- TRUE  
+area_filter <- 10
+idx_filter    <- 0.75
+
+# Compute filter 
+idx_padan_map_filter <- idx_padan_map
+
+if (apply_area_ha) {
+  idx_padan_map_filter <- idx_padan_map_filter %>% 
+    dplyr::filter(as.numeric(.data$area_ha) > area_filter)
+}
+
+if (apply_idx) {
+  idx_padan_map_filter <- idx_padan_map_filter %>% 
+    dplyr::filter(.data$idx_padan < idx_filter)
+}
+
+# Calculate summary
+n_before  <- nrow(idx_padan_map) %/% 2
+n_after   <- nrow(idx_padan_map_filter) %/% 2
+n_removed <- n_before - n_after
+pct_removed <- if (n_before > 0) (n_removed / n_before) * 100 else 0
+
+cat(sprintf("Before: %d pairs\n", n_before))
+cat(sprintf("After : %d pairs\n", n_after))
+cat(sprintf("Removed: %d pairs (%.1f%%)\n", n_removed, pct_removed))
+```
+
+## Tahap 6.1 Perhitungan zona alternatif
+
+Pada tahap ini, sistem menyajikan opsi zona/pola ruang alternatif berdasarkan pencarian nilai indeks SERASI tertinggi dari pasangan tumpang tindih RTRW/RZWP3K saat ini.
+
+1.  **Pola ruang alternatif untuk RTRW:**\
+    Kelas RZWP3K saat ini dipasangkan dengan kelas RTRW lainnya. Jika nilai indeks SERASI dari kelas RTRW alternatif sama dengan nilai kelas RTRW saat ini, maka kelas dengan nilai tertinggi kedua dipilih sebagai kelas alternatif. Namun, jika kelas RTRW alternatif memiliki nilai indeks SERASI yang lebih tinggi daripada kelas saat ini, maka kelas tersebut langsung dipilih sebagai kelas alternatif.
+
+2.  **Zona alternatif untuk RZWP3K:**\
+    Kelas RTRW saat ini dipasangkan dengan kelas RZWP3K lainnya. Jika nilai indeks SERASI dari kelas RZWP3K alternatif sama dengan nilai kelas RZWP3K saat ini, maka kelas dengan nilai tertinggi kedua dipilih sebagai kelas alternatif. Namun, jika kelas RZWP3K alternatif memiliki nilai indeks SERASI yang lebih tinggi daripada kelas saat ini, maka kelas tersebut langsung dipilih sebagai kelas alternatif.
+
+```{r determine-alternative-zone-options}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Determine alternative_zones
+overlaps_alternatives_zones <- determine_alternative_zones(
+  idx_padan_map_filter = idx_padan_map_filter,
+  serasi_matrix = matriks_serasi,
+  step = "step1",
+  n_alt = 5,
+  output_dir = output_dir
+)
+
+# Read alternative table
+alt_table_path <- "D:/OneDrive - CIFOR-ICRAF/Documents/GitHub/LaSPUR/output/step1/AOI_Palu-Parigi/overlaps_alternative_zones_selections_filled.xlsx"
+alt_table <- load_and_validate_table(alt_table_path)
+
+# Left join the alt_RTRW and alt_RZWP3K
+alt_map_with_decision <- dplyr::left_join(
+  idx_padan_map_filter,
+  alt_table[, c("id_pu", "id_rtrw", "id_rzwp3k", "alt_RTRW", "alt_RZWP3K")],
+  by = c("id_pu", "id_rtrw", "id_rzwp3k")
+)
+```
+
+## Tahap 6.2 Perhitungan indeks SERASI untuk zona alternatif
+
+Perhitungan ulang nilai indeks SERASI dari pasangan zona/pola alternatif.
+
+```{r calculate-serasi-idx-for-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+idx_padan_map_alt <- alt_map_with_decision %>%
+  rowwise() %>%
+  mutate(
+    idx_serasi_rtrw_alt = get_alternative_serasi(RZWP3K, alt_RTRW, matriks_serasi),
+    idx_serasi_rzwp3k_alt = get_alternative_serasi(RTRW, alt_RZWP3K, matriks_serasi)
+  ) %>%
+  ungroup()
+```
+
+## Tahap 6.3 Perhitungan indeks PADAN Index untuk zona alternatif
+
+Perhitungan ulang nilai indeks PADAN dari pasangan zona/pola alternatif.
+
+```{r calculate-padan-idx-for-alternative-zone}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+alpha <- 0.5
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    idx_padan_rtrw_alt = (alpha * idx_serasi_rtrw_alt) + ((1 - alpha) * idx_padu_final),
+    idx_padan_rzwp3k_alt = (alpha * idx_serasi_rzwp3k_alt) + ((1 - alpha) * idx_padu_final)
+  )
+```
+
+## Tahap 6.4 Analisis rekomendasi
+
+Rekomendasi dihasilkan dari perbandingan nilai indeks SERASI dan PADU terhadap ambang batas (threshold) yang telah ditentukan untuk kedua indeks tersebut. Terdapat sejumlah aturan untuk menentukan rekomendasi penyelesaian konflik tumpang tindih, yaitu:
+
+1.  **Jika unit tumpang tindih terdiri dari kelas RTRW & RZWP3K prioritas**\
+    → Tidak diberikan rekomendasi, karena kelas prioritas harus dipertahankan (tidak dapat diubah).
+
+2.  **Jika unit tumpang tindih tidak terdiri dari kelas non-RTRW prioritas, namun terdiri dari kelas RZWP3K prioritas**\
+    → Rekomendasi: **Ubah RTRW**.
+
+3.  **Jika unit tumpang tindih tidak terdiri dari kedua kelas prioritas (RTRW dan RZWP3K), namun nilai indeks SERASI ≥ ambang batas SERASI**\
+    → Rekomendasi: **Koordinasi**.
+
+4.  **Jika unit tumpang tindih tidak terdiri dari kedua kelas prioritas (RTRW dan RZWP3K), namun nilai indeks SERASI \< ambang batas SERASI dan indeks PADU ≥ ambang batas PADU**\
+    → Rekomendasi: **Ubah RZWP3K**.
+
+5.  **Jika unit tumpang tindih tidak terdiri dari kedua kelas prioritas (RTRW dan RZWP3K), namun nilai indeks SERASI \< ambang batas SERASI dan indeks PADU \< ambang batas PADU**\
+    → Rekomendasi: **Ubah RTRW**.
+
+```{r calculate-recommendation}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# Thresholds
+threshold_serasi <- 0.6
+threshold_padu   <- 0.65
+
+# Extract priority zone class (Prioritas == 1)
+priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
+priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
+
+# Add recommendation
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    recommendation = case_when(
+      is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
+      RTRW %in% priority_rtrw ~ "",
+      RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
+      idx_serasi >= threshold_serasi ~ "Koordinasi",
+      idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
+      idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
+    )
+  )
+```
+
+## Tahap 6.5 Perhitungan keputusan
+
+Pengambilan keputusan dilakukan berdasarkan hasil penentuan opsi rekomendasi yang dihasilkan.
+
+```{r calculate-decision}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+idx_padan_map_alt <- idx_padan_map_alt %>%
+  mutate(
+    decision = case_when(
+      is.na(recommendation) | is.na(idx_padan_rzwp3k_alt) | is.na(idx_padan) | 
+      is.na(alt_RZWP3K) | is.na(idx_padan_rtrw_alt) | is.na(alt_RTRW) ~ NA_character_,
+      recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
+        paste("Ubah RZWP3K ke", alt_RZWP3K),
+      
+      recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
+      
+      recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
+        paste("Ubah RTRW ke", alt_RTRW),
+      
+      recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
+      
+      TRUE ~ "Tetap/Koordinasi"
+    )
+  )
+```
+
+## Tahap 6.6 Perhitungan indeks PADAN akhir
+
+```{r calculate-final-padan}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+overlaps_recom_map <- idx_padan_map_alt %>%
+  mutate(
+    idx_padan_final = case_when(
+      grepl("Ubah RTRW", decision, fixed = TRUE) ~ idx_padan_rtrw_alt,
+      grepl("Ubah RZWP3K", decision, fixed = TRUE) ~ idx_padan_rzwp3k_alt,
+      grepl("Tetap/Koordinasi", decision, fixed = TRUE) ~ idx_padan,
+      TRUE ~ NA_real_
+    )
+  )
+
+overlaps_recom_table <- overlaps_recom_map %>% st_drop_geometry()
+
+write.xlsx(overlaps_recom_table, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.xlsx", overwrite = TRUE)
+
+st_write(overlaps_recom_map, "output/step1/AOI_Palu-Parigi/idx_padan_alternative.gpkg", append=FALSE)
+```
+
+# Tahap 7. Menghasilkan laporan
+
+```{r generate-report}
+#| error: true
+#| warning: false
+#| message: false
+#| include: true
+
+# List all necessary variables
+out <- list(
+    inputs = list(
+      rtrw_path = rtrw_path,
+      rzwp3k_path = rzwp3k_path,
+      rtrw_prioritas_path = rtrw_prioritas_path,
+      rzwp3k_prioritas_path = rzwp3k_prioritas_path,
+      matriks_serasi_path = matriks_serasi_path,
+      matriks_padu_ke_path = matriks_padu_ke_path,
+      padu_idx_weight_path = padu_idx_weight_path,
+      lulc_vect_path = lulc_vect_path,
+      lulc_ref_path = lulc_ref_path,
+      estuari_vect_path = estuari_vect_path,
+      # river_vect_path = river_vect_path,
+      tss_rast_path = tss_rast_path,
+      protected_area_vect_path = protected_area_vect_path,
+      coral_vect_path = coral_vect_path,
+      seagrass_vect_path = seagrass_vect_path,
+      mangrove_vect_path = mangrove_vect_path,
+      industry_vect_path = industry_vect_path,
+      pelayaran_vect_path = pelayaran_vect_path,
+      disaster_risk_vect_path = disaster_risk_vect_path,
+      output_dir = output_dir
+    ),
+    result = list(
+      rtrw_vect = rtrw_vect,
+      rzwp3k_vect = rzwp3k_vect,
+      matriks_serasi = matriks_serasi,
+      rtrw_prioritas = rtrw_prioritas,
+      rzwp3k_prioritas = rzwp3k_prioritas,
+      lulc_vect = lulc_vect,
+      matriks_padu_ke = matriks_padu_ke,
+      estuari_vect = estuari_vect,
+      tss_rast = tss_rast,
+      protected_area_vect = protected_area_vect,
+      coastal_habitat = coastal_habitat,
+      industry_vect = industry_vect,
+      pelayaran_vect = pelayaran_vect,
+      disaster_risk_vect = disaster_risk_vect,
+      idx_padan_map_alt = idx_padan_map_alt      
+    )
+  )
+
+generate_report(output = out, dir = output_dir)
+
+```
+
+# Tahap 8. Rekonsiliasi area tumpang tindih
+
+```{r generate-reconcilliation-table}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Generate reconciliation excel table
+generate_reconciliation_excel(
+  recon_map          = overlaps_recom_map,
+  rtrw_prioritas     = rtrw_prioritas,
+  rzwp3k_prioritas   = rzwp3k_prioritas,
+  output_dir         = output_dir,
+  step               = 1,
+  file_name          = "overlaps_reconcilliation_table.xlsx"
+)
+```
+
+```{r reconcile-unresolved-features}
+#| error: true
+#| warning: false
+#| message: true
+#| include: true
+
+# Read the input
+recon_table_path <- "D:/step1_sulteng/overlaps_reconcilliation_table_filled.xlsx"
+recon_table <- load_and_validate_table(recon_table_path) %>% 
+  select(id_pu, user_decision)
+matriks_serasi <- load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+rtrw_prioritas <- load_and_validate_table(rtrw_prioritas_path)
+rzwp3k_prioritas <- load_and_validate_table(rzwp3k_prioritas_path)
+alpha <- 0.5
+
+# Merge the user_decision to reconcilliation map
+overlaps_reconcilliation_map <- overlaps_recom_map %>%
+  left_join(recon_table, by = "id_pu") %>%
+  mutate(user_decision = user_decision) 
+
+# Run the reconciliation
+result <- reconciliation_step1(
+  rtrw_base   = rtrw_vect,
+  rzwp3k_base = rzwp3k_vect,
+  overlaps_map = overlaps_reconcilliation_map,
+  rtrw_priority = rtrw_prioritas,
+  rzwp3k_priority  = rzwp3k_prioritas,
+  alpha       = alpha
+)
+
+# Access the two layers separately
+rtrw_final_idx   <- result$rtrw
+rzwp3k_final_idx <- result$rzwp3k
+```

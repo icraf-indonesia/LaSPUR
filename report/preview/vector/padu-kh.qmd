@@ -1,0 +1,166 @@
+---
+title: "PADU-KH"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset PADU-KH merupakan kumpulan data vektor yang digunakan untuk mengidentifikasi kawasan habitat penting dalam analisis PADU-KH. Dataset ini terdiri atas ekosistem mangrove, terumbu karang, dan padang lamun yang menjadi dasar penilaian kesesuaian spasial pada proses rekonsiliasi tata ruang.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| Mangrove | Shapefile | Sebaran kawasan mangrove. |
+| AC_Coral | Shapefile | Sebaran terumbu karang. |
+| AC_Seagrass | Shapefile | Sebaran padang lamun. |
+
+---
+
+# Visualisasi
+
+## Mangrove
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_kh",
+    "Mangrove_training.shp"
+  )
+)
+```
+
+## Coral
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Coral_training.shp"
+  )
+)
+```
+
+## Seagrass
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Seagrass_training.shp"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Mangrove | Pemerintah Daerah / KLHK | - | - |
+| Coral | Pemerintah Daerah / KLHK | - | - |
+| Seagrass | Pemerintah Daerah / KLHK | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+## Mangrove
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_kh",
+    "Mangrove_training.shp"
+  )
+)
+```
+
+## Coral
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Coral_training.shp"
+  )
+)
+```
+
+## Seagrass
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Seagrass_training.shp"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-KH | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+## Mangrove
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_kh",
+    "Mangrove_training.shp"
+  )
+)
+```
+
+## Coral
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Coral_training.shp"
+  )
+)
+```
+
+## Seagrass
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_kh",
+    "AC_Seagrass_training.shp"
+  )
+)
+```

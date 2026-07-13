@@ -1,0 +1,131 @@
+---
+title: "Validasi Data"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+## Deskripsi
+
+Validasi merupakan tahapan pengendalian kualitas (*Quality Control*) untuk memastikan bahwa seluruh data masukan LaSPUR memenuhi spesifikasi teknis sebelum digunakan pada proses analisis. Pemeriksaan dilakukan terhadap struktur data, metadata, serta isi dataset sehingga kesalahan dapat dideteksi sejak awal dan tidak mempengaruhi hasil analisis.
+
+---
+
+## 1. Tingkatan Validasi
+
+### Validasi Spesifikasi
+
+Validasi spesifikasi memastikan bahwa struktur dataset telah sesuai dengan spesifikasi teknis LaSPUR.
+
+Pemeriksaan meliputi:
+
+- Format dataset
+- Struktur file
+- Sistem koordinat
+- Tipe geometri
+- Kelengkapan metadata
+
+Tahap ini tidak membaca seluruh isi data sehingga proses validasi berlangsung cepat.
+
+---
+
+### Validasi Metadata
+
+Validasi metadata memastikan bahwa karakteristik dataset sesuai dengan spesifikasi yang ditetapkan.
+
+Pemeriksaan meliputi:
+
+- Nama layer atau tabel
+- Nama kolom
+- Tipe data
+- Jumlah kolom
+- Sistem koordinat (CRS)
+
+Tahap ini hanya membaca metadata tanpa memeriksa seluruh isi data.
+
+---
+
+### Validasi Data
+
+Validasi data merupakan pemeriksaan terhadap isi dataset secara langsung.
+
+Pemeriksaan meliputi:
+
+- Missing Value
+- Validitas geometri
+- Duplikasi data
+- Konsistensi atribut
+- Kesesuaian nilai terhadap tabel acuan
+
+Tahap ini membutuhkan waktu lebih lama karena seluruh data dibaca selama proses validasi.
+
+---
+
+## 2. Hubungan Tingkatan Validasi
+
+| Tahapan | Cakupan Pemeriksaan |
+|----------|---------------------|
+| Validasi Spesifikasi | Struktur dataset |
+| Validasi Metadata | Struktur + Metadata |
+| Validasi Data | Struktur + Metadata + Isi Data |
+
+Setiap tingkatan validasi mencakup pemeriksaan pada tingkat sebelumnya. Oleh karena itu, validasi data hanya dilakukan apabila dataset telah memenuhi validasi spesifikasi dan metadata.
+
+---
+
+## 3. Status Validasi
+
+| Status | Keterangan |
+|---------|------------|
+| ✔ Lulus | Dataset memenuhi persyaratan dan dapat digunakan pada proses berikutnya. |
+| ⚠ Peringatan | Dataset masih dapat digunakan, namun terdapat kondisi yang sebaiknya diperbaiki. |
+| ✖ Gagal | Dataset tidak memenuhi persyaratan sehingga harus diperbaiki sebelum digunakan pada analisis LaSPUR. |
+
+---
+
+## 4. Pemeriksaan Data Vektor
+
+| Pemeriksaan | Tujuan |
+|-------------|--------|
+| CRS | Memastikan sistem koordinat telah terdefinisi dengan benar. |
+| Geometry | Memastikan seluruh geometri valid dan dapat diproses. |
+| Missing Value | Memastikan atribut penting tidak memiliki nilai kosong. |
+| Duplikasi | Memastikan tidak terdapat fitur yang terduplikasi. |
+| Tipe Geometri | Memastikan tipe geometri sesuai dengan kebutuhan proses. |
+| Jumlah Feature | Memastikan jumlah feature sesuai dengan data sumber. |
+
+---
+
+## 5. Pemeriksaan Data Raster
+
+| Pemeriksaan | Tujuan |
+|-------------|--------|
+| CRS | Memastikan raster memiliki sistem koordinat yang valid. |
+| Extent | Memastikan cakupan wilayah raster sesuai dengan area analisis. |
+| Resolusi | Memastikan ukuran piksel sesuai spesifikasi analisis. |
+| Nilai NoData | Memastikan nilai NoData telah didefinisikan dengan benar. |
+| Dimensi Raster | Memastikan jumlah baris dan kolom raster dapat diproses oleh LaSPUR. |
+
+---
+
+## 6. Pemeriksaan Tabel Acuan
+
+| Pemeriksaan | Tujuan |
+|-------------|--------|
+| Format File | Memastikan tabel menggunakan format yang didukung (Excel atau CSV). |
+| Nama Kolom | Memastikan seluruh kolom wajib tersedia. |
+| Tipe Data | Memastikan tipe data sesuai spesifikasi. |
+| Missing Value | Memastikan kolom penting tidak memiliki nilai kosong. |
+| Nilai Unik | Memastikan kolom kunci tidak memiliki duplikasi. |
+| Konsistensi Referensi | Memastikan nilai pada tabel acuan sesuai dengan dataset spasial yang menggunakannya. |
+
+---
+
+## 7. Prinsip Validasi
+
+Validasi dilakukan sebagai bagian dari proses pengendalian kualitas data (*Quality Control*) pada LaSPUR. Dataset yang memenuhi seluruh pemeriksaan memiliki struktur, metadata, dan isi data yang konsisten sehingga dapat digunakan oleh seluruh modul analisis tanpa menghasilkan kesalahan selama proses maupun pada keluaran akhir.

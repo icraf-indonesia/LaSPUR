@@ -348,7 +348,7 @@ plot_with_autokey(protected)
 #| error: false
 #| warning: false
 #| message: false
-coastal_habitat <- params$result$coastal_habitat["LC"]
+coastal_habitat <- params$result$coastal_habitat["x"]
 plot_with_autokey(coastal_habitat)
 ```
 

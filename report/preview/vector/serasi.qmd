@@ -1,0 +1,257 @@
+---
+title: "SERASI"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset SERASI merupakan data spasial utama yang digunakan pada tahap rekonsiliasi tata ruang darat (RTRW) dan tata ruang laut (RZWP3K). Kedua dataset digunakan untuk mengidentifikasi area yang tumpang tindih maupun yang saling berbatasan sebagai dasar analisis pada modul LaSPUR.
+
+---
+
+# Step 1
+
+## Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| Step1_RTRW_Palu-Parigi_Explode | Shapefile | Peta RTRW hasil pra-pemrosesan (explode polygon). |
+| Step1_RZWP3K_Palu-Parigi_Explode | Shapefile | Peta RZWP3K hasil pra-pemrosesan (explode polygon). |
+
+---
+
+## Visualisasi
+
+### Peta RTRW
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RTRW_explode_training.shp"
+  )
+)
+```
+
+### Peta RZWP3K
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RZWP3K_explode_training.shp"
+    )
+)
+```
+
+---
+
+## Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| RTRW | Pemerintah Daerah | - | - |
+| RZWP3K | Pemerintah Daerah | - | - |
+
+---
+
+## Spesifikasi Teknis
+
+### RTRW
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RTRW_explode_training.shp"
+  )
+)
+```
+
+### RZWP3K
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RZWP3K_explode_training.shp"
+  )
+)
+```
+
+---
+
+## Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI Step 1 | ✔ |
+| SERASI Step 2 | ✔ |
+| PADU | ✖ |
+| Output | ✔ |
+
+---
+
+## Pemeriksaan Data
+
+### RTRW
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RTRW_explode_training.shp"
+  )
+)
+```
+
+### RZWP3K
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "serasi",
+    "step1",
+    "Step1_RZWP3K_explode_training.shp"
+  )
+)
+```
+
+# Step 2
+
+## Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| Step2_RTRW_training | Shapefile | Peta RTRW hasil pra-pemrosesan (explode polygon). |
+| Step2_RZWP3K_training | Shapefile | Peta RZWP3K hasil pra-pemrosesan (explode polygon). |
+
+---
+
+## Visualisasi
+
+### Peta RTRW
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RTRW_training_dis_explode.shp"
+  )
+)
+```
+
+### Peta RZWP3K
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RZWP3K_training.shp"
+    )
+)
+```
+
+---
+
+## Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| RTRW | Pemerintah Daerah | - | - |
+| RZWP3K | Pemerintah Daerah | - | - |
+
+---
+
+## Spesifikasi Teknis
+
+### RTRW
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RTRW_training_dis_explode.shp"
+  )
+)
+```
+
+### RZWP3K
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RZWP3K_training.shp"
+  )
+)
+```
+
+---
+
+## Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| SERASI Step 1 | ✔ |
+| SERASI Step 2 | ✔ |
+| PADU | ✖ |
+| Output | ✔ |
+
+---
+
+## Pemeriksaan Data
+
+### RTRW
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RTRW_training_dis_explode.shp"
+  )
+)
+```
+
+### RZWP3K
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "serasi",
+    "step2",
+    "Step2_RZWP3K_training.shp"
+  )
+)
+```

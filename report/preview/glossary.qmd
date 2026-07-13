@@ -1,0 +1,224 @@
+---
+title: "Glosarium"
+execute:
+  echo: false
+---
+
+Dokumen ini menjelaskan istilah-istilah yang digunakan dalam dokumentasi, proses analisis spasial, serta modul-modul pada LaSPUR. Glosarium ini bertujuan agar pengguna memiliki pemahaman yang sama terhadap setiap istilah teknis yang digunakan.
+
+---
+
+# A
+
+| Istilah | Definisi |
+|----------|----------|
+| Atribut | Informasi non-spasial yang melekat pada suatu objek geografis, misalnya nama kawasan, kategori penggunaan lahan, atau nilai prioritas. |
+| Analisis Spasial | Proses analisis berdasarkan hubungan lokasi, bentuk, luas, maupun kedekatan antar objek spasial. |
+
+---
+
+# B
+
+| Istilah | Definisi |
+|----------|----------|
+| Bounding Box | Batas minimum dan maksimum suatu dataset spasial yang dinyatakan dalam koordinat X dan Y. |
+| Buffer | Zona dengan jarak tertentu yang dibuat mengelilingi suatu objek spasial. |
+
+---
+
+# C
+
+| Istilah | Definisi |
+|----------|----------|
+| CRS (Coordinate Reference System) | Sistem koordinat yang digunakan untuk merepresentasikan posisi objek di permukaan bumi. |
+| Clip | Operasi untuk memotong data spasial menggunakan batas wilayah tertentu. |
+
+---
+
+# D
+
+| Istilah | Definisi |
+|----------|----------|
+| Dataset | Sekumpulan data yang digunakan sebagai masukan maupun keluaran analisis. |
+| Dissolve | Proses menggabungkan beberapa polygon yang memiliki atribut sama menjadi satu polygon. |
+
+---
+
+# E
+
+| Istilah | Definisi |
+|----------|----------|
+| Extent | Luas cakupan spasial suatu dataset. |
+| Explode Polygon | Proses memisahkan polygon bertipe multipart menjadi polygon tunggal (singlepart). |
+
+---
+
+# F
+
+| Istilah | Definisi |
+|----------|----------|
+| Feature | Satu objek spasial pada dataset vektor, misalnya satu polygon kawasan atau satu garis jalan. |
+
+---
+
+# G
+
+| Istilah | Definisi |
+|----------|----------|
+| Geometri | Bentuk spasial suatu objek, dapat berupa titik, garis, atau polygon. |
+| GeoTIFF | Format raster yang menyimpan nilai piksel beserta informasi koordinat geografis. |
+
+---
+
+# I
+
+| Istilah | Definisi |
+|----------|----------|
+| Intersect | Operasi overlay yang menghasilkan bagian wilayah yang saling beririsan antar dua dataset. |
+
+---
+
+# K
+
+| Istilah | Definisi |
+|----------|----------|
+| Kawasan Prioritas | Kawasan yang memperoleh nilai prioritas tertentu berdasarkan aturan atau tabel acuan. |
+| Koordinat | Nilai posisi suatu objek pada sistem koordinat tertentu. |
+
+---
+
+# L
+
+| Istilah | Definisi |
+|----------|----------|
+| Layer | Satu kumpulan data spasial yang merepresentasikan tema tertentu. |
+| Land Use | Penggunaan lahan oleh manusia seperti permukiman, sawah, perkebunan, dan hutan. |
+| Land Cover | Tutupan fisik permukaan bumi seperti vegetasi, badan air, atau kawasan terbangun. |
+
+---
+
+# M
+
+| Istilah | Definisi |
+|----------|----------|
+| Metadata | Informasi yang menjelaskan karakteristik suatu dataset, seperti format, sistem koordinat, jumlah fitur, resolusi, dan sumber data. |
+| Multipart Polygon | Polygon yang terdiri dari beberapa bagian geometri namun dianggap sebagai satu feature. |
+
+---
+
+# O
+
+| Istilah | Definisi |
+|----------|----------|
+| Overlay | Analisis spasial yang menggabungkan dua atau lebih layer berdasarkan lokasi geografisnya. |
+
+---
+
+# P
+
+| Istilah | Definisi |
+|----------|----------|
+| PADU | Modul LaSPUR untuk analisis kesesuaian dan prioritas penggunaan ruang berdasarkan berbagai data masukan. |
+| Piksel | Unit terkecil pada data raster yang menyimpan satu nilai tertentu. |
+| Polygon | Objek spasial berbentuk area tertutup. |
+| Proyeksi | Transformasi koordinat dari permukaan bumi ke bidang datar menggunakan sistem tertentu. |
+
+---
+
+# R
+
+| Istilah | Definisi |
+|----------|----------|
+| Raster | Data spasial berbentuk grid yang terdiri dari kumpulan piksel. |
+| Resolusi Raster | Ukuran satu piksel pada data raster. Semakin kecil ukuran piksel, semakin tinggi detail data. |
+| Reclass | Proses mengubah nilai raster menjadi kelas baru berdasarkan aturan tertentu. |
+| Rekonsiliasi | Tahapan membandingkan dan menyelaraskan dua atau lebih sumber informasi spasial. |
+| RTRW | Rencana Tata Ruang Wilayah yang mengatur pemanfaatan ruang daratan. |
+| RZWP3K | Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil yang mengatur pemanfaatan ruang laut. |
+
+---
+
+# S
+
+| Istilah | Definisi |
+|----------|----------|
+| SERASI | Modul LaSPUR untuk analisis keserasian antara RTRW dan RZWP3K. |
+| Shapefile | Format data vektor yang terdiri dari beberapa file (.shp, .dbf, .shx, .prj, dll.). |
+| Singlepart Polygon | Polygon yang hanya memiliki satu bagian geometri. |
+| Spatial Join | Proses menggabungkan atribut berdasarkan hubungan spasial antar objek. |
+| Spatial Reference | Sistem referensi koordinat yang digunakan oleh suatu dataset. |
+
+---
+
+# T
+
+| Istilah | Definisi |
+|----------|----------|
+| Topologi | Hubungan spasial antar objek seperti saling bersinggungan, berpotongan, atau saling terhubung. |
+| Transformasi Koordinat | Proses mengubah sistem koordinat suatu dataset ke sistem koordinat lainnya. |
+
+---
+
+# U
+
+| Istilah | Definisi |
+|----------|----------|
+| Union | Operasi overlay yang menggabungkan seluruh area dari dua layer menjadi satu dataset baru. |
+
+---
+
+# V
+
+| Istilah | Definisi |
+|----------|----------|
+| Validasi Data | Pemeriksaan kualitas data untuk memastikan struktur, atribut, geometri, dan metadata telah sesuai. |
+| Vektor | Data spasial yang direpresentasikan sebagai titik, garis, atau polygon. |
+
+---
+
+# W
+
+| Istilah | Definisi |
+|----------|----------|
+| WGS84 | Sistem koordinat geografis (EPSG:4326) yang umum digunakan untuk penyimpanan dan visualisasi data spasial. |
+
+---
+
+# Istilah dalam LaSPUR
+
+| Istilah | Definisi |
+|----------|----------|
+| Tahap Persiapan Data | Tahapan pengumpulan, standarisasi, dan validasi seluruh data masukan. |
+| Tahap SERASI | Analisis keserasian antara RTRW dan RZWP3K. |
+| Tahap PADU | Analisis prioritas penggunaan ruang berdasarkan berbagai parameter. |
+| Tahap Rekonsiliasi | Penyelarasan hasil analisis antar modul sebelum menghasilkan keluaran akhir. |
+| Lookup Table | Tabel referensi yang digunakan untuk menghubungkan nilai atribut dengan klasifikasi atau prioritas tertentu. |
+| Matriks SERASI | Matriks yang digunakan untuk menentukan tingkat keserasian antara kategori RTRW dan kategori RZWP3K. |
+| Prioritas | Nilai yang menunjukkan tingkat kepentingan suatu kategori dalam proses analisis. |
+| Workflow | Urutan proses analisis yang dilakukan oleh modul LaSPUR. |
+| Output | Dataset hasil yang dihasilkan dari setiap tahapan analisis. |
+
+---
+
+# Singkatan
+
+| Singkatan | Kepanjangan |
+|------------|-------------|
+| CRS | Coordinate Reference System |
+| GIS | Geographic Information System |
+| EPSG | European Petroleum Survey Group Coordinate Reference Code |
+| RTRW | Rencana Tata Ruang Wilayah |
+| RZWP3K | Rencana Zonasi Wilayah Pesisir dan Pulau-Pulau Kecil |
+| WGS84 | World Geodetic System 1984 |
+| DEM | Digital Elevation Model |
+| AOI | Area of Interest |
+| ROI | Region of Interest |
+
+---
+
+## Referensi
+
+- OGC (Open Geospatial Consortium)
+- Badan Informasi Geospasial (BIG)
+- Dokumentasi LaSPUR
+- Dokumentasi GDAL, PROJ, dan sf (R)
