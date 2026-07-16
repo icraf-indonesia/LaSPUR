@@ -73,7 +73,7 @@ source("R/helpers.R")
   list(ok = TRUE, msg = "Validasi berhasil.")
 }
 
-# Helper to compute serasi index from matrix (correct orientation: class1 = RTRW, class2 = RZWP3K)
+# Helper to compute serasi index from matrix
 .get_serasi <- function(class1, class2, matriks_serasi) {
   if (is.na(class1) || is.na(class2)) return(NA_real_)
   class1 <- trimws(as.character(class1))
@@ -369,9 +369,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
       )
     })
     
-    # ── Step 2: load matrix on upload (independent of template button) ─
-    # This ensures rv$matriks_serasi is populated as soon as the file lands,
-    # so alt_upload can be validated regardless of order.
+    # Step 2: load matrix on upload
     observeEvent(input$matrix_file, {
       req(input$matrix_file)
       tryCatch({
@@ -410,9 +408,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
           dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
           
           incProgress(0.4, detail = "Memproses opsi alternatif...")
-          # Call determine_alternative_zones with step = "step1" (overlaps)
-          # The function expects columns: id_pu, id_rtrw, id_rzwp3k, RTRW, RZWP3K, area_ha, idx_serasi
-          # Our filtered map has exactly those.
           result <- determine_alternative_zones(
             idx_padan_map_filter = rv$idx_padan_map_filter,
             serasi_matrix = rv$matriks_serasi,
@@ -422,7 +417,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
           )
           
           incProgress(0.8, detail = "Menyimpan file template...")
-          # The function saves a file named "overlaps_alternative_zones_selections.xlsx"
           output_path <- file.path(out_dir_step2, "overlaps_alternative_zones_selections.xlsx")
           if (!file.exists(output_path)) {
             stop("File template tidak ditemukan setelah pembuatan.")
@@ -456,9 +450,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
       }
     )
     
-    # Use observe() so processing retries automatically whenever the uploaded
-    # file or its dependencies (matriks_serasi, idx_padan_map_filter) become
-    # available — regardless of upload order.
     observe({
       req(input$alt_upload)
       
@@ -496,7 +487,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
           by = c("id_pu", "id_rtrw", "id_rzwp3k")
         )
         
-        # Compute alternative serasi indices (correct orientation)
+        # Compute alternative serasi indices
         idx_padan_map_alt <- idx_padan_map_alt %>%
           dplyr::rowwise() %>%
           dplyr::mutate(
@@ -514,7 +505,9 @@ recommendation_overlaps_server <- function(id, output_dir) {
         rv$alt_status <- list(
           ok = TRUE, msg = check$msg,
           preview = head(sf::st_drop_geometry(idx_padan_map_alt)[, intersect(
-            c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "alt_RTRW", "alt_RZWP3K"),
+            c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", 
+              "area_ha", "admin", "idx_serasi",         
+              "alt_RTRW", "alt_RZWP3K"),
             names(idx_padan_map_alt)
           )], 10)
         )
@@ -730,7 +723,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
             title = "Alternatif Zona (Pratinjau)",
             value = "preview",
             icon = tags$i(class = "bi bi-eye"),
-            tableOutput(ns("alt_preview_table"))
+            DT::DTOutput(ns("alt_preview_table"))
           )
         ))
       }
@@ -742,7 +735,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
             value = "final",
             icon = tags$i(class = "bi bi-check2-circle"),
             div(style = "max-height: 400px; overflow: auto;",
-                tableOutput(ns("final_table")))
+                DT::DTOutput(ns("final_table")))  
           )
         ))
       }
@@ -758,15 +751,58 @@ recommendation_overlaps_server <- function(id, output_dir) {
       )
     })
     
-    output$alt_preview_table <- renderTable({
+    output$alt_preview_table <- DT::renderDT({
       req(rv$alt_status, rv$alt_status$ok)
-      rv$alt_status$preview
+      df_zone_alt <- rv$alt_status$preview
+      
+      df_zone_alt_subset <- df_zone_alt[, c("id_pu", "RTRW", "RZWP3K", "area_ha", "admin", "idx_serasi", "alt_RTRW", "alt_RZWP3K")]
+      colnames(df_zone_alt_subset) <- c("ID_PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI", "RTRW Alternatif Terpilih", "RZWP3K Alternatif Terpilih")
+      
+      DT::datatable(
+        df_zone_alt_subset,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'Bfrtip'
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Indeks SERASI"),  
+          digits = 2
+        )
     })
     
-    output$final_table <- renderTable({
+    output$final_table <- DT::renderDT({
       req(rv$final_result)
-      head(rv$final_result$table, 200)
+      df_final <- rv$final_result$table
+      df_final_subset <- df_final[, c("id_pu", "RTRW", "RZWP3K", "area_ha", "admin", "idx_serasi", "idx_padu_final", "alt_RTRW", "alt_RZWP3K", "idx_serasi_rtrw_alt", "idx_serasi_rzwp3k_alt", "idx_padan_rtrw_alt", "idx_padan_rzwp3k_alt", "recommendation", "decision", "idx_padan_final")]
+      colnames(df_final_subset) <- c("ID_PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "RTRW Alternatif", "RZWP3K Alternatif", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Opsi Rekomendasi", "Rekomendasi Keputusan", "Indeks PADAN Akhir")
+      
+      DT::datatable(
+        df_final_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'Bfrtip',
+          fixedColumns = list(
+            leftColumns = 3
+          ),
+          fixedHeader = TRUE
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      ) %>%
+        DT::formatRound(
+          columns = c("Luas (ha)", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Indeks PADAN Akhir"),  
+          digits = 2
+        )
     })
+    
     
     output$validation_log <- renderText({
       if (!is.null(rv$final_log)) rv$final_log else "Siap untuk analisis rekomendasi."

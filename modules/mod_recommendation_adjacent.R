@@ -30,7 +30,7 @@ source("R/helpers.R")
   )
 }
 
-# ── validation helpers (unchanged) ──────────────────────────
+# ── validation helpers  ──────────────────────────
 .validate_alt_table <- function(alt_table, matriks_serasi) {
   required_cols <- c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")
   missing_cols <- setdiff(required_cols, names(alt_table))
@@ -203,7 +203,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       idx_padan_map_alt     = NULL,
       alt_status            = NULL,
       
-      # step 3 (NPV, optional)
+      # step 3 
       adjacent_economy_map  = NULL,
       npv_status            = NULL,
       
@@ -235,10 +235,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     # ── Step 1 UI ─────────────────────────────────────────────
     output$step1_ui <- renderUI({
-      # Always show the file input
       file_input <- fileInput(ns("idx_padan_file"), "Pilih Peta Hasil Analisis PADAN (.gpkg)", accept = ".gpkg")
-      
-      # If map is not loaded yet, show a placeholder
+
       if (is.null(rv$idx_padan_map)) {
         return(tagList(
           file_input,
@@ -246,8 +244,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Step 2")
         ))
       }
-      
-      # Map is loaded – show full controls
+
       tagList(
         file_input,
         layout_column_wrap(
@@ -291,7 +288,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       })
     })
     
-    # ── Reactive filter (real‑time) ──────────────────────────
+    # ── Reactive filter  ──────────────────────────
     filtered_data <- reactive({
       req(rv$idx_padan_map)
       
@@ -313,8 +310,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$idx_padan_map_filter <- res$filtered
       rv$count_before <- res$before
       rv$count_after  <- res$after
-      
-      # If user already passed step1 (snapshot exists) and filter params changed, reset step2
+
       if (!is.null(rv$filter_snapshot)) {
         current <- list(
           apply_length = input$apply_length,
@@ -346,7 +342,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
         showNotification("Terapkan filter terlebih dahulu.", type = "warning")
         return()
       }
-      # Store snapshot of current filter parameters
       rv$filter_snapshot <- list(
         apply_length = input$apply_length,
         length_filter = input$length_filter,
@@ -386,9 +381,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       )
     })
     
-    # ── Step 2: load matrix on upload (independent of template button) ─
-    # This ensures rv$matriks_serasi is populated as soon as the file lands,
-    # so alt_upload can be validated regardless of order.
+    # Step 2: load matrix on upload 
     observeEvent(input$matrix_file, {
       req(input$matrix_file)
       tryCatch({
@@ -463,14 +456,10 @@ recommendation_adjacent_server <- function(id, output_dir) {
         file.copy(rv$alt_template_path, file, overwrite = TRUE)
       }
     )
-    
-    # Use observe() so processing retries automatically whenever the uploaded
-    # file or its dependencies (matriks_serasi, idx_padan_map_filter) become
-    # available — regardless of upload order.
+
     observe({
       req(input$alt_upload)
       
-      # Dependencies not yet ready — show a pending hint and wait.
       if (is.null(rv$matriks_serasi) || is.null(rv$idx_padan_map_filter)) {
         missing <- c(
           if (is.null(rv$matriks_serasi))       "Matriks Serasi (.xlsx)",
@@ -857,19 +846,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
     output$table_accordion <- renderUI({
       panels <- list()
       
-      # Panel for Alternative Preview (Step 2)
       if (!is.null(rv$alt_status) && rv$alt_status$ok) {
         panels <- c(panels, list(
           accordion_panel(
             title = "Alternatif Zona (Pratinjau)",
             value = "preview",
             icon = tags$i(class = "bi bi-eye"),
-            tableOutput(ns("alt_preview_table"))
+            DT::DTOutput(ns("alt_preview_table"))  
           )
         ))
       }
       
-      # Panel for Final Recommendation (Step 4)
       if (!is.null(rv$final_result)) {
         panels <- c(panels, list(
           accordion_panel(
@@ -877,7 +864,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
             value = "final",
             icon = tags$i(class = "bi bi-check2-circle"),
             div(style = "max-height: 400px; overflow: auto;",
-                tableOutput(ns("final_table")))
+                DT::DTOutput(ns("final_table")))   
           )
         ))
       }
@@ -893,14 +880,144 @@ recommendation_adjacent_server <- function(id, output_dir) {
       )
     })
     
-    output$alt_preview_table <- renderTable({
+    output$alt_preview_table <- DT::renderDT({
       req(rv$alt_status, rv$alt_status$ok)
-      rv$alt_status$preview
+      df_preview <- rv$alt_status$preview
+      
+      desired_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi", "alt_RTRW", "alt_RZWP3K")
+      cols_present <- intersect(desired_cols, names(df_preview))
+      
+      if (length(cols_present) == 0) {
+        df_subset <- df_preview
+      } else {
+        df_subset <- df_preview[, cols_present, drop = FALSE]
+      }
+
+      label_map <- c(
+        "id_pu"       = "ID PU",
+        "RTRW"        = "RTRW",
+        "RZWP3K"      = "RZWP3K",
+        "area_ha"     = "Luas (ha)",
+        "length"      = "Panjang Segmen (meter)",
+        "idx_serasi"  = "Indeks SERASI",
+        "alt_RTRW"    = "RTRW Alternatif Terpilih",
+        "alt_RZWP3K"  = "RZWP3K Alternatif Terpilih"
+      )
+      
+      new_names <- label_map[names(df_subset)]
+      new_names[is.na(new_names)] <- names(df_subset)[is.na(new_names)]
+      names(new_names) <- names(df_subset)
+      colnames(df_subset) <- unname(new_names)
+      
+      # Round numeric columns
+      numeric_cols <- names(df_subset)[sapply(df_subset, is.numeric)]
+      exclude_round <- c("ID PU", "id_pu")
+      round_cols <- setdiff(numeric_cols, exclude_round)
+      
+      DT::datatable(
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'Bfrtip',
+          fixedColumns = list(leftColumns = 1),
+          fixedHeader = TRUE
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      ) %>%
+        DT::formatRound(columns = round_cols, digits = 2)
     })
     
-    output$final_table <- renderTable({
+    output$final_table <- DT::renderDT({
       req(rv$final_result)
-      head(rv$final_result$table, 200)
+      df_final <- rv$final_result$table
+      
+      base_cols <- c(
+        "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_padu_final",
+        "alt_RTRW", "alt_RZWP3K", "recommendation", "RTRW_new", "RZWP3K_new",
+        "idx_serasi", "idx_serasi_new", "idx_padan", "idx_padan_new", "idx_padan_delta",
+        "actual_integration", "recom_integration"
+      )
+
+      extra_cols <- c()
+      if (isTRUE(rv$npv_status$ok)) {
+        econ_candidates <- grep("^(npv_ha_|econ_)", names(df_final), value = TRUE)
+        extra_cols <- intersect(econ_candidates, names(df_final))
+      }
+      
+      # Combine and keep only those that exist
+      cols_to_show <- intersect(c(base_cols, extra_cols), names(df_final))
+      
+      if (length(cols_to_show) == 0) {
+        df_subset <- df_final
+      } else {
+        df_subset <- df_final[, cols_to_show, drop = FALSE]
+      }
+
+      label_map <- c(
+        "id_pu"               = "ID PU",
+        "RTRW"                = "RTRW Awal",
+        "RZWP3K"              = "RZWP3K Awal",
+        "area_ha"             = "Luas (ha)",
+        "length"              = "Panjang Segmen Bertetangga (meter)",
+        "idx_padu_final"      = "Indeks PADU Kombinasi",
+        "alt_RTRW"            = "RTRW Alternatif",
+        "alt_RZWP3K"          = "RZWP3K Alternatif",
+        "recommendation"      = "Rekomendasi",
+        "RTRW_new"            = "RTRW Baru",
+        "RZWP3K_new"          = "RZWP3K Baru",
+        "idx_serasi"          = "Indeks SERASI Awal",
+        "idx_serasi_new"      = "Indeks SERASI Baru",
+        "idx_padan"           = "Indeks PADAN Awal",
+        "idx_padan_new"       = "Indeks PADAN Baru",
+        "idx_padan_delta"     = "Selisih Indeks PADAN",
+        "actual_integration"  = "Integrasi Aktual",
+        "recom_integration"   = "Integrasi Hasil Rekomendasi"
+      )
+      
+      econ_label_map <- c(
+        "npv_ha_actual_rtrw"   = "NPV per ha (Aktual RTRW)",
+        "npv_ha_actual_rzwp3k" = "NPV per ha (Aktual RZWP3K)",
+        "npv_ha_recom_rtrw"    = "NPV per ha (Rekomendasi RTRW)",
+        "npv_ha_recom_rzwp3k"  = "NPV per ha (Rekomendasi RZWP3K)",
+        "econ_rtrw_actual"     = "Nilai Ekonomi RTRW (Aktual)",
+        "econ_rtrw_recom"      = "Nilai Ekonomi RTRW (Rekomendasi)",
+        "econ_rtrw_delta"      = "Selisih Nilai Ekonomi RTRW",
+        "econ_rzwp3k_actual"   = "Nilai Ekonomi RZWP3K (Aktual)",
+        "econ_rzwp3k_recom"    = "Nilai Ekonomi RZWP3K (Rekomendasi)",
+        "econ_rzwp3k_delta"    = "Selisih Nilai Ekonomi RZWP3K",
+        "econ_delta"           = "Selisih Nilai Ekonomi Akhir"
+      )
+      
+      full_map <- c(label_map, econ_label_map)
+      new_names <- full_map[names(df_subset)]
+      new_names[is.na(new_names)] <- names(df_subset)[is.na(new_names)]
+      names(new_names) <- names(df_subset)
+      colnames(df_subset) <- unname(new_names)
+      
+      # Round numeric columns 
+      numeric_cols <- names(df_subset)[sapply(df_subset, is.numeric)]
+      exclude_round <- c("ID_PU", "id_pu")
+      round_cols <- setdiff(numeric_cols, exclude_round)
+      
+      DT::datatable(
+        df_subset,
+        extensions = c('FixedColumns', 'FixedHeader'),
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'Bfrtip',
+          fixedColumns = list(leftColumns = 3),
+          fixedHeader = TRUE
+        ),
+        rownames = FALSE,
+        class = "display compact stripe hover"
+      ) %>%
+        DT::formatRound(columns = round_cols, digits = 2)
     })
     
     # Validation log
