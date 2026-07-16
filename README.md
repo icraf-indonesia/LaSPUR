@@ -16,7 +16,7 @@ LaSPUR is available as both a Quarto notebook and a Shiny application, so you ca
 
 ### 1. Run Directly from GitHub
 
-The quickest way to try LaSPUR, no cloning required.
+The quickest way to try LaSPUR, no cloning required. On your RStudio (or another IDE) console, run the following code.
 
 ``` r
 # Install shiny if you haven't already
