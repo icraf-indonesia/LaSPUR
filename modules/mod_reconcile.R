@@ -646,7 +646,7 @@ reconcile_server <- function(id, output_dir) {
         popups <- sapply(1:nrow(df), function(i) {
           row_data <- df[i, , drop = FALSE]
           lines <- sapply(names(row_data), function(col) {
-            if (col == "origin_layer") return(NULL)
+            if (col %in% c("origin_layer", "search_label")) return(NULL)
             val <- row_data[[1, col]]
             if (length(val) == 0 || is.na(val) || is.null(val)) val <- "N/A"
             paste0("<b>", col, ":</b> ", as.character(val))
@@ -666,6 +666,18 @@ reconcile_server <- function(id, output_dir) {
         lapply(labels, htmltools::HTML)
       }
       
+      # Helper to prepare search label column
+      add_search_col <- function(sf_obj) {
+        if (is.null(sf_obj) || nrow(sf_obj) == 0) return(sf_obj)
+        df <- sf::st_drop_geometry(sf_obj)
+        id_val <- if ("id_pu" %in% names(df)) df$id_pu else ifelse("fid" %in% names(df), df$fid, "N/A")
+        z_old  <- if ("Zoning_Old" %in% names(df)) ifelse(is.na(df$Zoning_Old), "N/A", df$Zoning_Old) else "N/A"
+        z_new  <- if ("Zoning_New" %in% names(df)) ifelse(is.na(df$Zoning_New), "N/A", df$Zoning_New) else "N/A"
+        
+        sf_obj$search_label <- paste0("ID PU: ", id_val, " | ", z_old, " ➜ ", z_new)
+        sf_obj
+      }
+      
       # Color palette: "No" maps to Gray, "Yes" maps to Blue 
       pal_reconcile <- colorFactor(
         palette = c("#BDBDBD", "#2B8CBE"), 
@@ -681,7 +693,7 @@ reconcile_server <- function(id, output_dir) {
         available_groups <- character(0)
         
         if (!is.null(rv$display_rtrw) && nrow(rv$display_rtrw) > 0) {
-          rtrw_map <- .to_leaflet_crs(rv$display_rtrw)
+          rtrw_map <- add_search_col(.to_leaflet_crs(rv$display_rtrw))
           popup_rtrw <- make_popup(rtrw_map)
           label_rtrw <- make_label(rtrw_map)
           m <- m %>% addPolygons(
@@ -691,15 +703,15 @@ reconcile_server <- function(id, output_dir) {
             fillOpacity = 0.7,
             weight = 1,
             color = "#333333",
-            label = label_rtrw,
+            label = ~search_label,
             popup = popup_rtrw,
-            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)
           )
           available_groups <- c(available_groups, "RTRW Reconciled")
         }
         
         if (!is.null(rv$display_rzwp3k) && nrow(rv$display_rzwp3k) > 0) {
-          rzwp3k_map <- .to_leaflet_crs(rv$display_rzwp3k)
+          rzwp3k_map <- add_search_col(.to_leaflet_crs(rv$display_rzwp3k))
           popup_rzwp3k <- make_popup(rzwp3k_map)
           label_rzwp3k <- make_label(rzwp3k_map)
           m <- m %>% addPolygons(
@@ -709,9 +721,9 @@ reconcile_server <- function(id, output_dir) {
             fillOpacity = 0.7,
             weight = 1,
             color = "#333333",
-            label = label_rzwp3k,
+            label = ~search_label,
             popup = popup_rzwp3k,
-            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)
           )
           available_groups <- c(available_groups, "RZWP3K Reconciled")
         }
@@ -725,6 +737,18 @@ reconcile_server <- function(id, output_dir) {
             overlayGroups = available_groups,
             options = layersControlOptions(collapsed = FALSE)
           ) %>%
+          leaflet.extras::addSearchFeatures(
+            targetGroups = available_groups,
+            options = leaflet.extras::searchFeaturesOptions(
+              propertyName = "label",
+              zoom = 15,
+              openPopup = TRUE,
+              position = "topleft",
+              firstTipSubmit = TRUE,
+              autoCollapse = FALSE,
+              hideMarkerOnCollapse = TRUE
+            )
+          ) %>% leaflet.extras::addResetMapButton() %>% 
           addLegend(
             position = "bottomright",
             colors = c("#2B8CBE", "#BDBDBD"),
@@ -735,21 +759,34 @@ reconcile_server <- function(id, output_dir) {
         
       } else if (!is.null(rv$display_integrated) && nrow(rv$display_integrated) > 0) {
         # Step 2: Adjacent processing
-        map_sf <- .to_leaflet_crs(rv$display_integrated)
+        map_sf <- add_search_col(.to_leaflet_crs(rv$display_integrated))
         popup_int <- make_popup(map_sf)
         label_int <- make_label(map_sf)
         
         leaflet(map_sf) %>%
           addProviderTiles(providers$CartoDB.Positron) %>%
           addPolygons(
+            group = "Integrated Reconciled",
             fillColor = ~pal_reconcile(Reconcile),
             fillOpacity = 0.7,
             weight = 1,
             color = "#333333",
-            label = label_int,
+            label = ~search_label,
             popup = popup_int,
-            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8)
+            highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)
           ) %>%
+          leaflet.extras::addSearchFeatures(
+            targetGroups = "Integrated Reconciled",
+            options = leaflet.extras::searchFeaturesOptions(
+              propertyName = "label",
+              zoom = 15,
+              openPopup = TRUE,
+              position = "topleft",
+              firstTipSubmit = TRUE,
+              autoCollapse = FALSE,
+              hideMarkerOnCollapse = TRUE
+            )
+          ) %>% leaflet.extras::addResetMapButton() %>% 
           addLegend(
             position = "bottomright",
             colors = c("#2B8CBE", "#BDBDBD"), 

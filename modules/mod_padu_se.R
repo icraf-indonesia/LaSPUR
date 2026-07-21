@@ -304,7 +304,7 @@ padu_se_server <- function(id, output_dir) {
       }
     })
     
-    # ── Map output (leaflet) ──────────────────────────────────
+    # ── Map output ──────────────────
     output$result_map <- renderLeaflet({
       req(rv$analysis_result)
       
@@ -319,6 +319,9 @@ padu_se_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom idx_padu_se tidak ditemukan.", position = "topright"))
       }
       
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | ",
+                                    "Indeks PADU-SE: ", round(map_sf$idx_padu_se, 2)) %>% lapply(htmltools::HTML)
+      
       pal <- leaflet::colorNumeric(
         palette = "RdYlGn",
         domain  = map_sf$idx_padu_se,
@@ -328,13 +331,12 @@ padu_se_server <- function(id, output_dir) {
       leaflet::leaflet(map_sf) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
+          group       = "padu_se_layer",
           fillColor   = ~pal(idx_padu_se),
           fillOpacity = 0.7,
           weight      = 1,
           color       = "black",
-          label       = ~paste0(
-            "<strong>Indeks PADU-SE:</strong> ", round(idx_padu_se, 3)
-          ) %>% lapply(htmltools::HTML),
+          label       = ~search_label, 
           popup       = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>Indeks PADU-SE:</b>", round(idx_padu_se, 3)
@@ -342,9 +344,21 @@ padu_se_server <- function(id, output_dir) {
           highlightOptions = leaflet::highlightOptions(
             weight = 3,
             color  = "red",
-            fillOpacity = 0.9
+            fillOpacity = 0.9,
+            bringToFront = TRUE
           )
         ) %>%
+        leaflet.extras::addSearchFeatures(
+          targetGroups = "padu_se_layer",
+          options = leaflet.extras::searchFeaturesOptions(
+            propertyName = "label",    
+            zoom = 15,                 
+            openPopup = TRUE,           
+            firstTipSubmit = TRUE,
+            autoCollapse = FALSE,
+            hideMarkerOnCollapse = TRUE
+          )
+        ) %>% leaflet.extras::addResetMapButton() %>% 
         leaflet::addLegend(
           position = "bottomright",
           pal      = pal,

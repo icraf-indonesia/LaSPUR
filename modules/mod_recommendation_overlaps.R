@@ -831,6 +831,9 @@ recommendation_overlaps_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom yang diperlukan tidak ditemukan. Periksa Log.", position = "topright"))
       }
       
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Rekomendasi: ", map_sf$recommendation)
+      
+      
       pal <- leaflet::colorFactor(
         palette = c("blue", "green", "orange", "red", "purple", "grey"),
         domain = unique(map_sf$recommendation),
@@ -840,14 +843,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
       leaflet::leaflet(map_sf) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
+          group = "recommendation_layer",
           fillColor = ~pal(recommendation),
           fillOpacity = 0.7,
           weight = 1,
           color = "black",
-          label = ~paste0(
-            "<strong>Rekomendasi awal:</strong> ", recommendation, "<br>",
-            "<strong>Keputusan:</strong> ", decision
-          ) %>% lapply(htmltools::HTML),
+          label = ~search_label,
           popup = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>RTRW asal:</b>", RTRW, "<br>",
@@ -861,9 +862,21 @@ recommendation_overlaps_server <- function(id, output_dir) {
           highlightOptions = leaflet::highlightOptions(
             weight = 3,
             color = "red",
-            fillOpacity = 0.9
+            fillOpacity = 0.9,
+            bringToFront = TRUE
           )
         ) %>%
+        leaflet.extras::addSearchFeatures(
+          targetGroups = "recommendation_layer",
+          options = leaflet.extras::searchFeaturesOptions(
+            propertyName = "label",    
+            zoom = 15,                 
+            openPopup = TRUE,           
+            firstTipSubmit = TRUE,
+            autoCollapse = FALSE,
+            hideMarkerOnCollapse = TRUE
+          )
+        ) %>% leaflet.extras::addResetMapButton() %>% 
         leaflet::addLegend(
           position = "bottomright",
           pal = pal,

@@ -327,6 +327,9 @@ padu_combine_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom idx_padu_final tidak ditemukan.", position = "topright"))
       }
       
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | ",
+                                    "Indeks PADU: ", round(map_sf$idx_padu_final, 2)) %>% lapply(htmltools::HTML)
+      
       pal <- leaflet::colorNumeric(
         palette = "RdYlGn",
         domain  = map_sf$idx_padu_final,
@@ -336,13 +339,12 @@ padu_combine_server <- function(id, output_dir) {
       leaflet::leaflet(map_sf) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
+          group       = "padu_final_layer",
           fillColor   = ~pal(idx_padu_final),
           fillOpacity = 0.7,
           weight      = 1,
           color       = "black",
-          label       = ~paste0(
-            "<strong>Indeks PADU:</strong> ", round(idx_padu_final, 3)
-          ) %>% lapply(htmltools::HTML),
+          label       = ~search_label,
           popup       = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>Indeks PADU:</b>", round(idx_padu_final, 3)
@@ -350,9 +352,21 @@ padu_combine_server <- function(id, output_dir) {
           highlightOptions = leaflet::highlightOptions(
             weight = 3,
             color  = "red",
-            fillOpacity = 0.9
+            fillOpacity = 0.9,
+            bringToFront = TRUE
           )
         ) %>%
+        leaflet.extras::addSearchFeatures(
+          targetGroups = "padu_final_layer",
+          options = leaflet.extras::searchFeaturesOptions(
+            propertyName = "label",    
+            zoom = 15,                 
+            openPopup = TRUE,           
+            firstTipSubmit = TRUE,
+            autoCollapse = FALSE,
+            hideMarkerOnCollapse = TRUE
+          )
+        ) %>% leaflet.extras::addResetMapButton() %>% 
         leaflet::addLegend(
           position = "bottomright",
           pal      = pal,

@@ -236,6 +236,9 @@ padan_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom idx_padan tidak ditemukan.", position = "topright"))
       }
       
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | ",
+                                    "Indeks PADAN: ", round(map_sf$idx_padan, 2)) %>% lapply(htmltools::HTML)
+      
       pal <- leaflet::colorNumeric(
         palette = "RdYlGn",
         domain  = map_sf$idx_padan,
@@ -245,13 +248,12 @@ padan_server <- function(id, output_dir) {
       leaflet::leaflet(map_sf) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
+          group       = "padan_layer",
           fillColor   = ~pal(idx_padan),
           fillOpacity = 0.7,
           weight      = 1,
           color       = "black",
-          label       = ~paste0(
-            "<strong>Indeks PADAN:</strong> ", round(idx_padan, 3)
-          ) %>% lapply(htmltools::HTML),
+          label       = ~search_label,
           popup       = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>Indeks SERASI:</b>", round(idx_serasi, 3), "<br>",
@@ -261,9 +263,21 @@ padan_server <- function(id, output_dir) {
           highlightOptions = leaflet::highlightOptions(
             weight = 3,
             color  = "red",
-            fillOpacity = 0.9
+            fillOpacity = 0.9,
+            bringToFront = TRUE
           )
         ) %>%
+        leaflet.extras::addSearchFeatures(
+          targetGroups = "padan_layer",
+          options = leaflet.extras::searchFeaturesOptions(
+            propertyName = "label",    
+            zoom = 15,                 
+            openPopup = TRUE,           
+            firstTipSubmit = TRUE,
+            autoCollapse = FALSE,
+            hideMarkerOnCollapse = TRUE
+          )
+        ) %>% leaflet.extras::addResetMapButton() %>% 
         leaflet::addLegend(
           position = "bottomright",
           pal      = pal,

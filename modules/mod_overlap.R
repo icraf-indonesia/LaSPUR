@@ -579,6 +579,9 @@ overlap_server <- function(id, output_dir) {
         map_sf <- sf::st_transform(map_sf, crs = 4326)
       }
       
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, 
+                                    " | Indeks SERASI: ", round(map_sf$idx_serasi, 2)) %>% lapply(htmltools::HTML)
+      
       pal <- leaflet::colorFactor(
         palette = c("red", "orange", "green"),
         domain  = c(0, 0.5, 1),
@@ -588,14 +591,12 @@ overlap_server <- function(id, output_dir) {
       leaflet::leaflet(map_sf) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
+          group       = "serasi_layer", 
           fillColor   = ~pal(idx_serasi),
           fillOpacity = 0.7,
           weight      = 1,
           color       = "black",
-          label       = ~paste0(
-            "<strong>Indeks SERASI:</strong> ", round(idx_serasi, 2), "<br>",
-            "<strong>Luas (ha):</strong> ", round(area_ha, 2)
-          ) %>% lapply(htmltools::HTML),
+          label       = ~search_label,
           popup       = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>Status:</b>", stat_pu, "<br>",
@@ -610,9 +611,21 @@ overlap_server <- function(id, output_dir) {
           highlightOptions = leaflet::highlightOptions(
             weight = 3,
             color  = "red",
-            fillOpacity = 0.9
+            fillOpacity = 0.9,
+            bringToFront = TRUE
           )
         ) %>%
+        leaflet.extras::addSearchFeatures(
+          targetGroups = "serasi_layer",
+          options = leaflet.extras::searchFeaturesOptions(
+            propertyName = "label",    
+            zoom = 15,                 
+            openPopup = TRUE,           
+            firstTipSubmit = TRUE,
+            autoCollapse = FALSE,
+            hideMarkerOnCollapse = TRUE
+          )
+        ) %>% leaflet.extras::addResetMapButton() %>% 
         leaflet::addLegend(
           position = "bottomright",
           pal      = pal,

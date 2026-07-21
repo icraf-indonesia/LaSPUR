@@ -28,6 +28,7 @@ pacman::p_load(
   future,
   data.table,
   leaflet,
+  leaflet.extras,
   htmltools,
   readxl,
   shinyjs,
