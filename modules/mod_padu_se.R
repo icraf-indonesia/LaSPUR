@@ -338,7 +338,10 @@ padu_se_server <- function(id, output_dir) {
         na.color = "grey"
       )
       
-      leaflet::leaflet(map_sf) %>%
+      leaflet::leaflet(
+        map_sf,
+        options = leafletOptions(preferCanvas = TRUE)
+        ) %>%
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
         leaflet::addPolygons(
           layerId     = ~id_pu, 
@@ -347,6 +350,7 @@ padu_se_server <- function(id, output_dir) {
           fillOpacity = 0.7,
           weight      = 1,
           color       = "black",
+          stroke      = FALSE,
           label       = ~search_label, 
           popup       = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
@@ -440,7 +444,7 @@ padu_se_server <- function(id, output_dir) {
           fillOpacity = 0.5,
           group = "polygon_highlight",
           popup = paste(
-            "<b>ID PU (SELECTED):</b>", selected_polygon$id_pu, "<br>",
+            "<b>ID PU (Terpilih):</b>", selected_polygon$id_pu, "<br>",
             "<b>Indeks PADU-SE:</b>", round(selected_polygon$idx_padu_se, 3)
           ) %>% lapply(htmltools::HTML)
         )
