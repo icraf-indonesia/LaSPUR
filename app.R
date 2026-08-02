@@ -371,6 +371,135 @@ ui <- page_sidebar(
     #tabs.nav-pills .nav-link:hover .close-tab-btn,
     #tabs.nav-pills .nav-link.active .close-tab-btn { opacity: 1; }
     .close-tab-btn:hover { background-color: #FEE2E2 !important; color: #EF4444 !important; }
+
+    /* ========================================================
+       COLLAPSIBLE LEFT PANEL (INPUT & PARAMETER)
+       ======================================================== */
+
+    /* The row must not wrap so collapse works cleanly */
+    .module-panel-wrapper > .row {
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+
+    /* Left col: transition flex-basis + opacity + padding */
+    .module-panel-wrapper > .row > .col-sm-4 {
+      flex: 0 0 33.3333%;
+      max-width: 33.3333%;
+      overflow: hidden;
+      transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                  max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity   0.25s ease,
+                  padding   0.35s ease;
+    }
+
+    /* Right col */
+    .module-panel-wrapper > .row > .col-sm-8 {
+      flex: 0 0 66.6667%;
+      max-width: 66.6667%;
+      transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                  max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Collapsed — left col shrinks to zero */
+    .module-panel-wrapper.panel-collapsed > .row > .col-sm-4 {
+      flex: 0 0 0% !important;
+      max-width: 0 !important;
+      opacity: 0;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      pointer-events: none;
+    }
+    /* Right col fills full width */
+    .module-panel-wrapper.panel-collapsed > .row > .col-sm-8 {
+      flex: 0 0 100% !important;
+      max-width: 100% !important;
+    }
+
+    /* ========================================================
+       TOGGLE BUTTON STICKY ON RIGHT PANEL
+       ======================================================== */
+    .panel-toggle-container {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #FFFFFF;
+      padding: 8px 16px;
+      border-bottom: 1px solid #E2E8F0;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      border-radius: 0 0 8px 8px;
+      margin-bottom: 8px;
+    }
+    .panel-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #475569;
+      background-color: #F1F5F9;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+      line-height: 1.4;
+    }
+    .panel-toggle-btn:hover {
+      background-color: #eef6fc;
+      color: #1b75ba;
+      border-color: #1b75ba;
+    }
+    
+    /* ========================================================
+       COLLAPSIBLE TOGGLE BUTTON ON RIGHT PANEL
+       ======================================================== */
+    /* ── Equal height for left & right panels ── */
+    .module-panel-wrapper > .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .module-panel-wrapper > .row > [class*='col-'] {
+      display: flex;
+      flex-direction: column;
+    }
+    .module-panel-wrapper > .row > [class*='col-'] > .card,
+    .module-panel-wrapper > .row > [class*='col-'] > div:not(.panel-toggle-container) {
+      flex: 1;
+      height: 100%;
+    }
+    
+    /* ── Equal height & alignment for card headers ── */
+    .card-header {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px !important;
+      border-radius: 16px 16px 0 0 !important;
+      overflow: visible !important;
+    }
+    
+    .card-header .card-title,
+    .card-header h5,
+    .card-header h4,
+    .card-header h3 {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 1;
+      margin: 0;
+    }
+    
+    .panel-toggle-btn {
+      margin: 0 !important;
+      align-self: center;
+    }
   ")),
   
   sidebar = sidebar(
@@ -661,8 +790,11 @@ server <- function(input, output, session) {
         value = tab_id,
         div(
           style = "padding: 24px; background-color: #FFFFFF; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0; border-top: none;",
-          nav_buttons, 
-          cfg$ui_fn(instance_id)
+          nav_buttons,
+          div(
+            class = "module-panel-wrapper",
+            cfg$ui_fn(instance_id)
+          )
         )
       ),
       select = TRUE
@@ -752,7 +884,82 @@ $(document).ready(function() {
     $('body').toggleClass('sidebar-mini');
   });
 
-  // MUTATION OBSERVER: Mengawasi penambahan Tab baru dari R Shiny
+  // ── Collapsible Left Panel (Input & Parameter) ────────────
+  // Now injects the toggle button into the .card-header of the right panel
+  function injectToggleButtons() {
+    $('.module-panel-wrapper').each(function() {
+      var $wrapper = $(this);
+      var $rightCol = $wrapper.find('> .row > .col-sm-8');
+      if (!$rightCol.length) return;
+
+      // Remove any existing toggle containers/buttons to avoid duplicates
+      $rightCol.find('.panel-toggle-container, .panel-toggle-btn').remove();
+
+      // Look for a card-header inside the right column
+      var $header = $rightCol.find('.card-header');
+      var $btn;
+
+      // Helper to create and attach the toggle button
+      function createToggleButton(appendTo) {
+        $btn = $('<button class=\"panel-toggle-btn\" type=\"button\" title=\"Sembunyikan / Tampilkan Panel Input\">' +
+          '<i class=\"bi bi-layout-sidebar-inset-reverse\"></i>' +
+          '<span>Perluas</span>' +
+          '</button>');
+        // Style it to sit nicely in the header
+        if (appendTo.is('.card-header')) {
+          $btn.css({
+            'float': 'right',
+            'margin-top': '5px',
+            'margin-right': '5px'
+          });
+        } else {
+          // Fallback: wrap in a container with flex
+          var $container = $('<div class=\"panel-toggle-container\" style=\"display: flex; justify-content: flex-end; padding: 8px 16px;\">');
+          $container.append($btn);
+          appendTo = $container;
+          $rightCol.prepend($container);
+        }
+        appendTo.append($btn);
+
+        // Click handler
+        $btn.on('click', function(e) {
+          e.stopPropagation();
+          var $icon  = $(this).find('i');
+          var $label = $(this).find('span');
+          var isCollapsed = $wrapper.hasClass('panel-collapsed');
+
+          $wrapper.toggleClass('panel-collapsed');
+
+          if (isCollapsed) {
+            // Expanded: show collapse icon
+            $icon.removeClass('bi-layout-sidebar-inset').addClass('bi-layout-sidebar-inset-reverse');
+            $label.text('Perluas');
+          } else {
+            // Collapsed: show expand icon
+            $icon.removeClass('bi-layout-sidebar-inset-reverse').addClass('bi-layout-sidebar-inset');
+            $label.text('Ringkas');
+          }
+
+          // Trigger resize so maps/leaflet fill the new width
+          setTimeout(function() { $(window).trigger('resize'); }, 380);
+        });
+      }
+
+      if ($header.length) {
+        // Inject into the header
+        createToggleButton($header);
+      } else {
+        // Fallback: prepend to the right column as before
+        createToggleButton($rightCol);
+      }
+    });
+  }
+
+  // Initial injection and mutation observer for new tabs
+  attachCloseButtons();
+  injectToggleButtons();
+
+  // MutationObserver to handle dynamically added tabs
   function attachCloseButtons() {
     $('#tabs.nav-pills .nav-link').each(function() {
       var $link = $(this);
@@ -770,11 +977,13 @@ $(document).ready(function() {
   }
 
   attachCloseButtons();
-  
+  injectToggleButtons(); // initial injection
+
   var observer = new MutationObserver(function(mutations) {
     attachCloseButtons();
+    setTimeout(injectToggleButtons, 100);
   });
-  
+
   var targetNode = document.getElementById('tabs');
   if(targetNode) {
     observer.observe(targetNode, { childList: true, subtree: true });
@@ -797,6 +1006,7 @@ $(document).ready(function() {
 
 });
 "
+
 ui$children <- c(ui$children, list(tags$script(HTML(jsCode))))
 
 shinyApp(ui, server)
