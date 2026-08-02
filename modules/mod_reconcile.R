@@ -141,18 +141,15 @@ reconcile_ui <- function(id) {
           hr(),
           navset_tab(
             nav_panel(
-              "Peta",
-              leafletOutput(ns("reconcile_map_view"), height = "500px")
-            ),
-            nav_panel(
-              "Tabel Hasil",
+              "Visualisasi Hasil",
+              leafletOutput(ns("reconcile_map_view"), height = "400px"),
               div(
-                style = "height: 500px; overflow: auto;",
+                style = "height: 400px; overflow: auto; margin-top: 8px;",
                 uiOutput(ns("table_view_panel"))
               )
             ),
             nav_panel(
-              "Log & Validasi",
+              "Log",
               div(
                 style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
                 verbatimTextOutput(ns("validation_log"))
@@ -602,6 +599,7 @@ reconcile_server <- function(id, output_dir) {
       DT::datatable(
         df,
         extensions = c('FixedColumns', 'FixedHeader'),
+        selection = "single",
         options = list(
           pageLength   = 10,
           scrollX      = TRUE,
@@ -634,6 +632,54 @@ reconcile_server <- function(id, output_dir) {
       req(rv$resolved_integrated)
       df <- sf::st_drop_geometry(rv$resolved_integrated)
       format_reconcile_table(df, "integrated")
+    })
+    
+    # ── Row-click map zoom/highlight ─────────────────────────────
+    .highlight_row <- function(sf_data, row_idx) {
+      req(!is.null(sf_data), nrow(sf_data) >= row_idx)
+      feature <- sf_data[row_idx, ]
+      feature_wgs <- tryCatch(.to_leaflet_crs(feature), error = function(e) NULL)
+      req(!is.null(feature_wgs))
+      centroid <- tryCatch(sf::st_centroid(sf::st_geometry(feature_wgs))[[1]], error = function(e) NULL)
+      req(!is.null(centroid))
+      lng <- centroid[[1]]; lat <- centroid[[2]]
+      leafletProxy("reconcile_map_view", session) %>%
+        clearGroup("row_highlight") %>%
+        setView(lng = lng, lat = lat, zoom = 13) %>%
+        addPolygons(
+          data = feature_wgs,
+          group = "row_highlight",
+          fillColor = "#FF6B35",
+          fillOpacity = 0.6,
+          stroke = FALSE
+        )
+    }
+    
+    observeEvent(input$rtrw_preview_render_rows_selected, {
+      sel <- input$rtrw_preview_render_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        leafletProxy("reconcile_map_view", session) %>% clearGroup("row_highlight")
+      } else {
+        .highlight_row(rv$resolved_rtrw, sel[1])
+      }
+    })
+    
+    observeEvent(input$rzwp3k_preview_render_rows_selected, {
+      sel <- input$rzwp3k_preview_render_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        leafletProxy("reconcile_map_view", session) %>% clearGroup("row_highlight")
+      } else {
+        .highlight_row(rv$resolved_rzwp3k, sel[1])
+      }
+    })
+    
+    observeEvent(input$integrated_preview_render_rows_selected, {
+      sel <- input$integrated_preview_render_rows_selected
+      if (is.null(sel) || length(sel) == 0) {
+        leafletProxy("reconcile_map_view", session) %>% clearGroup("row_highlight")
+      } else {
+        .highlight_row(rv$resolved_integrated, sel[1])
+      }
     })
     
     # ── Leaflet Map ─────────────────────────────────────────────
@@ -701,8 +747,7 @@ reconcile_server <- function(id, output_dir) {
             group = "RTRW Reconciled",
             fillColor = ~pal_reconcile(Reconcile),
             fillOpacity = 0.7,
-            weight = 1,
-            color = "#333333",
+            stroke = FALSE,
             label = ~search_label,
             popup = popup_rtrw,
             highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)
@@ -719,8 +764,7 @@ reconcile_server <- function(id, output_dir) {
             group = "RZWP3K Reconciled",
             fillColor = ~pal_reconcile(Reconcile),
             fillOpacity = 0.7,
-            weight = 1,
-            color = "#333333",
+            stroke = FALSE,
             label = ~search_label,
             popup = popup_rzwp3k,
             highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)
@@ -769,8 +813,7 @@ reconcile_server <- function(id, output_dir) {
             group = "Integrated Reconciled",
             fillColor = ~pal_reconcile(Reconcile),
             fillOpacity = 0.7,
-            weight = 1,
-            color = "#333333",
+            stroke = FALSE,
             label = ~search_label,
             popup = popup_int,
             highlightOptions = highlightOptions(weight = 3, color = "#0056b3", fillOpacity = 0.8, bringToFront = TRUE)

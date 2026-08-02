@@ -503,3 +503,300 @@ ensure_geometry_name <- function(sf_obj) {
   }
   return(sf_obj)
 }
+
+# ── Shared UI for Result Visualization ──────────────────────────
+#' Create Result Visualization UI
+#'
+#' @param ns Namespace function of the module calling this.
+#' @return A Shiny UI object containing the map, table, log, and download buttons.
+#' @export
+create_result_ui <- function(ns) {
+  tagList(
+    navset_tab(
+      nav_panel(
+        "Visualisasi Hasil",
+        fluidRow(
+          column(
+            width = 12,
+            style = "margin-top: 10px;",
+            leafletOutput(ns("result_map"), height = "450px")
+          )
+        ),
+        hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"), 
+        fluidRow(
+          column(
+            width = 12,
+            div(
+              style = "max-height: 400px; overflow-y: auto;",
+              DT::DTOutput(ns("result_table"))
+            )
+          )
+        )
+      ),
+      nav_panel(
+        "Log",
+        div(
+          style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
+          verbatimTextOutput(ns("validation_log"))
+        )
+      )
+    ),
+    
+    div(
+      style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
+      downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
+      downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
+    )
+  )
+}
+
+# ── Shared Server for Result Visualization ──────────────────────
+#' Render Result Visualization Server Logic
+#'
+#' @param input,output,session Standard shiny server arguments from the calling module.
+#' @param rv Reactive values object containing analysis_result$map, analysis_result$table, log_messages, gpkg_path, xlsx_path.
+#' @param config A list containing configuration options:
+#'   - map_color_col: Column to use for map coloring.
+#'   - map_title: Title for the map legend.
+#'   - map_label_cols: Named list or vector of columns for labels/popups. Example: c("ID PU: " = "id_pu", "Indeks: " = "idx_padu_se").
+#'   - map_palette: Palette name (e.g., "RdYlGn"). Default is "RdYlGn".
+#'   - table_cols: Named vector for subsetting and renaming table columns. c("colname" = "Display Name").
+#'   - table_round_cols: Character vector of display column names to round to 2 digits.
+#' @export
+render_result_server <- function(input, output, session, rv, config) {
+  
+  # Default configurations
+  map_color_col <- config$map_color_col
+  map_title <- config$map_title
+  map_palette <- if(!is.null(config$map_palette)) config$map_palette else "RdYlGn"
+  table_cols <- config$table_cols
+  table_round_cols <- config$table_round_cols
+  
+  # ── Map output ──────────────────
+  output$result_map <- renderLeaflet({
+    req(rv$analysis_result)
+    
+    map_sf <- rv$analysis_result$map
+    
+    if (!sf::st_is_longlat(map_sf)) {
+      map_sf <- sf::st_transform(map_sf, crs = 4326)
+    }
+    
+    if (!map_color_col %in% names(map_sf)) {
+      return(leaflet::leaflet() %>% 
+               leaflet::addControl(paste("Kolom", map_color_col, "tidak ditemukan."), position = "topright"))
+    }
+    
+    # Construct popup and label HTML dynamically
+    create_html <- function(row) {
+      res <- ""
+      for (name in names(config$map_label_cols)) {
+        col <- config$map_label_cols[[name]]
+        val <- row[[col]]
+        if (is.numeric(val)) val <- round(val, 3)
+        res <- paste0(res, "<b>", name, "</b>: ", val, "<br>")
+      }
+      res
+    }
+    
+    create_label <- function(row) {
+      res <- ""
+      for (name in names(config$map_label_cols)) {
+        col <- config$map_label_cols[[name]]
+        val <- row[[col]]
+        if (is.numeric(val)) val <- round(val, 2)
+        if (res == "") {
+          res <- paste0(name, " ", val)
+        } else {
+          res <- paste0(res, " | ", name, " ", val)
+        }
+      }
+      res
+    }
+    
+    # Apply to all rows
+    if (nrow(map_sf) > 0) {
+      popups <- sapply(1:nrow(map_sf), function(i) create_html(map_sf[i, ]))
+      labels <- sapply(1:nrow(map_sf), function(i) create_label(map_sf[i, ]))
+      map_sf$popup_html <- lapply(popups, htmltools::HTML)
+      map_sf$search_label <- lapply(labels, htmltools::HTML)
+    } else {
+      map_sf$popup_html <- list()
+      map_sf$search_label <- list()
+    }
+    
+    # Check if map_color_col is numeric to decide palette type
+    if(is.numeric(map_sf[[map_color_col]])) {
+      pal <- leaflet::colorNumeric(
+        palette = map_palette,
+        domain  = map_sf[[map_color_col]],
+        na.color = "grey"
+      )
+    } else {
+      pal <- leaflet::colorFactor(
+        palette = map_palette,
+        domain = map_sf[[map_color_col]],
+        na.color = "grey"
+      )
+    }
+    
+    leaflet::leaflet(
+      map_sf,
+      options = leafletOptions(preferCanvas = TRUE)
+    ) %>%
+      leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+      leaflet::addPolygons(
+        layerId     = ~id_pu, 
+        group       = "result_layer",
+        fillColor   = ~pal(get(map_color_col)),
+        fillOpacity = 0.7,
+        weight      = 1,
+        color       = "black",
+        stroke      = FALSE,
+        label       = ~search_label, 
+        popup       = ~popup_html,
+        highlightOptions = leaflet::highlightOptions(
+          weight = 3,
+          color  = "red",
+          fillOpacity = 0.9,
+          bringToFront = TRUE
+        )
+      ) %>%
+      leaflet.extras::addSearchFeatures(
+        targetGroups = "result_layer",
+        options = leaflet.extras::searchFeaturesOptions(
+          propertyName = "label",    
+          zoom = 15,                 
+          openPopup = TRUE,           
+          firstTipSubmit = TRUE,
+          autoCollapse = FALSE,
+          hideMarkerOnCollapse = TRUE
+        )
+      ) %>% leaflet.extras::addResetMapButton() %>% 
+      leaflet::addLegend(
+        position = "bottomright",
+        pal      = pal,
+        values   = as.formula(paste0("~`", map_color_col, "`")),
+        title    = map_title,
+        opacity  = 0.7
+      )
+  })
+  
+  # ── Table output ───────────────────────────────────────────
+  output$result_table <- DT::renderDT({
+    req(rv$analysis_result)
+    
+    df <- rv$analysis_result$table
+    
+    # Subset and rename columns
+    valid_cols <- names(table_cols)[names(table_cols) %in% colnames(df)]
+    df_subset <- df[, valid_cols, drop = FALSE]
+    colnames(df_subset) <- table_cols[valid_cols]
+    
+    dt <- DT::datatable(
+      df_subset,
+      selection = "single", 
+      extensions = c('FixedColumns', 'FixedHeader'),
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        scrollY = "400px",
+        dom = 'Bfrtip',
+        fixedColumns = list(
+          leftColumns = 3
+        ),
+        fixedHeader = TRUE
+      ),
+      rownames = FALSE,
+      class = "display compact stripe hover"
+    )
+    
+    # Round specified columns
+    if (!is.null(table_round_cols) && length(table_round_cols) > 0) {
+      valid_round_cols <- table_round_cols[table_round_cols %in% colnames(df_subset)]
+      if (length(valid_round_cols) > 0) {
+        dt <- dt %>% DT::formatRound(columns = valid_round_cols, digits = 2)
+      }
+    }
+    
+    dt
+  })
+  
+  # Table row selection targets map polygon 
+  observeEvent(input$result_table_rows_selected, {
+    req(rv$analysis_result)
+    
+    selected_idx <- input$result_table_rows_selected
+    df_table <- rv$analysis_result$table
+    
+    # Assuming 'id_pu' is the standard identifier across all tables
+    if (!"id_pu" %in% colnames(df_table)) return()
+    
+    selected_id_pu <- df_table$id_pu[selected_idx]
+    
+    map_sf <- rv$analysis_result$map
+    if (!sf::st_is_longlat(map_sf)) {
+      map_sf <- sf::st_transform(map_sf, crs = 4326)
+    }
+    
+    selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
+    req(nrow(selected_polygon) > 0)
+    centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
+    
+    # Build popup for highlighted polygon
+    row_data <- selected_polygon[1, ]
+    popup_text <- ""
+    for (name in names(config$map_label_cols)) {
+      col <- config$map_label_cols[[name]]
+      val <- row_data[[col]]
+      if (is.numeric(val)) val <- round(val, 3)
+      popup_text <- paste0(popup_text, "<b>", name, " (Terpilih)</b>: ", val, "<br>")
+    }
+    
+    leaflet::leafletProxy("result_map", session = session) %>%
+      leaflet::clearGroup("polygon_highlight") %>%
+      leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
+      leaflet::addPolygons(
+        data = selected_polygon,
+        color = "#FF4136",     
+        weight = 5,
+        fillColor = "#FFDC00", 
+        fillOpacity = 0.5,
+        group = "polygon_highlight",
+        popup = lapply(popup_text, htmltools::HTML)
+      )
+  })
+  
+  observe({
+    if (is.null(input$result_table_rows_selected)) {
+      leaflet::leafletProxy("result_map", session = session) %>% leaflet::clearGroup("polygon_highlight")
+    }
+  })
+  
+  # ── Validation log ─────────────────────────────────────────
+  output$validation_log <- renderPrint({
+    invalidateLater(100, session)
+    cat(rv$log_messages)
+  })
+  
+  # ── Download handlers ──────────────────────────────────────
+  output$dl_gpkg <- downloadHandler(
+    filename = function() {
+      if(!is.null(rv$gpkg_path)) basename(rv$gpkg_path) else "result.gpkg"
+    },
+    content = function(file) {
+      req(rv$gpkg_path)
+      file.copy(rv$gpkg_path, file, overwrite = TRUE)
+    }
+  )
+  
+  output$dl_xlsx <- downloadHandler(
+    filename = function() {
+      if(!is.null(rv$xlsx_path)) basename(rv$xlsx_path) else "result.xlsx"
+    },
+    content = function(file) {
+      req(rv$xlsx_path)
+      file.copy(rv$xlsx_path, file, overwrite = TRUE)
+    }
+  )
+}

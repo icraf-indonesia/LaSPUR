@@ -148,18 +148,16 @@ recommendation_overlaps_ui <- function(id) {
           
           navset_tab(
             nav_panel(
-              "Peta",
-              leafletOutput(ns("recommendation_map"), height = "500px")
-            ),
-            nav_panel(
-              "Tabel",
+              "Visualisasi Hasil",
+              leafletOutput(ns("recommendation_map"), height = "450px"),
+              hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
               div(
-                style = "height: 500px; overflow: auto;",
+                style = "max-height: 500px; overflow: auto;",
                 uiOutput(ns("table_accordion"))
               )
             ),
             nav_panel(
-              "Log Validasi",
+              "Log",
               div(
                 style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
                 verbatimTextOutput(ns("validation_log"))
@@ -784,6 +782,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
       DT::datatable(
         df_final_subset,
         extensions = c('FixedColumns', 'FixedHeader'),
+        selection = "single",
         options = list(
           pageLength = 10,
           scrollX = TRUE,
@@ -803,10 +802,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
         )
     })
     
-    
-    output$validation_log <- renderText({
-      if (!is.null(rv$final_log)) rv$final_log else "Siap untuk analisis rekomendasi."
-    })
     
     # ── Interactive map ────────────────────────────────────────
     output$recommendation_map <- renderLeaflet({
@@ -848,6 +843,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
           fillOpacity = 0.7,
           weight = 1,
           color = "black",
+          stroke = FALSE,
           label = ~search_label,
           popup = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
@@ -886,21 +882,107 @@ recommendation_overlaps_server <- function(id, output_dir) {
         )
     })
     
-    # ── Download handlers ──────────────────────────────────────
-    output$dl_gpkg <- downloadHandler(
-      filename = function() "idx_padan_overlaps_recommendation.gpkg",
-      content = function(file) {
-        req(rv$final_result)
-        file.copy(rv$final_result$gpkg_path, file, overwrite = TRUE)
+    # ── Sync rv$final_result → standard rv fields for render_result_server ──
+    observe({
+      if (!is.null(rv$final_result)) {
+        rv$analysis_result <- list(
+          map   = rv$final_result$map,
+          table = rv$final_result$table
+        )
+        rv$gpkg_path    <- rv$final_result$gpkg_path
+        rv$xlsx_path    <- rv$final_result$xlsx_path
+        rv$log_messages <- if (!is.null(rv$final_log)) rv$final_log else ""
+      } else {
+        rv$analysis_result <- NULL
+        rv$gpkg_path       <- NULL
+        rv$xlsx_path       <- NULL
+        rv$log_messages    <- if (!is.null(rv$final_log)) rv$final_log else "Siap untuk analisis rekomendasi."
       }
+    })
+    
+    # ── Row-click: zoom & highlight on recommendation_map ───
+    observeEvent(input$final_table_rows_selected, {
+      req(rv$final_result)
+      
+      selected_idx <- input$final_table_rows_selected
+      df_table <- rv$final_result$table
+      
+      if (!"id_pu" %in% colnames(df_table)) return()
+      selected_id_pu <- df_table$id_pu[selected_idx]
+      
+      map_sf <- rv$final_result$map
+      if (!sf::st_is_longlat(map_sf)) {
+        map_sf <- sf::st_transform(map_sf, crs = 4326)
+      }
+      
+      selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
+      req(nrow(selected_polygon) > 0)
+      
+      centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
+      
+      popup_text <- paste0(
+        "<b>ID PU:</b> ", selected_polygon$id_pu[1], "<br>",
+        "<b>RTRW asal:</b> ", selected_polygon$RTRW[1], "<br>",
+        "<b>RZWP3K asal:</b> ", selected_polygon$RZWP3K[1], "<br>",
+        "<b>Rekomendasi:</b> ", selected_polygon$recommendation[1], "<br>",
+        "<b>Keputusan:</b> ", selected_polygon$decision[1]
+      )
+      
+      leaflet::leafletProxy("recommendation_map", session = session) %>%
+        leaflet::clearGroup("row_highlight") %>%
+        leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
+        leaflet::addPolygons(
+          data        = selected_polygon,
+          color       = "#FF4136",
+          weight      = 5,
+          fillColor   = "#FFDC00",
+          fillOpacity = 0.5,
+          stroke      = TRUE,
+          group       = "row_highlight",
+          popup       = lapply(popup_text, htmltools::HTML)
+        )
+    })
+    
+    # Clear highlight when no row selected
+    observe({
+      if (is.null(input$final_table_rows_selected)) {
+        leaflet::leafletProxy("recommendation_map", session = session) %>%
+          leaflet::clearGroup("row_highlight")
+      }
+    })
+    
+    # ── Shared result server: wires validation_log, dl_gpkg, dl_xlsx ──
+    recom_overlaps_config <- list(
+      map_color_col  = "recommendation",
+      map_title      = "Rekomendasi Awal",
+      map_palette    = c("blue", "green", "orange", "red", "purple", "grey"),
+      map_label_cols = list(
+        "ID PU"        = "id_pu",
+        "RTRW"         = "RTRW",
+        "RZWP3K"       = "RZWP3K",
+        "Rekomendasi"  = "recommendation",
+        "Keputusan"    = "decision"
+      ),
+      table_cols     = c(
+        "id_pu"             = "ID PU",
+        "RTRW"              = "RTRW",
+        "RZWP3K"            = "RZWP3K",
+        "area_ha"           = "Luas (ha)",
+        "admin"             = "Administrasi",
+        "idx_serasi"        = "Indeks SERASI Awal",
+        "idx_padu_final"    = "Indeks PADU Kombinasi",
+        "alt_RTRW"          = "RTRW Alternatif",
+        "alt_RZWP3K"        = "RZWP3K Alternatif",
+        "recommendation"    = "Opsi Rekomendasi",
+        "decision"          = "Rekomendasi Keputusan",
+        "idx_padan_final"   = "Indeks PADAN Akhir"
+      ),
+      table_round_cols = c(
+        "Luas (ha)", "Indeks SERASI Awal", "Indeks PADU Kombinasi",
+        "Indeks PADAN Akhir"
+      )
     )
     
-    output$dl_xlsx <- downloadHandler(
-      filename = function() "idx_padan_overlaps_recommendation.xlsx",
-      content = function(file) {
-        req(rv$final_result)
-        file.copy(rv$final_result$xlsx_path, file, overwrite = TRUE)
-      }
-    )
+    render_result_server(input, output, session, rv, recom_overlaps_config)
   })
 }

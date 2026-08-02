@@ -88,42 +88,7 @@ padu_se_ui <- function(id) {
           
           hr(),
           
-          navset_tab(
-            nav_panel(
-              "Visualisasi Hasil",
-              fluidRow(
-                column(
-                  width = 12,
-                  style = "margin-top: 10px;",
-                  leafletOutput(ns("result_map"), height = "450px")
-                )
-              ),
-              hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"), 
-              fluidRow(
-                column(
-                  width = 12,
-                  div(
-                    style = "max-height: 400px; overflow-y: auto;",
-                    DT::DTOutput(ns("result_table"))
-                  )
-                )
-              )
-            ),
-            
-            nav_panel(
-              "Log",
-              div(
-                style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
-                verbatimTextOutput(ns("validation_log"))
-              )
-            )
-          ),
-          
-          div(
-            style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
-            downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
-            downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
-          )
+          create_result_ui(ns)
         )
       )
     )
@@ -314,170 +279,36 @@ padu_se_server <- function(id, output_dir) {
       }
     })
     
-    # ── Map output ──────────────────
-    output$result_map <- renderLeaflet({
-      req(rv$analysis_result)
-      
-      map_sf <- rv$analysis_result$map
-      
-      if (!sf::st_is_longlat(map_sf)) {
-        map_sf <- sf::st_transform(map_sf, crs = 4326)
-      }
-      
-      if (!"idx_padu_se" %in% names(map_sf)) {
-        return(leaflet::leaflet() %>% 
-                 leaflet::addControl("Kolom idx_padu_se tidak ditemukan.", position = "topright"))
-      }
-      
-      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | ",
-                                    "Indeks PADU-SE: ", round(map_sf$idx_padu_se, 2)) %>% lapply(htmltools::HTML)
-      
-      pal <- leaflet::colorNumeric(
-        palette = "RdYlGn",
-        domain  = map_sf$idx_padu_se,
-        na.color = "grey"
+    # ── Result Visualization ───────────────────────────────────
+    padu_se_config <- list(
+      map_color_col = "idx_padu_se",
+      map_title = "Indeks PADU-SE",
+      map_palette = "RdYlGn",
+      map_label_cols = c(
+        "ID PU" = "id_pu",
+        "RTRW" = "RTRW",
+        "RZWP3K" = "RZWP3K",
+        "Indeks PADU-SE" = "idx_padu_se"
+      ),
+      table_cols = c(
+        "id_pu" = "ID PU",
+        "RTRW" = "RTRW",
+        "RZWP3K" = "RZWP3K",
+        "admin" = "Administrasi",
+        "area_ha" = "Luas (ha)",
+        "ntl" = "Cahaya Malam (nanoWatts/sr/cm²)",
+        "popdens" = "Kepadatan Penduduk (jiwa/ha)",
+        "idx_padu_se" = "Indeks PADU-SE"
+      ),
+      table_round_cols = c(
+        "Luas (ha)", 
+        "Cahaya Malam (nanoWatts/sr/cm²)", 
+        "Kepadatan Penduduk (jiwa/ha)", 
+        "Indeks PADU-SE"
       )
-      
-      leaflet::leaflet(
-        map_sf,
-        options = leafletOptions(preferCanvas = TRUE)
-        ) %>%
-        leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
-        leaflet::addPolygons(
-          layerId     = ~id_pu, 
-          group       = "padu_se_layer",
-          fillColor   = ~pal(idx_padu_se),
-          fillOpacity = 0.7,
-          weight      = 1,
-          color       = "black",
-          stroke      = FALSE,
-          label       = ~search_label, 
-          popup       = ~paste(
-            "<b>ID PU:</b>", id_pu, "<br>",
-            "<b>Indeks PADU-SE:</b>", round(idx_padu_se, 3)
-          ) %>% lapply(htmltools::HTML),
-          highlightOptions = leaflet::highlightOptions(
-            weight = 3,
-            color  = "red",
-            fillOpacity = 0.9,
-            bringToFront = TRUE
-          )
-        ) %>%
-        leaflet.extras::addSearchFeatures(
-          targetGroups = "padu_se_layer",
-          options = leaflet.extras::searchFeaturesOptions(
-            propertyName = "label",    
-            zoom = 15,                 
-            openPopup = TRUE,           
-            firstTipSubmit = TRUE,
-            autoCollapse = FALSE,
-            hideMarkerOnCollapse = TRUE
-          )
-        ) %>% leaflet.extras::addResetMapButton() %>% 
-        leaflet::addLegend(
-          position = "bottomright",
-          pal      = pal,
-          values   = ~idx_padu_se,
-          title    = "Indeks PADU-SE",
-          opacity  = 0.7
-        )
-    })
-    
-    # ── Table output ───────────────────────────────────────────
-    output$result_table <- DT::renderDT({
-      req(rv$analysis_result)
-      
-      df <- rv$analysis_result$table
-      df_subset <- df[, c("id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "ntl", "popdens", "idx_padu_se")]
-      
-      colnames(df_subset) <- c("ID PU", "RTRW", "RZWP3K", "Administrasi", "Luas (ha)", "Cahaya Malam (nanoWatts/sr/cm²)", "Kepadatan Penduduk (jiwa/ha)", "Indeks PADU-SE")
-      
-      DT::datatable(
-        df_subset,
-        selection = "single", 
-        extensions = c('FixedColumns', 'FixedHeader'),
-        options = list(
-          pageLength = 10,
-          scrollX = TRUE,
-          scrollY = "400px",
-          dom = 'Bfrtip',
-          fixedColumns = list(
-            leftColumns = 3
-          ),
-          fixedHeader = TRUE
-        ),
-        rownames = FALSE,
-        class = "display compact stripe hover"
-      ) %>%
-        DT::formatRound(
-          columns = c("Luas (ha)", "Cahaya Malam (nanoWatts/sr/cm²)", "Kepadatan Penduduk (jiwa/ha)", "Indeks PADU-SE"),  
-          digits = 2
-        )
-    })
-    
-    # Table row selection targets map polygon 
-    observeEvent(input$result_table_rows_selected, {
-      req(rv$analysis_result)
-      
-      selected_idx <- input$result_table_rows_selected
-      df_table <- rv$analysis_result$table
-
-      selected_id_pu <- df_table$id_pu[selected_idx]
-      
-      map_sf <- rv$analysis_result$map
-      if (!sf::st_is_longlat(map_sf)) {
-        map_sf <- sf::st_transform(map_sf, crs = 4326)
-      }
-      
-      selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
-      req(nrow(selected_polygon) > 0)
-      centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
-      
-      leafletProxy("result_map") %>%
-        clearGroup("polygon_highlight") %>%
-        setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
-        addPolygons(
-          data = selected_polygon,
-          color = "#FF4136",     
-          weight = 5,
-          fillColor = "#FFDC00", 
-          fillOpacity = 0.5,
-          group = "polygon_highlight",
-          popup = paste(
-            "<b>ID PU (Terpilih):</b>", selected_polygon$id_pu, "<br>",
-            "<b>Indeks PADU-SE:</b>", round(selected_polygon$idx_padu_se, 3)
-          ) %>% lapply(htmltools::HTML)
-        )
-    })
-    
-    observe({
-      if (is.null(input$result_table_rows_selected)) {
-        leafletProxy("result_map") %>% clearGroup("polygon_highlight")
-      }
-    })
-    
-    # ── Validation log ─────────────────────────────────────────
-    output$validation_log <- renderPrint({
-      invalidateLater(100, session)
-      cat(rv$log_messages)
-    })
-    
-    # ── Download handlers ──────────────────────────────────────
-    output$dl_gpkg <- downloadHandler(
-      filename = function() "idx_padu_se.gpkg",
-      content = function(file) {
-        req(rv$gpkg_path)
-        file.copy(rv$gpkg_path, file, overwrite = TRUE)
-      }
     )
     
-    output$dl_xlsx <- downloadHandler(
-      filename = function() "idx_padu_se.xlsx",
-      content = function(file) {
-        req(rv$xlsx_path)
-        file.copy(rv$xlsx_path, file, overwrite = TRUE)
-      }
-    )
+    render_result_server(input, output, session, rv, padu_se_config)
     
   })
 }
