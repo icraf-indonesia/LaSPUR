@@ -148,7 +148,8 @@ landing_page <- tabPanel(
         p("Rekomendasi penyelesaian alokasi ruang darat & laut saling bertampalan secara spasial pada lokasi yang sama.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_overlap", "Pilih Tumpang Tindih", class = "btn-primary w-100 mt-4",
-                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;",
+                     onclick = "$('body').removeClass('sidebar-mini');")
       ),
       
       div(
@@ -162,7 +163,8 @@ landing_page <- tabPanel(
         p("Rekomendasi penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_adjacent", "Pilih Bertetangga", class = "btn-primary w-100 mt-4",
-                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;",
+                     onclick = "$('body').removeClass('sidebar-mini');")
       ),
       
       div(
@@ -176,7 +178,9 @@ landing_page <- tabPanel(
         p("Rekomendasi alokasi ruang yang memberi dampak sosio-ekologis melalui keterhubungan alami fungsional.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_interconnect", "Segera Hadir", class = "btn-light w-100 mt-4",
-                     style = "background-color: #F1F5F9; color: #64748B; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+                     style = "background-color: #F1F5F9; color: #64748B; border: none; font-weight: 600; padding: 12px; border-radius: 12px;" #,
+                     # onclick = "$('body').removeClass('sidebar-mini');"
+                     )
       )
     ),
     
@@ -866,6 +870,7 @@ server <- function(input, output, session) {
 
 jsCode <- "
 $(document).ready(function() {
+  $('body').addClass('sidebar-mini'); 
 
   function addUserGuideButton() {
     if ($('#navbar-user-guide').length) return;
