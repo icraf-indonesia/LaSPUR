@@ -69,7 +69,7 @@ pacman::p_load(
 #' @export
 load_and_validate_shapefile <- function(shp_path) {
   file_ext <- tolower(tools::file_ext(shp_path))
-
+  
   if (file_ext == "gpkg") {
     # GeoPackage: single file, no sidecar check needed
     if (!file.exists(shp_path)) {
@@ -86,11 +86,11 @@ load_and_validate_shapefile <- function(shp_path) {
     required_ext <- c(".shp", ".shx", ".dbf", ".prj")
     base_path <- tools::file_path_sans_ext(shp_path)
     missing_files <- required_ext[!file.exists(paste0(base_path, required_ext))]
-
+    
     if (length(missing_files) > 0) {
       stop("Missing required files: ", paste(missing_files, collapse = ", "))
     }
-
+    
     # Read shapefile
     message(">> Reading shapefile: ", shp_path, " ...")
     sf_object <- tryCatch(
@@ -572,11 +572,37 @@ render_result_server <- function(input, output, session, rv, config) {
   table_cols <- config$table_cols
   table_round_cols <- config$table_round_cols
   
+  # Simplification tolerance (map units, typically meters for UTM data) used only for the Leaflet display copy of the geometry. 
+  map_simplify_tolerance <- if (!is.null(config$map_simplify_tolerance)) {
+    config$map_simplify_tolerance
+  } else {
+    5 # meters
+  }
+  
   # ── Map output ──────────────────
   output$result_map <- renderLeaflet({
     req(rv$analysis_result)
     
     map_sf <- rv$analysis_result$map
+    
+    # Build a display-only copy with simplified geometry for rendering.
+    if (isTRUE(map_simplify_tolerance > 0) && nrow(map_sf) > 0 && !sf::st_is_longlat(map_sf)) {
+      map_sf <- tryCatch({
+        simplified <- sf::st_simplify(
+          map_sf,
+          dTolerance = map_simplify_tolerance,
+          preserveTopology = TRUE
+        )
+        # Guard against simplification collapsing/invalidating a geometry
+        if (any(!sf::st_is_valid(simplified))) {
+          simplified <- sf::st_make_valid(simplified)
+        }
+        simplified
+      }, error = function(e) {
+        warning("Map geometry simplification failed, falling back to full precision: ", conditionMessage(e))
+        map_sf
+      })
+    }
     
     if (!sf::st_is_longlat(map_sf)) {
       map_sf <- sf::st_transform(map_sf, crs = 4326)
@@ -734,14 +760,26 @@ render_result_server <- function(input, output, session, rv, config) {
     
     selected_id_pu <- df_table$id_pu[selected_idx]
     
-    map_sf <- rv$analysis_result$map
-    if (!sf::st_is_longlat(map_sf)) {
-      map_sf <- sf::st_transform(map_sf, crs = 4326)
+    # Subset in the original CRS
+    map_sf_raw <- rv$analysis_result$map
+    selected_polygon_raw <- map_sf_raw[map_sf_raw$id_pu == selected_id_pu, ]
+    req(nrow(selected_polygon_raw) > 0)
+    
+    if (any(!sf::st_is_valid(selected_polygon_raw))) {
+      selected_polygon_raw <- sf::st_make_valid(selected_polygon_raw)
     }
     
-    selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
-    req(nrow(selected_polygon) > 0)
-    centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
+    centroid_pt <- sf::st_centroid(sf::st_geometry(selected_polygon_raw))
+    if (!sf::st_is_longlat(selected_polygon_raw)) {
+      centroid_pt <- sf::st_transform(centroid_pt, crs = 4326)
+    }
+    centroid_coord <- sf::st_coordinates(centroid_pt)
+    
+    selected_polygon <- if (!sf::st_is_longlat(selected_polygon_raw)) {
+      sf::st_transform(selected_polygon_raw, crs = 4326)
+    } else {
+      selected_polygon_raw
+    }
     
     # Build popup for highlighted polygon
     row_data <- selected_polygon[1, ]
