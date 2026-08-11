@@ -148,8 +148,7 @@ landing_page <- tabPanel(
         p("Rekomendasi penyelesaian alokasi ruang darat & laut saling bertampalan secara spasial pada lokasi yang sama.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_overlap", "Pilih Tumpang Tindih", class = "btn-primary w-100 mt-4",
-                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;",
-                     onclick = "$('body').removeClass('sidebar-mini');")
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
       ),
       
       div(
@@ -163,8 +162,7 @@ landing_page <- tabPanel(
         p("Rekomendasi penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_adjacent", "Pilih Bertetangga", class = "btn-primary w-100 mt-4",
-                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;",
-                     onclick = "$('body').removeClass('sidebar-mini');")
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
       ),
       
       div(
@@ -178,9 +176,7 @@ landing_page <- tabPanel(
         p("Rekomendasi alokasi ruang yang memberi dampak sosio-ekologis melalui keterhubungan alami fungsional.",
           style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
         actionButton("btn_path_interconnect", "Segera Hadir", class = "btn-light w-100 mt-4",
-                     style = "background-color: #F1F5F9; color: #64748B; border: none; font-weight: 600; padding: 12px; border-radius: 12px;" #,
-                     # onclick = "$('body').removeClass('sidebar-mini');"
-                     )
+                     style = "background-color: #F1F5F9; color: #64748B; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
       )
     ),
     
@@ -209,8 +205,9 @@ ui <- page_sidebar(
   ),
   
   title = tags$div(
+    id = "logo_home",
     class = "d-flex align-items-center",
-    style = "padding-left: 10px; cursor: default;",
+    style = "padding-left: 10px; cursor: pointer;",
     tags$img(src = "pur_icon.png", style = "height: 34px; margin-right: 12px; border-radius: 6px;"),
     tags$span("LaSPUR", style = "font-weight: 800; font-size: 1.4rem; color: #1b75ba; letter-spacing: -0.5px;"),
     uiOutput("active_path_indicator", inline = TRUE)
@@ -504,6 +501,72 @@ ui <- page_sidebar(
       margin: 0 !important;
       align-self: center;
     }
+
+    /* ── COMPACTNESS IMPROVEMENTS ──────────────────────────── */
+    /* Reduce card spacing */
+    .card {
+      margin-bottom: 0.75rem !important;
+    }
+    .card-body {
+      padding: 0.75rem 1rem !important;
+    }
+    .card-header {
+      padding: 0.5rem 1rem !important;
+    }
+
+    /* Tighter column gutters inside module panels */
+    .module-panel-wrapper > .row {
+      margin-left: -8px;
+      margin-right: -8px;
+    }
+    .module-panel-wrapper > .row > [class*='col-'] {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
+    /* Reduce landing card padding */
+    .landing-card {
+      padding: 24px 20px !important;
+    }
+
+    /* ── Tighter spacing for file inputs & form elements ── */
+    .module-panel-wrapper .form-group,
+    .module-panel-wrapper .shiny-input-container {
+      margin-bottom: 0.5rem !important;
+    }
+    .module-panel-wrapper .form-group label,
+    .module-panel-wrapper .shiny-input-container label {
+      margin-bottom: 0.15rem !important;
+      font-size: 0.9rem;
+    }
+    .module-panel-wrapper .form-control,
+    .module-panel-wrapper .shiny-file-input-progress {
+      padding: 0.25rem 0.5rem !important;
+      font-size: 0.9rem;
+    }
+    .module-panel-wrapper .shiny-input-container .btn-file {
+      padding: 0.25rem 0.8rem !important;
+    }
+    .module-panel-wrapper .shiny-file-input .progress {
+      height: 8px !important;
+    }
+    .module-panel-wrapper .shiny-input-container .help-block {
+      margin-top: 0.1rem !important;
+      font-size: 0.85rem;
+    }
+    /* Reduce spacing inside card bodies in the left column */
+    .module-panel-wrapper > .row > .col-sm-4 .card-body {
+      padding: 0.5rem 0.75rem !important;
+    }
+    /* Tighter margins for paragraphs and lists inside panels */
+    .module-panel-wrapper p,
+    .module-panel-wrapper ul,
+    .module-panel-wrapper ol {
+      margin-bottom: 0.3rem !important;
+    }
+    .module-panel-wrapper hr {
+      margin: 0.5rem 0 !important;
+    }
   ")),
   
   sidebar = sidebar(
@@ -529,7 +592,7 @@ ui <- page_sidebar(
       shinyDirButton(
         id    = "btn_browse_output",
         label = "Pilih Folder",
-        title = "Pilih Direktori Output", # Tooltip sudah ada bawaan
+        title = "Pilih Direktori Output",
         icon  = icon("folder-open"),
         class = "btn-light w-100",
         style = "background-color: #FFFFFF; border: 1px solid #E2E8F0; color: #475569; font-weight: 600; border-radius: 8px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
@@ -591,7 +654,7 @@ ui <- page_sidebar(
     )
   ),
   
-  # Modal Konfirmasi Tutup Tab
+  # ── Modal Konfirmasi Tutup Tab ──────────────────────────────
   tags$div(
     id = "close_confirm_modal", class = "modal fade",
     tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
@@ -620,7 +683,38 @@ ui <- page_sidebar(
     )
   ),
   
-  # Tombol Panduan (Di Navbar Kanan)
+  # ── Modal Informasi Konfirmasi Awal ─────────────────────────
+  tags$div(
+    id = "info_confirm_modal", class = "modal fade",
+    tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
+    tags$div(class = "modal-dialog modal-dialog-centered modal-lg",
+             tags$div(class = "modal-content", style = "border-radius: 16px; border: none; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);",
+                      tags$div(class = "modal-header", style = "background-color: #eef6fc; color: #1b75ba; border-bottom: 1px solid #dbeafe; padding: 20px 24px;",
+                               tags$h5(class = "modal-title d-flex align-items-center", style = "font-weight: 700; font-size: 1.1rem;",
+                                       icon("info-circle", class="me-2"),
+                                       tags$span(id = "info_modal_title", "Konfirmasi")),
+                               tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "modal")
+                      ),
+                      tags$div(class = "modal-body", style = "padding: 24px; color: #1e293b; font-size: 1rem; line-height: 1.6;",
+                               tags$div(id = "info_modal_body_text", style = "margin-bottom: 12px;"),
+                               tags$p(style = "margin-top: 8px;",
+                                      tags$a(id = "info_modal_link", href = "#", target = "_blank", 
+                                             style = "font-weight: 600; color: #1b75ba; text-decoration: underline;",
+                                             "Pelajari lebih lanjut")
+                               )
+                      ),
+                      tags$div(class = "modal-footer", style = "border-top: 1px solid #E2E8F0; padding: 16px 24px; background-color: #F8FAFC;",
+                               tags$button(type = "button", class = "btn btn-light", style = "font-weight: 600; color: #64748B; border: 1px solid #E2E8F0;",
+                                           `data-bs-dismiss` = "modal", "Kembali"),
+                               actionButton("confirm_info_yes",
+                                            label = "Ya, saya mengerti",
+                                            class = "btn-primary", style = "font-weight: 600; border: none; box-shadow: 0 4px 6px -1px rgba(27,117,186,0.2);")
+                      )
+             )
+    )
+  ),
+  
+  # ── Tombol Panduan ──────────────────────────────────────────
   tags$a(
     id = "user-guide-link",
     href = "https://laspur.landseascape.id/",
@@ -641,6 +735,7 @@ server <- function(input, output, session) {
   
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
+  pending_action <- reactiveVal(NULL)   # "overlap" or "adjacent"
   
   active_path   <- reactiveVal("") 
   
@@ -659,6 +754,11 @@ server <- function(input, output, session) {
                "Jalur: Bertetangga"
       )
     }
+  })
+  
+  # ── Logo click handler ──────────────────────────────────────
+  shinyjs::onclick("logo_home", {
+    updateTabsetPanel(session, "tabs", selected = "home")
   })
   
   tab_state <- new.env(parent = emptyenv())
@@ -695,30 +795,66 @@ server <- function(input, output, session) {
     }
   }
   
-  observeEvent(input$btn_home, {
-    updateTabsetPanel(session, "tabs", selected = "home")
-  })
+  # ── Function to perform the actual path switch ──────────────
+  perform_action <- function(action) {
+    if (action == "overlap") {
+      active_path("overlap")
+      shinyjs::show("sidebar_menus")
+      shinyjs::show("wrapper_nav_overlap")
+      shinyjs::show("wrapper_nav_recommendation_overlaps")
+      shinyjs::hide("wrapper_nav_adjacent")
+      shinyjs::hide("wrapper_nav_recommendation_adjacent")
+      disable_tabs(c("adjacent", "recommendation_adjacent"), "Jalur diubah ke Tumpang Tindih. Tab Area Bertetangga ditutup.")
+      add_tab("overlap")
+    } else if (action == "adjacent") {
+      active_path("adjacent")
+      shinyjs::show("sidebar_menus")
+      shinyjs::hide("wrapper_nav_overlap")
+      shinyjs::hide("wrapper_nav_recommendation_overlaps")
+      shinyjs::show("wrapper_nav_adjacent")
+      shinyjs::show("wrapper_nav_recommendation_adjacent")
+      disable_tabs(c("overlap", "recommendation_overlaps"), "Jalur diubah ke Bertetangga. Tab Area Tumpang Tindih ditutup.")
+      add_tab("adjacent")
+    }
+    # also expand sidebar if mini
+    session$sendCustomMessage("expand_sidebar", list())
+  }
   
+  # ── Observers for the landing page buttons ──────────────────
   observeEvent(input$btn_path_overlap, {
-    active_path("overlap")
-    shinyjs::show("sidebar_menus")
-    shinyjs::show("wrapper_nav_overlap")
-    shinyjs::show("wrapper_nav_recommendation_overlaps")
-    shinyjs::hide("wrapper_nav_adjacent")
-    shinyjs::hide("wrapper_nav_recommendation_adjacent")
-    disable_tabs(c("adjacent", "recommendation_adjacent"), "Jalur diubah ke Tumpang Tindih. Tab Area Bertetangga ditutup.")
-    add_tab("overlap")
+    pending_action("overlap")
+    session$sendCustomMessage("show_info_modal", list(
+      title = "Konfirmasi Analisis Tumpang Tindih",
+      body_text = "Analisis tumpang tindih bertujuan mengidentifikasi dan menyelesaikan kasus tumpang tindih antara peta RTRW dan RZWP3K yang belum terintegrasi. Pastikan Anda telah memiliki setidaknya data peta RTRW dan RZWP3K yang belum terintegrasi.",
+      link_href = "https://laspur.landseascape.id/",
+      link_text = "Pelajari lebih lanjut"
+    ))
   })
   
   observeEvent(input$btn_path_adjacent, {
-    active_path("adjacent")
-    shinyjs::show("sidebar_menus")
-    shinyjs::hide("wrapper_nav_overlap")
-    shinyjs::hide("wrapper_nav_recommendation_overlaps")
-    shinyjs::show("wrapper_nav_adjacent")
-    shinyjs::show("wrapper_nav_recommendation_adjacent")
-    disable_tabs(c("overlap", "recommendation_overlaps"), "Jalur diubah ke Bertetangga. Tab Area Tumpang Tindih ditutup.")
-    add_tab("adjacent")
+    pending_action("adjacent")
+    session$sendCustomMessage("show_info_modal", list(
+      title = "Konfirmasi Analisis Bertetangga",
+      body_text = "Analisis bertetangga bertujuan mengidentifikasi dan menyelesaikan kasus kawasan RTRW terintegrasi yang bertetangga dengan kawasan yang tidak serasi berdasarkan fungsi dan tujuan penetapannya, sehingga berpotensi menimbulkan spillover effect. Pastikan Anda telah memiliki peta RTRW terintegrasi atau hasil rekonsiliasi dari analisis tumpang tindih.",
+      link_href = "https://laspur.landseascape.id/",
+      link_text = "Pelajari lebih lanjut"
+    ))
+  })
+  
+  # ── Confirm button on info modal ────────────────────────────
+  observeEvent(input$confirm_info_yes, {
+    req(!is.null(pending_action()))
+    action <- pending_action()
+    # hide modal
+    session$sendCustomMessage("hide_info_modal", list())
+    # perform action
+    perform_action(action)
+    pending_action(NULL)  # clear after execution
+  })
+  
+  # ── Dismiss modal (via backdrop/close) clears pending action ──
+  observeEvent(input$info_modal_dismissed, {
+    pending_action(NULL)
   })
   
   observeEvent(input$btn_path_interconnect, {
@@ -776,7 +912,7 @@ server <- function(input, output, session) {
     instance_id <- paste0(tab_id, "__g", gen)
     
     nav_buttons <- div(
-      style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #E2E8F0; gap: 12px;",
+      style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #E2E8F0; gap: 12px;",
       if (tab_id %in% c("overlap", "adjacent")) {
         actionButton(paste0("btn_back_", tab_id), "Beranda", icon = icon("house"), class = "btn-outline-secondary btn-sm", style = "font-weight: 600; padding: 8px 16px; border-radius: 8px;")
       } else {
@@ -793,7 +929,7 @@ server <- function(input, output, session) {
         title = cfg$label,
         value = tab_id,
         div(
-          style = "padding: 24px; background-color: #FFFFFF; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0; border-top: none;",
+          style = "padding: 16px 20px; background-color: #FFFFFF; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0; border-top: none;",
           nav_buttons,
           div(
             class = "module-panel-wrapper",
@@ -889,28 +1025,28 @@ $(document).ready(function() {
     $('body').toggleClass('sidebar-mini');
   });
 
-  // ── Collapsible Left Panel (Input & Parameter) ────────────
-  // Now injects the toggle button into the .card-header of the right panel
+  // ── Expand sidebar (used after confirm) ──
+  Shiny.addCustomMessageHandler('expand_sidebar', function(msg) {
+    $('body').removeClass('sidebar-mini');
+  });
+
+  // ── Collapsible Left Panel ──────────────────────────────
   function injectToggleButtons() {
     $('.module-panel-wrapper').each(function() {
       var $wrapper = $(this);
       var $rightCol = $wrapper.find('> .row > .col-sm-8');
       if (!$rightCol.length) return;
 
-      // Remove any existing toggle containers/buttons to avoid duplicates
       $rightCol.find('.panel-toggle-container, .panel-toggle-btn').remove();
 
-      // Look for a card-header inside the right column
       var $header = $rightCol.find('.card-header');
       var $btn;
 
-      // Helper to create and attach the toggle button
       function createToggleButton(appendTo) {
         $btn = $('<button class=\"panel-toggle-btn\" type=\"button\" title=\"Sembunyikan / Tampilkan Panel Input\">' +
           '<i class=\"bi bi-layout-sidebar-inset-reverse\"></i>' +
           '<span>Perluas</span>' +
           '</button>');
-        // Style it to sit nicely in the header
         if (appendTo.is('.card-header')) {
           $btn.css({
             'float': 'right',
@@ -918,7 +1054,6 @@ $(document).ready(function() {
             'margin-right': '5px'
           });
         } else {
-          // Fallback: wrap in a container with flex
           var $container = $('<div class=\"panel-toggle-container\" style=\"display: flex; justify-content: flex-end; padding: 8px 16px;\">');
           $container.append($btn);
           appendTo = $container;
@@ -926,7 +1061,6 @@ $(document).ready(function() {
         }
         appendTo.append($btn);
 
-        // Click handler
         $btn.on('click', function(e) {
           e.stopPropagation();
           var $icon  = $(this).find('i');
@@ -936,35 +1070,25 @@ $(document).ready(function() {
           $wrapper.toggleClass('panel-collapsed');
 
           if (isCollapsed) {
-            // Expanded: show collapse icon
             $icon.removeClass('bi-layout-sidebar-inset').addClass('bi-layout-sidebar-inset-reverse');
             $label.text('Perluas');
           } else {
-            // Collapsed: show expand icon
             $icon.removeClass('bi-layout-sidebar-inset-reverse').addClass('bi-layout-sidebar-inset');
             $label.text('Ringkas');
           }
 
-          // Trigger resize so maps/leaflet fill the new width
           setTimeout(function() { $(window).trigger('resize'); }, 380);
         });
       }
 
       if ($header.length) {
-        // Inject into the header
         createToggleButton($header);
       } else {
-        // Fallback: prepend to the right column as before
         createToggleButton($rightCol);
       }
     });
   }
 
-  // Initial injection and mutation observer for new tabs
-  attachCloseButtons();
-  injectToggleButtons();
-
-  // MutationObserver to handle dynamically added tabs
   function attachCloseButtons() {
     $('#tabs.nav-pills .nav-link').each(function() {
       var $link = $(this);
@@ -982,7 +1106,7 @@ $(document).ready(function() {
   }
 
   attachCloseButtons();
-  injectToggleButtons(); // initial injection
+  injectToggleButtons();
 
   var observer = new MutationObserver(function(mutations) {
     attachCloseButtons();
@@ -996,7 +1120,28 @@ $(document).ready(function() {
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // Modal Handlers
+  // ── Info Modal ──────────────────────────────────────────────
+  Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
+    document.getElementById('info_modal_title').innerText = msg.title;
+    document.getElementById('info_modal_body_text').innerHTML = msg.body_text;
+    var link = document.getElementById('info_modal_link');
+    link.href = msg.link_href;
+    link.innerText = msg.link_text;
+    var modal = new bootstrap.Modal(document.getElementById('info_confirm_modal'));
+    modal.show();
+  });
+
+  Shiny.addCustomMessageHandler('hide_info_modal', function(msg) {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('info_confirm_modal'));
+    if (modal) modal.hide();
+  });
+
+  // Send signal when modal is hidden (user clicks backdrop, close, or Kembali)
+  $('#info_confirm_modal').on('hidden.bs.modal', function() {
+    Shiny.setInputValue('info_modal_dismissed', Math.random());
+  });
+
+  // ── Close Tab Modal ─────────────────────────────────────────
   Shiny.addCustomMessageHandler('show_close_modal', function(msg) {
     var modal = new bootstrap.Modal(document.getElementById('close_confirm_modal'));
     modal.show();
