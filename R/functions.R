@@ -2448,13 +2448,21 @@ calculate_padu_ki <- function(idx_serasi_map,
     workers = workers
   )
   
+  # Calculate normalize risk value
+  min_val <- min(disaster_risk_extracted[[new_col]], na.rm = TRUE)
+  max_val <- max(disaster_risk_extracted[[new_col]], na.rm = TRUE)
+  
   # Calculate PADU-KI index
   idx_padu_ki_map <- disaster_risk_extracted %>%
     dplyr::mutate(
       idx_padu_ki = dplyr::if_else(
         is.na(.data[[new_col]]),
         NA_real_,
-        1 - .data[[new_col]]
+        1 - dplyr::if_else(
+          max_val > min_val,
+          (.data[[new_col]] - min_val) / (max_val - min_val),
+          0   # if all values equal, normalized value is 0
+        )
       )
     ) %>%
     dplyr::select(-dplyr::all_of(new_col))
