@@ -387,7 +387,7 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
 #' @export
 identify_adjacent <- function(rtrw,
                               rzwp,
-                              min_area_ha = 0,
+                              min_area_ha = 1,
                               nama_field_rtrw = "RTRW",
                               nama_field_rzwp = "RZWP3K",
                               batch_progress_interval = 250,
@@ -527,6 +527,86 @@ identify_adjacent <- function(rtrw,
     dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, geometry)
   
   return(invisible(pu_sf))
+}
+
+#' Identify multipair groups and degree in an adjacency sf object
+#'
+#' For each polygon (identified by `id`), this function counts how many distinct
+#' `id_pu` pairs it appears in (the degree). It then adds:
+#' \itemize{
+#'   \item `multipair`: `"Yes"` if either polygon in the pair has degree > 1.
+#'   \item `id_group`: numeric group for each center hub (0 for isolated pairs).
+#'   \item `n_pairs`: the number of distinct `id_pu` pairs this polygon is in.
+#' }
+#'
+#' @param sf_obj An `sf` object with columns `id` and `id_pu`. Each `id_pu` appears twice.
+#' @param tie_break Function to choose a center when both polygons have degree > 1.
+#'   Default: choose the smaller `id`.
+#' @return The same `sf` object with added columns `multipair`, `id_group`, and `n_pairs`.
+#' @export
+identify_adjacent_group <- function(sf_obj,
+                                    tie_break = function(x, y) if (x < y) x else y) {
+  stopifnot(inherits(sf_obj, "sf"))
+  stopifnot(all(c("id", "id_pu") %in% names(sf_obj)))
+  
+  # Compute degree (n_pairs) per polygon and drop geometry
+  degree <- sf_obj %>%
+    group_by(id) %>%
+    summarise(n_pairs = n_distinct(id_pu), .groups = "drop") %>%
+    st_drop_geometry()   
+  
+  deg_lookup <- setNames(degree$n_pairs, degree$id)
+  
+  # Build pair table (one row per id_pu) and drop geometry
+  pairs <- sf_obj %>%
+    group_by(id_pu) %>%
+    summarise(id1 = first(id), id2 = last(id), .groups = "drop") %>%
+    mutate(
+      deg1 = deg_lookup[as.character(id1)],
+      deg2 = deg_lookup[as.character(id2)]
+    )
+  
+  pairs_df <- st_drop_geometry(pairs)  
+  
+  # Assign group numbers to centers 
+  center_env <- new.env()
+  center_env$next_group <- 1L
+  get_group <- function(center_id) {
+    key <- as.character(center_id)
+    if (is.null(center_env[[key]])) {
+      center_env[[key]] <- center_env$next_group
+      center_env$next_group <- center_env$next_group + 1L
+    }
+    center_env[[key]]
+  }
+  
+  pairs_df <- pairs_df %>%
+    rowwise() %>%
+    mutate(
+      multipair_log = (deg1 > 1 | deg2 > 1),
+      center = case_when(
+        deg1 > 1 & deg2 > 1 ~ tie_break(id1, id2),
+        deg1 > 1 ~ id1,
+        deg2 > 1 ~ id2,
+        TRUE ~ NA_integer_
+      ),
+      group = if (multipair_log) get_group(center) else 0L
+    ) %>%
+    ungroup()
+  
+  # Join back – first with pair info, then with degree
+  result <- sf_obj %>%
+    left_join(pairs_df, by = "id_pu") %>%
+    left_join(degree, by = "id") %>%       
+    mutate(
+      multipair = ifelse(multipair_log, "Yes", "No"),
+      id_group = group
+    ) %>%
+    select(-id1, -id2, -deg1, -deg2, -multipair_log, -multipair, -center, -group) %>%
+    select(all_of(names(sf_obj)), id_group, n_pairs)
+  
+  stopifnot(nrow(result) == nrow(sf_obj))
+  return(result)
 }
 
 #' Process adjacent polygons by computing shared boundary lengths and buffer areas
@@ -703,7 +783,7 @@ process_adjacent <- function(pu_sf,
     dplyr::mutate(
       area_buffer_ha = (length * buffer_m) / 10000
     ) %>%
-    dplyr::select(id, id_pu, RTRW, RZWP3K, area_ha, length, area_buffer_ha, geometry)
+    dplyr::select(id, id_pu, id_group, RTRW, RZWP3K, area_ha, length, area_buffer_ha, n_pairs, geometry)
   
   return(pu_sf_result)
 }
@@ -3810,33 +3890,65 @@ generate_reconciliation_excel <- function(recon_map,
 #'
 #' @export
 dissolve_id_pu <- function(sf_obj) {
-  # Required columns (added "admin")
-  required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", 
-                     "length", "area_buffer_ha", "idx_serasi", "admin")
+  
+  # Required columns
+  required_cols <- c(
+    "id",
+    "id_pu",
+    "id_group",
+    "n_pairs",
+    "RTRW",
+    "RZWP3K",
+    "area_ha",
+    "length",
+    "area_buffer_ha",
+    "idx_serasi",
+    "admin"
+  )
+  
   stopifnot(all(required_cols %in% colnames(sf_obj)))
   
   # Split into RTRW and RZWP3K rows
-  rtrw <- sf_obj %>% filter(!is.na(RTRW))
-  rzwp3k <- sf_obj %>% filter(!is.na(RZWP3K))
+  rtrw <- sf_obj %>% 
+    filter(!is.na(RTRW))
+  
+  rzwp3k <- sf_obj %>% 
+    filter(!is.na(RZWP3K))
   
   # Basic validation
   if (nrow(rtrw) != nrow(rzwp3k)) {
     stop("Unequal number of RTRW and RZWP3K rows.")
   }
+  
   if (!all(rtrw$id_pu == rzwp3k$id_pu)) {
     stop("Mismatched id_pu between RTRW and RZWP3K rows.")
   }
   
-  # Join attributes (without geometry)
+  # Join attributes
   combined <- rtrw %>%
     st_drop_geometry() %>%
-    select(id_pu, id_rtrw = id, RTRW, area_ha_rtrw = area_ha,
-           admin_rtrw = admin, length, area_buffer_ha, idx_serasi) %>%
+    select(
+      id_pu,
+      id_rtrw = id,
+      RTRW,
+      area_ha_rtrw = area_ha,
+      admin_rtrw = admin,
+      length,
+      area_buffer_ha,
+      idx_serasi,
+      id_group,
+      n_pairs
+    ) %>%
     inner_join(
       rzwp3k %>%
         st_drop_geometry() %>%
-        select(id_pu, id_rzwp3k = id, RZWP3K, area_ha_rzwp3k = area_ha,
-               admin_rzwp3k = admin),
+        select(
+          id_pu,
+          id_rzwp3k = id,
+          RZWP3K,
+          area_ha_rzwp3k = area_ha,
+          admin_rzwp3k = admin
+        ),
       by = "id_pu"
     ) %>%
     mutate(
@@ -3844,21 +3956,50 @@ dissolve_id_pu <- function(sf_obj) {
       area_ha = area_ha_rtrw + area_ha_rzwp3k,
       admin = paste0(admin_rtrw, "_", admin_rzwp3k)
     ) %>%
-    select(id_pu, new_id, RTRW, RZWP3K, area_ha, admin, length, area_buffer_ha, idx_serasi)
+    select(
+      id_pu,
+      new_id,
+      RTRW,
+      RZWP3K,
+      area_ha,
+      admin,
+      length,
+      area_buffer_ha,
+      idx_serasi,
+      id_group,
+      n_pairs
+    )
   
   # Union geometries per id_pu
   geom_union <- sf_obj %>%
     group_by(id_pu) %>%
-    summarise(geometry = st_union(geometry), .groups = "drop")
+    summarise(
+      geometry = st_union(geometry),
+      .groups = "drop"
+    )
   
   # Merge attributes with unioned geometries
   result <- geom_union %>%
     inner_join(combined, by = "id_pu") %>%
     rename(id = new_id) %>%
-    select(id, id_pu, RTRW, RZWP3K, area_ha, admin, length, area_buffer_ha, idx_serasi, geometry) %>%
+    select(
+      id,
+      id_pu,
+      id_group,
+      RTRW,
+      RZWP3K,
+      area_ha,
+      admin,
+      length,
+      area_buffer_ha,
+      n_pairs,
+      idx_serasi,
+      geometry
+    ) %>%
     st_as_sf()
   
   st_crs(result) <- st_crs(sf_obj)
+  
   return(result)
 }
 

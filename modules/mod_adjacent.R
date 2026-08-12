@@ -34,7 +34,7 @@ adjacent_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("2.1 Identifikasi Area Bertetangga", style = "margin: 0; font-weight: 700;"),
+      h4("2.1 Analisis SERASI Area Bertetangga", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Mengidentifikasi area bertetangga secara spasial antara kawasan/zona RTRW dan RZWP3K serta menghitung indeks SERASI.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
@@ -462,16 +462,22 @@ adjacent_server <- function(id, output_dir) {
           adjacent_map_raw <- identify_adjacent(
             rtrw = rv$rtrw_vect,
             rzwp = rv$rzwp3k_vect,
-            min_area_ha = 0,
+            min_area_ha = 1,
             m_precision = input$m_precision 
           )
+          
+          # Identify group
+          adjacent_map_raw_update <- identify_adjacent_group(
+            adjacent_map_raw
+          )
+          
           append_log("   Area bertetangga berhasil diidentifikasi.")
           
           # Step 2: Process adjacent (progress 50%)
           incProgress(0.2, detail = "Memproses area bertetangga...")
           append_log(">> Memproses area bertetangga dengan buffer 100 m...")
           adjacent_map <- process_adjacent(
-            pu_sf = adjacent_map_raw,
+            pu_sf = adjacent_map_raw_update,
             buffer_m = 100,
             m_precision = input$m_precision,   
             snap_tolerance = input$snap_tolerance,
@@ -491,7 +497,8 @@ adjacent_server <- function(id, output_dir) {
               length(valid_class$mismatch_col4) == 0) {
             
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
-            idx_serasi_map <- merge_attributes_to_map(adjacent_map, rv$matriks_serasi)
+            idx_serasi_map <- merge_attributes_to_map(adjacent_map, rv$matriks_serasi) %>%
+              filter(idx_serasi != 1)
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
             # ── Merge with administrative map (if provided) ──
@@ -528,7 +535,9 @@ adjacent_server <- function(id, output_dir) {
             
             rv$gpkg_path <- gpkg_path
             rv$xlsx_path <- xlsx_path
-            rv$analysis_result <- list(map = idx_serasi_map, table = as_tibble(sf::st_drop_geometry(idx_serasi_map)))
+            
+            idx_serasi_map_viz <- dissolve_id_pu(idx_serasi_map)
+            rv$analysis_result <- list(map = idx_serasi_map_viz, table = as_tibble(sf::st_drop_geometry(idx_serasi_map_viz)))
             
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis bertetangga berhasil diselesaikan.")
@@ -587,6 +596,7 @@ adjacent_server <- function(id, output_dir) {
       map_palette      = "RdYlGn",
       map_label_cols   = c(
         "ID PU"          = "id_pu",
+        "ID Group"       = "id_group",
         "RTRW"           = "RTRW",
         "RZWP3K"         = "RZWP3K",
         "Indeks SERASI"  = "idx_serasi"
@@ -594,11 +604,13 @@ adjacent_server <- function(id, output_dir) {
       table_cols = c(
         "id"       = "ID",
         "id_pu"    = "ID PU",
+        "id_group" = "ID Group",
         "RTRW"     = "RTRW",
         "RZWP3K"   = "RZWP3K",
         "admin"    = "Administrasi",
         "area_ha"  = "Luas (ha)",
         "length"   = "Panjang Segmen Ketetanggaan (m)",
+        "n_pairs"  = "Jumlah pasangan tetangga",
         "idx_serasi" = "Indeks SERASI"
       ),
       table_round_cols = c("Luas (ha)", "Panjang Segmen Ketetanggaan (m)", "Indeks SERASI")
