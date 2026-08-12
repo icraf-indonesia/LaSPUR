@@ -652,17 +652,17 @@ render_result_server <- function(input, output, session, rv, config) {
     }
     
     # Check if map_color_col is numeric to decide palette type
-    if(is.numeric(map_sf[[map_color_col]])) {
+    if (is.numeric(map_sf[[map_color_col]])) {
       pal <- leaflet::colorNumeric(
         palette = map_palette,
         domain  = map_sf[[map_color_col]],
-        na.color = "grey"
+        na.color = "transparent"
       )
     } else {
       pal <- leaflet::colorFactor(
         palette = map_palette,
-        domain = map_sf[[map_color_col]],
-        na.color = "grey"
+        domain  = map_sf[[map_color_col]],
+        na.color = "transparent"
       )
     }
     
@@ -748,14 +748,13 @@ render_result_server <- function(input, output, session, rv, config) {
     dt
   })
   
-  # Table row selection targets map polygon 
+  # Table row selection targets map polygon
   observeEvent(input$result_table_rows_selected, {
     req(rv$analysis_result)
     
     selected_idx <- input$result_table_rows_selected
     df_table <- rv$analysis_result$table
     
-    # Assuming 'id_pu' is the standard identifier across all tables
     if (!"id_pu" %in% colnames(df_table)) return()
     
     selected_id_pu <- df_table$id_pu[selected_idx]
@@ -796,12 +795,15 @@ render_result_server <- function(input, output, session, rv, config) {
       leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
       leaflet::addPolygons(
         data = selected_polygon,
-        color = "#FF4136",     
+        color = "#008B8B",
         weight = 5,
-        fillColor = "#FFDC00", 
-        fillOpacity = 0.5,
+        fillColor = "#00FFFF",
+        fillOpacity = 0.7,
         group = "polygon_highlight",
-        popup = lapply(popup_text, htmltools::HTML)
+        popup = lapply(
+          popup_text,
+          htmltools::HTML
+        )
       )
   })
   
