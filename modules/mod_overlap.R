@@ -34,7 +34,7 @@ overlap_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("1.1 Identifikasi Area Tumpang Tindih", style = "margin: 0; font-weight: 700;"),
+      h4("1.1 Analisis SERASI Area Tumpang Tindih", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Mengidentifikasi kasus area tumpang tindih secara spasial antara kawasan/zona peta RTRW dan RZWP3K serta menghitung indeks SERASI.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"

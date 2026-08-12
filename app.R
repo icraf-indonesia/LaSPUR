@@ -113,8 +113,8 @@ tab_config <- list(
   padu_ki         = list(label = "2.7 PADU-KI",             ui_fn = padu_ki_ui,         srv_fn = padu_ki_server),
   padu_combine    = list(label = "2.8 PADU-Kombinasi",        ui_fn = padu_combine_ui,    srv_fn = padu_combine_server),
   padan           = list(label = "3. PADAN",                ui_fn = padan_ui,           srv_fn = padan_server),
-  recommendation_overlaps  = list(label = "4.1 Rekomendasi Tumpang Tindih",          ui_fn = recommendation_overlaps_ui,  srv_fn = recommendation_overlaps_server),
-  recommendation_adjacent  = list(label = "4.2 Rekomendasi Bertetangga",          ui_fn = recommendation_adjacent_ui,  srv_fn = recommendation_adjacent_server),
+  recommendation_overlaps  = list(label = "4.1 Penyusunan Alternatif Tumpang Tindih",          ui_fn = recommendation_overlaps_ui,  srv_fn = recommendation_overlaps_server),
+  recommendation_adjacent  = list(label = "4.2 Penyusunan Alternatif Bertetangga",          ui_fn = recommendation_adjacent_ui,  srv_fn = recommendation_adjacent_server),
   reconcile    = list(label = "5. Rekonsiliasi",             ui_fn = reconcile_ui,    srv_fn = reconcile_server) 
 )
 
@@ -539,13 +539,8 @@ ui <- page_sidebar(
       margin-bottom: 0.15rem !important;
       font-size: 0.9rem;
     }
-    .module-panel-wrapper .form-control,
-    .module-panel-wrapper .shiny-file-input-progress {
-      padding: 0.25rem 0.5rem !important;
-      font-size: 0.9rem;
-    }
     .module-panel-wrapper .shiny-input-container .btn-file {
-      padding: 0.25rem 0.8rem !important;
+      padding: 0.25rem 0.9rem !important;
     }
     .module-panel-wrapper .shiny-file-input .progress {
       height: 8px !important;
@@ -616,7 +611,7 @@ ui <- page_sidebar(
       accordion(
         open = FALSE,
         accordion_panel(
-          title = acc_title(icon("search", class = "menu-icon fa-fw"), "1. Identifikasi Konflik"),
+          title = acc_title(icon("search", class = "menu-icon fa-fw"), "1. Analisis SERASI"),
           value = "panel_identifikasi",
           nav_item("nav_overlap",         "1.1", "Area Tumpang Tindih"),
           nav_item("nav_adjacent",        "1.2", "Area Bertetangga"),
@@ -640,10 +635,10 @@ ui <- page_sidebar(
           nav_item("nav_padan", "3", "Analisis PADAN")
         ),
         accordion_panel(
-          title = acc_title(icon("lightbulb", class = "menu-icon fa-fw"), "4. Rekomendasi"),
+          title = acc_title(icon("lightbulb", class = "menu-icon fa-fw"), "4. Penyusunan Alternatif"),
           value = "panel_rekomendasi",
-          nav_item("nav_recommendation_overlaps", "4.1", "Rekomendasi Tumpang Tindih"),
-          nav_item("nav_recommendation_adjacent", "4.2", "Rekomendasi Bertetangga")
+          nav_item("nav_recommendation_overlaps", "4.1", "Penyusunan Alternatif Tumpang Tindih"),
+          nav_item("nav_recommendation_adjacent", "4.2", "Penyusunan Alternatif Bertetangga")
         ),
         accordion_panel(
           title = acc_title(icon("handshake", class = "menu-icon fa-fw"), "5. Rekonsiliasi"),

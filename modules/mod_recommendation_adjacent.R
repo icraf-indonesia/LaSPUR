@@ -88,7 +88,7 @@ recommendation_adjacent_ui <- function(id) {
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("4. Analisis Rekomendasi Area Bertetangga", style = "margin: 0; font-weight: 700;"),
+      h4("4. Analisis Penyusunan Alternatif Area Bertetangga", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Menentukan opsi penyelesaian konflik dalam integrasi tata ruang darat-laut.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
