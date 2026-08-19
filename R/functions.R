@@ -1419,54 +1419,72 @@ calculate_lulc_adjacency.sf <- function(lulc,
     }
   }
   
-  output_df <- furrr::future_map_dfr(
+  results <- furrr::future_map(
     admin_ids,
     function(uid) {
       poly <- admin_sf[admin_sf[[id_col]] == uid, ]
       
-      lulc_clip <- tryCatch(sf::st_intersection(lulc, poly), error = function(e) {
-        warning("Admin unit ", uid, " error: ", e$message)
-        return(NULL)
-      })
-      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
+      zero_row <- function(uid) {
+        data.frame(
+          id_pu = as.character(uid),
+          Class_A = NA_character_,
+          Class_B = NA_character_,
+          Edge_Count = 0,
+          percentage = 0,
+          stringsAsFactors = FALSE
+        )
+      }
+      
+      lulc_clip <- tryCatch(
+        sf::st_intersection(lulc, poly),
+        error = function(e) {
+          warning("Admin unit ", uid, " error: ", e$message)
+          return(NULL)
+        }
+      )
+      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) {
+        return(list(success = zero_row(uid)))
+      }
       
       if (!all(sf::st_is_valid(lulc_clip))) {
         lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
       }
       
       safe_extract_polygons <- function(x) {
-        # Extract polygons from any GEOMETRYCOLLECTIONs
         if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
           x <- sf::st_collection_extract(x, "POLYGON", warn = FALSE)
         }
-        if (is.null(x) || nrow(x) == 0)
-          return(NULL)
-        
-        # Keep only polygon geometries
+        if (is.null(x) || nrow(x) == 0) return(NULL)
         x <- x[sf::st_geometry_type(x) %in% c("POLYGON", "MULTIPOLYGON"), ]
-        if (nrow(x) == 0)
-          return(NULL)
+        if (nrow(x) == 0) return(NULL)
         x <- x[!sf::st_is_empty(x), ]
-        if (nrow(x) == 0)
-          return(NULL)
+        if (nrow(x) == 0) return(NULL)
         x
       }
       
       lulc_clip <- safe_extract_polygons(lulc_clip)
-      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) return(NULL)
+      if (is.null(lulc_clip) || nrow(lulc_clip) == 0) {
+        return(list(success = zero_row(uid)))
+      }
       
       lulc_clip$class_code <- as.character(lulc_clip[[class_col]])
       
       s2_was_on <- sf::sf_use_s2()
       if (s2_was_on) sf::sf_use_s2(FALSE)
       
-      touches_list <- tryCatch(sf::st_touches(lulc_clip, lulc_clip), error = function(e) {
-        warning("Admin unit ", uid, " touches error: ", e$message)
-        return(NULL)
-      })
+      touches_list <- tryCatch(
+        sf::st_touches(lulc_clip, lulc_clip),
+        error = function(e) {
+          warning("Admin unit ", uid, " touches error: ", e$message)
+          return(NULL)
+        }
+      )
       
       if (s2_was_on) sf::sf_use_s2(TRUE)
-      if (is.null(touches_list)) return(NULL)
+      
+      if (is.null(touches_list)) {
+        return(list(success = zero_row(uid)))
+      }
       
       pair_counts <- data.frame()
       n <- nrow(lulc_clip)
@@ -1483,31 +1501,31 @@ calculate_lulc_adjacency.sf <- function(lulc,
         }
       }
       
-      if (nrow(pair_counts) == 0) return(NULL)
+      if (nrow(pair_counts) == 0) {
+        return(list(success = zero_row(uid)))
+      }
       
       adj_df <- pair_counts |>
         dplyr::group_by(Class_A, Class_B) |>
         dplyr::summarise(Edge_Count = dplyr::n(), .groups = "drop")
       
       total_adj <- sum(adj_df$Edge_Count)
-      adj_df |>
+      adj_df <- adj_df |>
         dplyr::mutate(
           id_pu = as.character(uid),
           percentage = (Edge_Count / total_adj) * 100
         )
+      
+      return(list(success = adj_df[, c("id_pu", "Class_A", "Class_B", "Edge_Count", "percentage")]))
     },
     .progress = progress,
-    .options = furrr::furrr_options(
-      packages = c("sf", "dplyr")
-    )
+    .options = furrr::furrr_options(packages = c("sf", "dplyr"))
   )
   
-  if (is.null(output_df) || nrow(output_df) == 0) {
-    warning("No adjacency data found.")
-    return(data.frame())
-  }
+  success_list <- purrr::map(results, "success")
+  output_df <- dplyr::bind_rows(success_list)
   
-  return(output_df[, c("id_pu", "Class_A", "Class_B", "Edge_Count", "percentage")])
+  return(output_df)
 }
 
 #' Calculate PADU-KE index and return both index table and map-ready data
