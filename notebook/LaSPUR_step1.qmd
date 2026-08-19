@@ -262,7 +262,7 @@ padu_ke <- calculate_padu_ke(
   normalize         = TRUE
 )
 
-idx_padu_ke <- padu_ke$idx_padu_ke %>% select(-idx_padu_ke_abs)
+idx_padu_ke <- padu_ke$idx_padu_ke %>% select(-abs_idx_padu_ke)
 idx_padu_ke_map <- padu_ke$idx_padu_ke_map
 
 plot(idx_padu_ke_map["idx_padu_ke"], border = 1)

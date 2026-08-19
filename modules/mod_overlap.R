@@ -459,24 +459,17 @@ overlap_server <- function(id, output_dir) {
             # Merge with administrative map if provided ──
             if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
               append_log(">> Menggabungkan hasil dengan peta administratif...")
-              
               admin_sf <- rv$admin_vect
-              # Ensure both layers are in the same CRS
               if (sf::st_crs(admin_sf) != sf::st_crs(idx_serasi_map)) {
                 admin_sf <- sf::st_transform(admin_sf, sf::st_crs(idx_serasi_map))
               }
-              
-              # Spatial join: assign each polygon to the admin unit it intersects most
               idx_serasi_map <- sf::st_join(
                 idx_serasi_map,
                 admin_sf[, rv$admin_col, drop = FALSE],
                 join = sf::st_intersects,
                 largest = TRUE
               )
-              
-              # Rename the admin column to a standard name ("admin")
               names(idx_serasi_map)[names(idx_serasi_map) == rv$admin_col] <- "admin"
-              
               append_log("   Penggabungan administratif selesai.")
             }
             
@@ -493,6 +486,31 @@ overlap_server <- function(id, output_dir) {
             rv$gpkg_path <- gpkg_path
             rv$xlsx_path <- xlsx_path
             rv$analysis_result <- list(map = idx_serasi_map, table = idx_serasi_table)
+            
+            # ─── Store result for report generation ───
+            out <- list(
+              inputs = list(
+                rtrw_path = input$rtrw_file,
+                rzwp3k_path = input$rzwp3k_file,
+                admin_path = input$admin_file,
+                rtrw_prioritas_path = input$rtrw_prioritas_file,
+                rzwp3k_prioritas_path = input$rzwp3k_prioritas_file,
+                matriks_serasi_path = input$matriks_serasi_file,
+                output_dir = output_dir()
+              ),
+              result = list(
+                rtrw_vect = rv$rtrw_vect,
+                rzwp3k_vect = rv$rzwp3k_vect,
+                matriks_serasi = rv$matriks_serasi,
+                rtrw_prioritas = rv$rtrw_prioritas,
+                rzwp3k_prioritas = rv$rzwp3k_prioritas,
+                idx_serasi_map = idx_serasi_map,
+                idx_serasi_table = idx_serasi_table
+              )
+            )
+            
+            # Store in shared environment
+            session$userData$module_results$overlap <- out
             
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis overlap berhasil diselesaikan.")

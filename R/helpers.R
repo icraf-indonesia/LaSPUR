@@ -434,43 +434,58 @@ load_and_validate_raster <- function(raster_path,
 
 #' Generate LaSPUR Report
 #' 
-#' Generates a report for the LaSPUR using R Markdown.
+#' Generates an HTML report for a LaSPUR module using R Markdown.
+#' The output is always HTML because the templates use interactive widgets
+#' (Leaflet maps, DT tables) that are not compatible with PDF output.
 #'
 #' @param output List. Output from LaSPUR module.
 #' @param dir Character string. Directory to save the report.
-#' @param output_format Character string. The format of the output report. 
-#' Options are "html" (default) or "pdf".
+#' @param module_name Character string. Optional name of the module (used in filename).
+#' @param template_path Character string. Path to the R Markdown template file.
+#'   Defaults to "report/LaSPUR_SERASI_report_template.Rmd" for backward compatibility.
 #' 
 #' @importFrom rmarkdown render
 #'
 #' @export
-generate_report <- function(output, dir, output_format = c("html", "pdf")) {
-  # Match the input argument to ensure it's either "html" or "pdf"
-  output_format <- match.arg(output_format)
-  
+generate_report <- function(output, dir,
+                            module_name   = NULL,
+                            template_path = "report/LaSPUR_SERASI_report_template.Rmd") {
   report_params <- list(
     inputs = output$inputs,
     result = output$result
   )
   
-  # Determine file extension and rmarkdown output format type
-  if (output_format == "html") {
-    file_ext <- ".html"
-    fmt_target <- "html_document"
-  } else {
-    file_ext <- ".pdf"
-    fmt_target <- "pdf_document"
+  # Fallback for modules that don't have a template yet
+  if (is.null(template_path) || !nzchar(template_path) || !file.exists(template_path)) {
+    template_path <- tempfile(fileext = ".Rmd")
+    writeLines(c(
+      "---",
+      paste0("title: \"Laporan Modul ", module_name, "\""),
+      "output: html_document",
+      "---",
+      "",
+      "### Laporan Belum Tersedia",
+      "",
+      "Template laporan spesifik untuk modul ini sedang dalam tahap pengembangan."
+    ), template_path)
   }
   
-  output_file <- paste0("LaSPUR_Report_", Sys.Date(), file_ext)
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
+  if (!is.null(module_name) && nzchar(module_name)) {
+    base_name <- paste0("LaSPUR_", module_name, "_Report_", timestamp)
+  } else {
+    base_name <- paste0("LaSPUR_Report_", timestamp)
+  }
+  
+  output_file <- paste0(base_name, ".html")
   
   rmarkdown::render(
-    input = "report/LaSPUR_type1_report_template.Rmd",
-    output_format = fmt_target,
-    output_file = output_file,
-    output_dir = dir,
-    params = report_params,
-    knit_root_dir = getwd() 
+    input         = template_path,
+    output_format = "html_document",
+    output_file   = output_file,
+    output_dir    = dir,
+    params        = report_params,
+    knit_root_dir = getwd()
   )
 }
 

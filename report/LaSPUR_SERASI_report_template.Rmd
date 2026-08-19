@@ -1,0 +1,442 @@
+---
+title: "LaSPUR - Land & Sea Planning Unit Reconcilliation Report"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+---
+
+```{r setup}
+#| include: false
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(
+          obj,
+          key.pos   = 4,        
+          key.width = lcm(width) 
+        )
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+```
+
+untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong
+
+```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+<details>
+
+<summary>Klik disini untuk membuka log analisis</summary>
+
+```{r analysis-log, echo=FALSE}
+analysis_log <- tribble(
+  ~Category,                         ~Details,
+  "1. Peta RTRW",                    params$inputs$rtrw_path,
+  "2. Peta RZWP3K",                  params$inputs$rzwp3k_path,
+  "3. Peta Wilayah Administrasi",    params$inputs$admin_path,
+  "4. Tabel Acuan Pola RTRW",        params$inputs$rtrw_prioritas_path,
+  "5. Tabel Acuan Pola RZWP3K",      params$inputs$rzwp3k_prioritas_path,
+  "6. Tabel Matriks SERASI",         params$inputs$matriks_serasi_path,
+  "7. Direktori output",             params$inputs$output_dir,
+)
+
+# Render the formatted table
+analysis_log %>% 
+  kbl(caption = "Analysis Log", escape = FALSE) %>%
+  kable_paper("hover", full_width = FALSE)
+```
+
+</details>
+
+# Ringkasan
+
+```{r summary-calculation}
+#| error: true
+#| warning: false
+#| message: false
+
+idx_serasi_tbl <- params$result$idx_serasi_map %>% st_drop_geometry()
+
+summary <- list(
+  # Overall summary table
+  overall = idx_serasi_tbl %>%
+    summarise(
+      total_unit = n(),
+      total_rtrw = n_distinct(RTRW),
+      total_rzwp3k = n_distinct(RZWP3K),
+      total_ha = sum(area_ha, na.rm = TRUE),
+      qualified_treshold_area = sum(area_flag == "luas terpenuhi", na.rm = TRUE)
+    ) %>%
+    as_tibble(),
+  
+  # Combination count table (RTRW × RZWP3K)
+  combinations = idx_serasi_tbl %>%
+    group_by(RTRW, RZWP3K) %>%
+    summarise(
+      total_combination = n(),
+      total_area_ha = sum(area_ha, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(total_combination)) %>%
+    as_tibble()
+)
+```
+
+## Ringkasan Identifikasi Tumpang Tindih
+
+```{r summary_overall}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_overall_t <- summary$overall %>%
+  pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
+  mutate(Komponen = case_when(
+    Komponen == "total_unit"                 ~ "Jumlah Kasus",
+    Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
+    Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
+    Komponen == "total_ha"                   ~ "Luas Total Area Kasus (ha)",
+    Komponen == "qualified_treshold_area"    ~ "Jumlah Kasus Memenuhi Ambang Luas",
+    TRUE                                   ~ Komponen  
+  ))
+
+DT::datatable(summary_overall_t, rownames = FALSE)
+```
+
+## Ringkasan Kombinasi Kasus
+
+```{r summary_combinations}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_combinations_t <- summary$combinations %>%
+  rename(
+    "RTRW" = RTRW,
+    "RZWP3K" = RZWP3K,
+    "Jumlah Kasus" = total_combination,
+    "Total Luas Area (ha)" = total_area_ha
+  )
+
+DT::datatable(summary_combinations_t, rownames = FALSE)
+```
+
+# Tentang Modul
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+# Data dan Metode
+
+## Data Utama
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RTRW</summary>
+
+```{r input-peta-rtrw}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+rtrw <- params$result$rtrw_vect["RTRW"]
+plot_with_autokey(rtrw)
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RZWP3K</summary>
+
+```{r input-peta-rzwp3k}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
+plot_with_autokey(rzwp3k)
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Matriks Kompabilitas (SERASI)</summary>
+
+```{r matriks-serasi}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+DT::datatable(params$result$matriks_serasi)
+```
+
+</details>
+
+## Metodologi
+
+
+
+# Hasil
+
+```{r interactive-map-serasi}
+#| echo: false
+#| warning: false
+#| message: false
+
+# Load libraries 
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  leaflet,
+  htmltools,
+  htmlwidgets,
+  RColorBrewer
+)
+
+idx_serasi_map <- params$result$idx_serasi_map
+
+# ── 1. Reproject to WGS84 (Leaflet requires lat/lng) ──────────────────────────
+map_data <- idx_serasi_map |>
+  st_transform(crs = 4326) |>
+  mutate(
+    .row_id = row_number() - 1L
+  )
+
+# ── 2. Colour palette (adjust field as needed) ─────────────────────────────────
+pal <- colorNumeric(
+  palette = "RdYlGn",
+  domain  = map_data$idx_serasi_final,
+  na.color = "#808080"
+)
+
+# ── 3. Attribute table columns to display ─────────────────────────────────────
+tbl_cols <- c(
+  "id_pu", "stat_pu", "RTRW", "RZWP3K", "area_ha", "area_flag", "idx_serasi"
+)
+
+tbl_data <- map_data |>
+  st_drop_geometry() |>
+  select(all_of(tbl_cols))
+
+# ── 4. Build Leaflet map ───────────────────────────────────────────────────────
+leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
+  addProviderTiles(providers$CartoDB.Positron, group = "Basemap") |>
+  addPolygons(
+    layerId     = ~.row_id,       
+    fillColor   = ~pal(idx_serasi),
+    fillOpacity = 0.7,
+    color       = "#444",
+    weight      = 0.8,
+    opacity     = 1,
+    highlightOptions = highlightOptions(
+      color        = "#ff6600",
+      weight       = 3,
+      fillOpacity  = 0.9,
+      bringToFront = TRUE
+    ),
+    label = ~paste0(
+      "<b>PU ", id_pu, "</b><br>",
+      "RTRW: ", RTRW, "<br>",
+      "RZWP3K: ", RZWP3K, "<br>",
+      "Indeks SERASI: ", round(idx_serasi, 3)
+    ) |> lapply(HTML),
+    popup = ~paste0(
+      "<b>Planning Unit ", id_pu, "</b><hr>",
+      "<b>Status:</b> ", stat_pu, "<br>",
+      "<b>RTRW:</b> ", RTRW, "<br>",
+      "<b>RZWP3K:</b> ", RZWP3K, "<br>",
+      "<b>Area (ha):</b> ", round(area_ha, 2), "<br>",
+      "<b>Area Flag:</b> ", area_flag, "<br>",
+      "<hr>",
+      "<b>idx_serasi:</b> ", round(idx_serasi, 3), "<br>"
+    ) |> lapply(HTML),
+    group = "SERASI"
+  ) |>
+  addLegend(
+    pal      = pal,
+    values   = ~idx_serasi,
+    title    = "Indeks SERASI",
+    position = "bottomright",
+    opacity  = 0.8
+  ) |>
+  addLayersControl(
+    baseGroups    = "Basemap",
+    overlayGroups = "SERASI",
+    options       = layersControlOptions(collapsed = FALSE)
+  )
+
+# ── 5. Build DT table ──────────────────────────────────────────────────────────
+dt_table <- datatable(
+  tbl_data,
+  elementId  = "serasi-table",
+  rownames   = FALSE,
+  filter     = "top",
+  extensions = c("Buttons", "Scroller"),
+  options    = list(
+    pageLength  = 10,
+    scrollX     = TRUE,
+    scrollY     = "300px",
+    scroller    = TRUE,
+    dom         = "Bfrtip",
+    buttons     = list(
+      list(extend = "copy",  className = "btn btn-light btn-sm"),
+      list(extend = "csv",   className = "btn btn-light btn-sm"),
+      list(extend = "excel", className = "btn btn-light btn-sm")
+    ),
+    rowCallback = JS("
+      function(row, data, index) {
+        $(row).attr('data-row-id', index);
+      }
+    ")
+  )
+)
+
+# ── 6. JavaScript ───────────────────────────
+sync_js <- HTML("
+<script>
+(function() {
+  // Wait until both widgets are rendered
+  function init() {
+    var mapEl  = document.getElementById('serasi-map');
+    var tblEl  = document.getElementById('serasi-table');
+    if (!mapEl || !tblEl) { setTimeout(init, 300); return; }
+
+    var leafMap = null;
+    // Retrieve the Leaflet map instance
+    Object.keys(mapEl._leaflet_events || {});
+    try { leafMap = mapEl._leaflet_id ? L.map(mapEl) : null; } catch(e) {}
+    if (!leafMap) {
+      // HTMLWidget approach
+      if (window.HTMLWidgets) {
+        var instances = HTMLWidgets.getInstance(mapEl);
+        if (instances) leafMap = instances.getMap();
+      }
+    }
+    if (!leafMap) { setTimeout(init, 300); return; }
+
+    var dtApi = null;
+    if (window.$) {
+      try { dtApi = $('#serasi-table').DataTable(); } catch(e) {}
+    }
+    if (!dtApi) { setTimeout(init, 300); return; }
+
+    var lastHighlighted = null;
+
+    // Map hover → highlight table row
+    leafMap.eachLayer(function(layer) {
+      if (layer.feature) {
+        layer.on('mouseover', function(e) {
+          var rowId = layer.feature.properties['.row_id'];
+          highlightRow(rowId);
+        });
+        layer.on('mouseout', function(e) {
+          clearHighlight();
+        });
+      }
+    });
+
+    function highlightRow(rowId) {
+      if (lastHighlighted !== null) {
+        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
+      }
+      lastHighlighted = rowId;
+      var row = $('tr[data-row-id=\"' + rowId + '\"]');
+      if (row.length) {
+        row.css('background-color', '#fff3cd');
+        // scroll the table to the highlighted row
+        var tblWrapper = document.getElementById('serasi-table_wrapper');
+        if (tblWrapper) {
+          var rowTop = row.position() ? row.position().top : 0;
+          var scroller = tblWrapper.querySelector('.dataTables_scrollBody');
+          if (scroller) scroller.scrollTop = rowTop - 50;
+        }
+      }
+    }
+
+    function clearHighlight() {
+      if (lastHighlighted !== null) {
+        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
+        lastHighlighted = null;
+      }
+    }
+
+    // Table row hover → flash map polygon
+    $('#serasi-table tbody').on('mouseenter', 'tr', function() {
+      var rowId = parseInt($(this).attr('data-row-id'));
+      if (isNaN(rowId)) return;
+      leafMap.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.properties['.row_id'] === rowId) {
+          layer.setStyle({ color: '#ff6600', weight: 3, fillOpacity: 0.9 });
+          layer.bringToFront();
+        }
+      });
+    }).on('mouseleave', 'tr', function() {
+      leafMap.eachLayer(function(layer) {
+        if (layer.feature) {
+          layer.setStyle({ color: '#444', weight: 0.8, fillOpacity: 0.7 });
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(init, 800);
+  });
+})();
+</script>
+")
+
+# ── 7. Assemble final widget ───────────────────────────────────────────────────
+tagList(
+  tags$style("
+    #serasi-map    { height: 500px; width: 100%; margin-bottom: 0; }
+    #serasi-table_wrapper { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 10px; }
+    #serasi-map    { border-radius: 5px 5px 0 0; border: 1px solid #dee2e6; }
+    .dataTables_scrollBody tr[data-row-id]:hover { background-color: #e8f4f8 !important; cursor: pointer; }
+  "),
+  leaf_map,
+  dt_table,
+  sync_js
+)
+```
+
+------------------------------------------------------------------------
+
+<!-- Mandatory closing statement for all module -->
+
+<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LUMENS sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). Umpan balik dan pertanyaan dipersilakan [Contact Us URL]. </font size>
+
+
+
+
+
+
+
+
+
+
+

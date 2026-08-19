@@ -410,7 +410,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Memuat matriks serasi...")
           rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
           
-          out_dir_step2 <- file.path(output_dir(), "step2")
+          out_dir_step2 <- file.path(output_dir())
           dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
           
           incProgress(0.5, detail = "Memproses opsi alternatif...")

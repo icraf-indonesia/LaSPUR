@@ -118,6 +118,70 @@ tab_config <- list(
   reconcile    = list(label = "5. Rekonsiliasi",             ui_fn = reconcile_ui,    srv_fn = reconcile_server) 
 )
 
+# ── Report module config ─────────────────────────────────────
+report_module_config <- list(
+  overlap = list(
+    label    = "1.1 Area Tumpang Tindih",
+    template = "report/LaSPUR_SERASI_report_template.Rmd"
+  ),
+  adjacent = list(
+    label    = "1.2 Area Bertetangga",
+    template = "report/LaSPUR_adjacent_report_template.Rmd"
+  ),
+  interconnection = list(
+    label    = "1.3 Area Saling Terhubung",
+    template = ""
+  ),
+  padu_ke = list(
+    label    = "2.1 PADU-KE",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_hs = list(
+    label    = "2.2 PADU-HS",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_kl = list(
+    label    = "2.3 PADU-KL",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_kh = list(
+    label    = "2.4 PADU-KH",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_rtp = list(
+    label    = "2.5 PADU-RTp",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_se = list(
+    label    = "2.6 PADU-SE",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_ki = list(
+    label    = "2.7 PADU-KI",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padu_combine = list(
+    label    = "2.8 PADU-Kombinasi",
+    template = "report/LaSPUR_PADU_report_template.Rmd"
+  ),
+  padan = list(
+    label    = "3. PADAN",
+    template = "report/LaSPUR_PADAN_report_template.Rmd"
+  ),
+  recommendation_overlaps = list(
+    label    = "4.1 Penyusunan Alternatif Tumpang Tindih",
+    template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+  ),
+  recommendation_adjacent = list(
+    label    = "4.2 Penyusunan Alternatif Bertetangga",
+    template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+  ),
+  reconcile = list(
+    label    = "5. Rekonsiliasi",
+    template = "report/LaSPUR_RECONCILLIATION_report_template.Rmd"
+  )
+)
+
 # ── Landing Page UI ──────────────────────────────────────────
 landing_page <- tabPanel(
   title = "Beranda",
@@ -125,9 +189,9 @@ landing_page <- tabPanel(
   div(
     style = "padding: 60px 20px; max-width: 1100px; margin: 0 auto; text-align: center;",
     
-    tags$img(src = "pur_icon.png", style = "max-width: 100px; margin-bottom: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 20px;"),
+    tags$img(src = "logo_laspur.png", style = "max-width: 600px; margin-bottom: 24px; border-radius: 20px;"),
     
-    h1("LaSPUR", style = "color: #1b75ba; font-weight: 800; font-size: 3.5rem; margin-bottom: 16px; letter-spacing: -1px;"),
+    # h1("LaSPUR", style = "color: #1b75ba; font-weight: 800; font-size: 3.5rem; margin-bottom: 16px; letter-spacing: -1px;"),
     
     p(
       "Land and Seascape Planning Unit Reconciliation adalah alat bantu perancangan tata ruang darat (RTRWP) dengan tata ruang laut (RZWP3K).",
@@ -192,7 +256,7 @@ ui <- page_sidebar(
   useShinyjs(), 
   
   tags$head(
-    tags$link(rel = "icon", type = "image/png", href = "pur_icon.png"),
+    tags$link(rel = "icon", type = "image/png", href = "logotype_laspur.png"),
     tags$link(rel = "stylesheet", href = "icons/bootstrap-icons.css"),
     tags$style(HTML("
       @font-face {
@@ -208,11 +272,11 @@ ui <- page_sidebar(
     id = "logo_home",
     class = "d-flex align-items-center",
     style = "padding-left: 10px; cursor: pointer;",
-    tags$img(src = "pur_icon.png", style = "height: 34px; margin-right: 12px; border-radius: 6px;"),
-    tags$span("LaSPUR", style = "font-weight: 800; font-size: 1.4rem; color: #1b75ba; letter-spacing: -0.5px;"),
+    tags$img(src = "logotype_laspur.png", style = "height: 25px; margin-right: 12px; border-radius: 6px;"),
+    # tags$span("LaSPUR", style = "font-weight: 800; font-size: 1.4rem; color: #1b75ba; letter-spacing: -0.5px;"),
     uiOutput("active_path_indicator", inline = TRUE)
   ),
-  window_title = "LaSPUR",
+  # window_title = "LaSPUR",
   
   theme = bs_theme(
     version = 5,
@@ -344,6 +408,30 @@ ui <- page_sidebar(
       width: 32px !important; min-width: 32px !important; height: 32px !important; 
       display: flex !important; align-items: center !important; justify-content: center !important; border-radius: 8px !important;
     }
+    
+    /* ── Report footer button in mini mode ── */
+    body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
+    body:not(.sidebar-mini) aside #btn_home .menu-icon {
+      display: inline-block !important;
+      margin-right: 8px !important;
+    }
+    
+    body.sidebar-mini aside .report-sidebar-footer {
+      border-top: none !important;
+      padding-top: 8px !important;
+      margin-top: 8px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+    }
+    body.sidebar-mini aside .report-sidebar-footer .report-sidebar-subtitle { display: none !important; }
+    body.sidebar-mini aside #btn_generate_report {
+      width: 48px !important;
+      padding: 14px 0 !important;
+      justify-content: center !important;
+      background-color: transparent !important;
+    }
+    body.sidebar-mini aside #btn_generate_report:hover { background-color: #eef6fc !important; }
     
     /* ========================================================
        TABS BROWSER ALA CHROME & TOMBOL CLOSE PADA HOVER
@@ -646,6 +734,25 @@ ui <- page_sidebar(
           nav_item("nav_reconcile", "5", "Rekonsiliasi")
         )
       )
+    ),
+    div(
+      class = "report-sidebar-footer",
+      style = "margin-top: 20px; padding-top: 16px; border-top: 1px solid #E2E8F0;",
+      actionButton(
+        "btn_generate_report",
+        tagList(
+          icon("file-lines", class = "menu-icon fa-fw"),
+          tags$span(class = "menu-text", "Buat Laporan")
+        ),
+        title = "Buat Laporan",
+        class = "btn w-100 d-flex align-items-center",
+        style = "text-align: left; color: #1b75ba; background-color: #eef6fc; border: none; padding: 14px 16px; font-weight: 600; border-radius: 8px;"
+      ),
+      tags$small(
+        class = "report-sidebar-subtitle",
+        style = "display: block; margin-top: 6px; color: #94A3B8; font-size: 0.75rem;",
+        "Hasil dari modul yang sudah dijalankan"
+      )
     )
   ),
   
@@ -728,6 +835,9 @@ ui <- page_sidebar(
 # ── Server ───────────────────────────────────────────────────
 server <- function(input, output, session) {
   
+  # ── Shared storage for module results ──────────────────────
+  session$userData$module_results <- reactiveValues()
+  
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
   pending_action <- reactiveVal(NULL)   # "overlap" or "adjacent"
@@ -753,6 +863,11 @@ server <- function(input, output, session) {
   
   # ── Logo click handler ──────────────────────────────────────
   shinyjs::onclick("logo_home", {
+    updateTabsetPanel(session, "tabs", selected = "home")
+  })
+  
+  # ── Beranda Utama button handler ────────────────────────────
+  observeEvent(input$btn_home, {
     updateTabsetPanel(session, "tabs", selected = "home")
   })
   
@@ -997,6 +1112,160 @@ server <- function(input, output, session) {
   observeEvent(input$nav_recommendation_overlaps,  { add_tab("recommendation_overlaps") })
   observeEvent(input$nav_recommendation_adjacent,  { add_tab("recommendation_adjacent") })
   observeEvent(input$nav_reconcile,    { add_tab("reconcile") })
+  
+  # ── Report Generation ────────────────────────────────────────
+  
+  observeEvent(input$btn_generate_report, {
+    if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+      showNotification(
+        "Direktori output belum diatur. Harap pilih folder output terlebih dahulu.",
+        type = "error", duration = 5
+      )
+      return()
+    }
+    
+    mod_ids    <- names(report_module_config)
+    has_result <- vapply(mod_ids, function(m)
+      !is.null(session$userData$module_results[[m]]), logical(1))
+    
+    # Create labelled choices with status badges
+    choices_ui <- lapply(seq_along(mod_ids), function(i) {
+      mod_id  <- mod_ids[[i]]
+      cfg     <- report_module_config[[mod_id]]
+      ready   <- has_result[[i]]
+      
+      badge <- if (ready) {
+        tags$span(
+          class = "badge ms-2",
+          style = "background-color:#106665; font-size:0.7rem; vertical-align:middle;",
+          "Siap"
+        )
+      } else {
+        tags$span(
+          class = "badge ms-2",
+          style = "background-color:#94A3B8; font-size:0.7rem; vertical-align:middle;",
+          "Belum dijalankan"
+        )
+      }
+      
+      tags$div(
+        class = "form-check mb-2",
+        tags$input(
+          class    = "form-check-input report-mod-cb",
+          type     = "checkbox",
+          id       = paste0("cb_mod_", mod_id),
+          value    = mod_id,
+          checked  = if (ready) NA else NULL,
+          disabled = if (!ready) NA else NULL
+        ),
+        tags$label(
+          class  = "form-check-label",
+          `for`  = paste0("cb_mod_", mod_id),
+          style  = if (!ready) "color:#94A3B8;" else "",
+          cfg$label,
+          badge
+        )
+      )
+    })
+    
+    sync_js <- tags$script(HTML("
+      $(document).off('click', '#btn_report_generate').on('click', '#btn_report_generate', function() {
+        var selected = [];
+        $('.report-mod-cb:checked').each(function() {
+          selected.push($(this).val());
+        });
+        Shiny.setInputValue('report_modules_selected', selected, {priority: 'event'});
+      });
+    "))
+    
+    showModal(
+      modalDialog(
+        title = tagList(
+          icon("file-lines", class = "me-2"),
+          "Buat Laporan — Pilih Modul"
+        ),
+        tags$p(
+          style = "color:#64748B; font-size:0.9rem; margin-bottom:16px;",
+          "Centang modul yang ingin disertakan dalam laporan. Modul yang belum dijalankan tidak dapat dipilih."
+        ),
+        tags$div(
+          style = "padding: 8px 4px;",
+          if (length(choices_ui) > 0) choices_ui else
+            tags$p(class = "text-muted", "Tidak ada modul yang terdaftar.")
+        ),
+        sync_js,
+        footer = tagList(
+          modalButton("Batal"),
+          actionButton(
+            "btn_report_generate",
+            tagList(icon("file-export", class = "me-2"), "Buat Laporan"),
+            class = "btn-primary",
+            style = "font-weight: 600; border: none; box-shadow: 0 4px 6px -1px rgba(27,117,186,0.2);"
+          )
+        ),
+        easyClose = TRUE,
+        size = "m"
+      )
+    )
+  })
+  
+  observeEvent(input$report_modules_selected, {
+    selected <- input$report_modules_selected
+    
+    if (length(selected) == 0) {
+      showNotification("Pilih setidaknya satu modul.", type = "warning")
+      return()
+    }
+    
+    removeModal()
+    
+    n <- length(selected)
+    
+    withProgress(message = "Membuat laporan...", value = 0, {
+      success_count <- 0
+      
+      for (i in seq_along(selected)) {
+        mod <- selected[[i]]
+        cfg <- report_module_config[[mod]]
+        
+        incProgress(
+          amount = 1 / n,
+          detail = paste0("Modul: ", cfg$label, " (", i, "/", n, ")")
+        )
+        
+        out <- session$userData$module_results[[mod]]
+        if (is.null(out)) {
+          showNotification(
+            paste("Hasil untuk modul", mod, "tidak ditemukan. Dilewati."),
+            type = "warning", duration = 6
+          )
+          next
+        }
+        
+        tryCatch({
+          generate_report(
+            output        = out,
+            dir           = output_dir(),
+            module_name   = mod,
+            template_path = cfg$template
+          )
+          success_count <- success_count + 1
+        }, error = function(e) {
+          showNotification(
+            paste0("Gagal membuat laporan untuk modul '", mod, "': ", conditionMessage(e)),
+            type = "error", duration = 10
+          )
+        })
+      }
+      
+      if (success_count > 0) {
+        showNotification(
+          paste0(success_count, " laporan berhasil dibuat di folder: ", output_dir()),
+          type = "message", duration = 7
+        )
+      }
+    })
+  })
 }
 
 jsCode <- "
@@ -1009,8 +1278,8 @@ $(document).ready(function() {
     if (!btn.length) return;
     btn.attr('id', 'navbar-user-guide');
     btn.css('display', 'inline-flex');
-    $('.navbar').append(
-      $('<div>').css({'margin-left':'auto', 'margin-right':'24px'}).append(btn)
+    $('.navbar > .container-fluid').append(
+      $('<div>').css({'margin-left':'auto', 'margin-right':'12px'}).append(btn)
     );
   }
   addUserGuideButton();
