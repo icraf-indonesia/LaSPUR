@@ -347,7 +347,7 @@ padu_ke_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis ──────────────────────────
     observeEvent(input$btn_run, {
       req(rv$idx_serasi_map, rv$lulc_vect, rv$matriks_padu_ke)
       
@@ -420,18 +420,86 @@ padu_ke_server <- function(id, output_dir) {
           
           # Step 4: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          append_log(">> Menyimpan hasil ke disk...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_ke.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_ke.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          append_log(">> Menyimpan hasil ke direktori...")
+
+          padu_ke_dir <- file.path(output_dir(), "Analisis PADU-KE")
+          if (!dir.exists(padu_ke_dir)) {
+            dir.create(padu_ke_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_ke_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_ke_dir)
+          }
+          
+          gpkg_path <- file.path(padu_ke_dir, "idx_padu_ke.gpkg")
+          xlsx_path <- file.path(padu_ke_dir, "idx_padu_ke.xlsx")
           
           sf::st_write(idx_padu_ke_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           result_table <- as_tibble(idx_padu_ke_map %>% sf::st_drop_geometry())
           openxlsx::write.xlsx(result_table, xlsx_path)
-          
+
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_ke_map, table = result_table)
+
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              lulc_map_path = input$lulc_file,
+              matriks_padu_ke_path = input$matriks_padu_ke_file,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = idx_map,
+              lulc_map = lulc_vect_data,
+              lulc_ref = rv$lulc_ref,
+              matriks_padu_ke = rv$matriks_padu_ke,
+              lulc_adjacencies  = lulc_adjacencies,
+              idx_padu_ke_map = idx_padu_ke_map,
+              idx_padu_ke_table = result_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_ke_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_ke_log.txt")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              dput(out$inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_ke <- out
+          
+          # Export static maps 
+          idx_padu_ke_viz <- plot_continuous_map(
+            map      = idx_padu_ke_map,
+            column   = "idx_padu_ke",         
+            title    = "Peta Indeks PADU-KE",
+            legend   = "Indeks PADU-KE",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_ke.png")
+          )
+          
+          lulc_viz <- plot_categorical_map(
+            map      = lulc_vect_data,
+            title    = "Peta Tutupan/Penggunaan Lahan",
+            column   = class_col,
+            legend   = "Kelas Penutup Lahan",
+            legend_ncol = 1,
+            filepath = file.path(log_dir, "penutup_lahan.png")
+          )
           
           append_log(paste0("   Hasil disimpan di: ", gpkg_path))
           append_log("Analisis PADU-KE berhasil diselesaikan.")

@@ -433,7 +433,7 @@ adjacent_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis  ──────────────────────────
     observeEvent(input$btn_run, {
       req(rv$rtrw_vect, rv$rzwp3k_vect,
           rv$rtrw_prioritas, rv$rzwp3k_prioritas,
@@ -456,7 +456,6 @@ adjacent_server <- function(id, output_dir) {
           incProgress(0.1, detail = "Memulai analisis...")
           append_log(">> Memulai analisis area bertetangga...")
           
-          # Step 1: Identify adjacent (progress 30%)
           incProgress(0.2, detail = "Mengidentifikasi area bertetangga...")
           append_log(">> Mengidentifikasi area bertetangga antara RTRW dan RZWP3K...")
           adjacent_map_raw <- identify_adjacent(
@@ -473,7 +472,6 @@ adjacent_server <- function(id, output_dir) {
           
           append_log("   Area bertetangga berhasil diidentifikasi.")
           
-          # Step 2: Process adjacent (progress 50%)
           incProgress(0.2, detail = "Memproses area bertetangga...")
           append_log(">> Memproses area bertetangga dengan buffer 100 m...")
           adjacent_map <- process_adjacent(
@@ -486,12 +484,10 @@ adjacent_server <- function(id, output_dir) {
           )
           append_log("   Pemrosesan selesai.")
           
-          # Step 3: Validate zone class (progress 70%)
           incProgress(0.2, detail = "Memvalidasi kesesuaian kelas zona...")
           append_log(">> Memvalidasi kesesuaian nama kelas antara peta dan prioritas...")
           valid_class <- validate_zone_class(adjacent_map, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
           
-          # Step 4: Merge and save (progress 90%)
           incProgress(0.2, detail = "Menggabungkan dan menyimpan hasil...")
           if (length(valid_class$mismatch_col3) == 0 &&
               length(valid_class$mismatch_col4) == 0) {
@@ -501,17 +497,14 @@ adjacent_server <- function(id, output_dir) {
               filter(idx_serasi != 1)
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            # ── Merge with administrative map (if provided) ──
             if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
               append_log(">> Menggabungkan hasil dengan peta administratif...")
               
-              # Ensure both are in the same CRS (transform admin to match idx_serasi_map)
               admin_sf <- rv$admin_vect
               if (sf::st_crs(admin_sf) != sf::st_crs(idx_serasi_map)) {
                 admin_sf <- sf::st_transform(admin_sf, sf::st_crs(idx_serasi_map))
               }
               
-              # Spatial join: assign each polygon to the admin unit it intersects most
               idx_serasi_map <- sf::st_join(
                 idx_serasi_map,
                 admin_sf[, rv$admin_col, drop = FALSE],
@@ -519,25 +512,106 @@ adjacent_server <- function(id, output_dir) {
                 largest = TRUE
               )
               
-              # Rename the admin column to a standard name ("admin")
               names(idx_serasi_map)[names(idx_serasi_map) == rv$admin_col] <- "admin"
               
               append_log("   Penggabungan administratif selesai.")
             }
             
-            # Save outputs
-            gpkg_path <- file.path(output_dir(), "idx_serasi_adjacent.gpkg")
-            xlsx_path <- file.path(output_dir(), "idx_serasi_adjacent.xlsx")
-            dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+            # Prepare table and save
+            idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
+            
+            serasi_dir <- file.path(output_dir(), "Analisis SERASI")
+            if (!dir.exists(serasi_dir)) {
+              dir.create(serasi_dir, recursive = TRUE, showWarnings = FALSE)
+            }
+            
+            if (!dir.exists(serasi_dir)) {
+              stop("Tidak dapat membuat atau mengakses direktori: ", serasi_dir)
+            }
+            
+            gpkg_path <- file.path(serasi_dir, "idx_serasi_adjacent.gpkg")
+            xlsx_path <- file.path(serasi_dir, "idx_serasi_adjacent.xlsx")
             
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-            openxlsx::write.xlsx(as_tibble(sf::st_drop_geometry(idx_serasi_map)), xlsx_path)
+            openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
             
             rv$gpkg_path <- gpkg_path
             rv$xlsx_path <- xlsx_path
             
             idx_serasi_map_viz <- dissolve_id_pu(idx_serasi_map)
             rv$analysis_result <- list(map = idx_serasi_map_viz, table = as_tibble(sf::st_drop_geometry(idx_serasi_map_viz)))
+            
+            # ─── Store result for report generation ───
+            out <- list(
+              inputs = list(
+                start_time = Sys.time(),
+                case = "adjacent",
+                rtrw_path = input$rtrw_file,
+                rzwp3k_path = input$rzwp3k_file,
+                admin_path = input$admin_file,
+                rtrw_prioritas_path = input$rtrw_prioritas_file,
+                rzwp3k_prioritas_path = input$rzwp3k_prioritas_file,
+                matriks_serasi_path = input$matriks_serasi_file,
+                output_dir = output_dir()
+              ),
+              result = list(
+                rtrw_vect = rv$rtrw_vect,
+                rzwp3k_vect = rv$rzwp3k_vect,
+                matriks_serasi = rv$matriks_serasi,
+                rtrw_prioritas = rv$rtrw_prioritas,
+                rzwp3k_prioritas = rv$rzwp3k_prioritas,
+                idx_serasi_map = idx_serasi_map,
+                idx_serasi_table = idx_serasi_table
+              )
+            )
+            
+            # Export log
+            log_dir <- file.path(serasi_dir, "log")
+            if (!dir.exists(log_dir)) {
+              dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+            }
+            log_path <- file.path(log_dir, "idx_serasi_log.txt")
+            if (dir.exists(log_dir)) {
+              tryCatch({
+                dput(out$inputs, file = log_path)
+              }, error = function(e) {
+                warning("Gagal menulis file log: ", e$message)
+              })
+            } else {
+              warning("Direktori log tidak tersedia, lewati penulisan log.")
+            }
+            
+            # Store in shared environment
+            session$userData$module_results$serasi <- out
+            
+            # Export static maps 
+            idx_serasi_viz <- plot_continuous_map(
+              map      = idx_serasi_map,
+              column   = "idx_serasi",         
+              title    = "Peta Indeks SERASI Kasus Bertetangga",
+              legend   = "Indeks SERASI",
+              low      = "red",
+              high     = "lightgreen",
+              filepath = file.path(log_dir, "idx_serasi.png")
+            )
+            
+            rtrw_viz <- plot_categorical_map(
+              map      = rv$rtrw_vect,
+              title    = "Peta RTRW Kasus Bertetangga",
+              column   = "RTRW",
+              legend   = "Kelas RTRW",
+              legend_ncol = 1,
+              filepath = file.path(log_dir, "rtrw.png")
+            )
+            
+            rzwp3k_viz <- plot_categorical_map(
+              map      = rv$rzwp3k_vect,
+              title    = "Peta RZWP3K Kasus Bertetangga",
+              column   = "RZWP3K",
+              legend   = "Kelas RZWP3K",
+              legend_ncol = 1,
+              filepath = file.path(log_dir, "rzwp3k.png")
+            )
             
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis bertetangga berhasil diselesaikan.")
@@ -569,7 +643,7 @@ adjacent_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      }) 
     })
     
     # ── Status box ─────────────────────────────────────────────

@@ -156,7 +156,7 @@ overlap_server <- function(id, output_dir) {
                   accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
         
-        # NEW: Administrative map input (optional)
+        # Administrative map input (optional)
         tags$p(tags$i(class = "bi bi-map me-1"), "Peta Administratif (.shp) (Opsional)",
                style = "font-weight: 600; margin-bottom: 4px;"),
         tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
@@ -393,7 +393,7 @@ overlap_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis ──────────────────────────
     observeEvent(input$btn_run, {
       
       # Check output directory 
@@ -424,31 +424,26 @@ overlap_server <- function(id, output_dir) {
         
         tryCatch({
           
-          # Step 1: load already loaded, skip
           incProgress(0.1, detail = "Memulai analisis...")
           append_log(">> Memulai analisis overlap...")
           
-          # Step 2: Identify overlaps (progress 30%)
           incProgress(0.2, detail = "Mengidentifikasi tumpang tindih...")
           append_log(">> Mengidentifikasi tumpang tindih antara RTRW dan RZWP3K...")
           union_sf <- identify_overlaps(rv$rtrw_vect, rv$rzwp3k_vect)
           append_log("   Tumpang tindih berhasil diidentifikasi.")
           
-          # Step 3: Filter by threshold (progress 50%)
           incProgress(0.2, detail = "Menyaring berdasarkan luas minimum...")
           threshold <- input$threshold_ha
           append_log(paste0(">> Menyaring poligon dengan luas >= ", threshold, " ha..."))
           filtered_union_sf <- filter_overlaps(union_sf, threshold)
           append_log(paste0("   ", nrow(filtered_union_sf), " poligon tersisa setelah penyaringan."))
           
-          # Step 4: Validate zone class (progress 70%)
           incProgress(0.2, detail = "Memvalidasi kesesuaian kelas zona...")
           append_log(">> Memvalidasi kesesuaian nama kelas antara peta dan prioritas...")
           valid_class <- validate_zone_class(
             filtered_union_sf, rv$rtrw_prioritas, rv$rzwp3k_prioritas
           )
           
-          # Step 5: Merge and save (progress 90%)
           incProgress(0.2, detail = "Menggabungkan dan menyimpan hasil...")
           if (length(valid_class$mismatch_col3) == 0 &&
               length(valid_class$mismatch_col4) == 0) {
@@ -456,7 +451,7 @@ overlap_server <- function(id, output_dir) {
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
             idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
             
-            # Merge with administrative map if provided ──
+            # Merge with administrative map 
             if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
               append_log(">> Menggabungkan hasil dengan peta administratif...")
               admin_sf <- rv$admin_vect
@@ -476,9 +471,17 @@ overlap_server <- function(id, output_dir) {
             # Prepare table and save
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            gpkg_path <- file.path(output_dir(), "idx_serasi_overlaps.gpkg")
-            xlsx_path <- file.path(output_dir(), "idx_serasi_overlaps.xlsx")
-            dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+            serasi_dir <- file.path(output_dir(), "Analisis SERASI")
+            if (!dir.exists(serasi_dir)) {
+              dir.create(serasi_dir, recursive = TRUE, showWarnings = FALSE)
+            }
+
+            if (!dir.exists(serasi_dir)) {
+              stop("Tidak dapat membuat atau mengakses direktori: ", serasi_dir)
+            }
+            
+            gpkg_path <- file.path(serasi_dir, "idx_serasi_overlaps.gpkg")
+            xlsx_path <- file.path(serasi_dir, "idx_serasi_overlaps.xlsx")
             
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
             openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
@@ -490,6 +493,8 @@ overlap_server <- function(id, output_dir) {
             # ─── Store result for report generation ───
             out <- list(
               inputs = list(
+                start_time = Sys.time(),
+                case = "overlap",
                 rtrw_path = input$rtrw_file,
                 rzwp3k_path = input$rzwp3k_file,
                 admin_path = input$admin_file,
@@ -509,8 +514,53 @@ overlap_server <- function(id, output_dir) {
               )
             )
             
+            # Export log
+            log_dir <- file.path(serasi_dir, "log")
+            if (!dir.exists(log_dir)) {
+              dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+            }
+            log_path <- file.path(log_dir, "idx_serasi_log.txt")
+            if (dir.exists(log_dir)) {
+              tryCatch({
+                dput(out$inputs, file = log_path)
+              }, error = function(e) {
+                warning("Gagal menulis file log: ", e$message)
+              })
+            } else {
+              warning("Direktori log tidak tersedia, lewati penulisan log.")
+            }
+            
             # Store in shared environment
-            session$userData$module_results$overlap <- out
+            session$userData$module_results$serasi <- out
+            
+            # Export static maps 
+            idx_serasi_viz <- plot_continuous_map(
+              map      = idx_serasi_map,
+              column   = "idx_serasi",         
+              title    = "Peta Indeks SERASI Kasus Tumpang Tindih",
+              legend   = "Indeks SERASI",
+              low      = "red",
+              high     = "lightgreen",
+              filepath = file.path(log_dir, "idx_serasi.png")
+            )
+            
+            rtrw_viz <- plot_categorical_map(
+              map      = rv$rtrw_vect,
+              title    = "Peta RTRW Kasus Tumpang Tindih",
+              column   = "RTRW",
+              legend   = "Kelas RTRW",
+              legend_ncol = 1,
+              filepath = file.path(log_dir, "rtrw.png")
+            )
+            
+            rzwp3k_viz <- plot_categorical_map(
+              map      = rv$rzwp3k_vect,
+              title    = "Peta RZWP3K Kasus Tumpang Tindih",
+              column   = "RZWP3K",
+              legend   = "Kelas RZWP3K",
+              legend_ncol = 1,
+              filepath = file.path(log_dir, "rzwp3k.png")
+            )
             
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis overlap berhasil diselesaikan.")
@@ -542,7 +592,7 @@ overlap_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      }) 
     })
     
     # ── Status box ─────────────────────────────────────────────

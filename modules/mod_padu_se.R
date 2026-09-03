@@ -232,9 +232,17 @@ padu_se_server <- function(id, output_dir) {
           
           # Step 4: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(out_dir, "idx_padu_se.gpkg")
-          xlsx_path <- file.path(out_dir, "idx_padu_se.xlsx")
-          dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_se_dir <- file.path(output_dir(), "Analisis PADU-SE")
+          if (!dir.exists(padu_se_dir)) {
+            dir.create(padu_se_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_se_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_se_dir)
+          }
+          
+          gpkg_path <- file.path(padu_se_dir, "idx_padu_se.gpkg")
+          xlsx_path <- file.path(padu_se_dir, "idx_padu_se.xlsx")
           
           sf::st_write(idx_padu_se_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_se_map))
@@ -244,6 +252,74 @@ padu_se_server <- function(id, output_dir) {
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_se_map, table = res_table)
           
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              ntl_path = input$ntl_area_file, 
+              popdens_area_path = input$popdens_area_file,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = pu,
+              ntl_map = ntl_map,
+              popdens_map = popdens_map,
+              idx_padu_se_map = idx_padu_se_map,
+              idx_padu_se_table = res_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_se_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_se_log.txt")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              dput(out$inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_se <- out
+          
+          # Export static maps 
+          idx_padu_se_viz <- plot_continuous_map(
+            map      = idx_padu_se_map,
+            column   = "idx_padu_se",         
+            title    = "Peta Indeks PADU-SE",
+            legend   = "Indeks PADU-SE",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_se.png")
+          )
+          
+          ntl_viz <- plot_continuous_map(
+            map      = ntl_map,
+            column   = NA,        
+            title    = "Peta Cahaya Malam (Nigth time light)",
+            legend   = "nanoWatts/sr/cm²",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "cahaya_malam.png")
+          )
+          
+          popdens_viz <- plot_continuous_map(
+            map      = popdens_map,
+            column   = NA,        
+            title    = "Peta Kepadatan Populasi Penduduk",
+            legend   = "Penduduk (jiwa/ha)",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "kepadatan_penduduk.png")
+          )
+
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
           append_log("Analisis PADU-SE berhasil diselesaikan.")

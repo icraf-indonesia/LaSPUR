@@ -855,3 +855,321 @@ render_result_server <- function(input, output, session, rv, config) {
     }
   )
 }
+
+#' Plot Continuous Raster or Vector (sf) Map with Optional PNG Export
+#'
+#' This function creates a continuous map using **ggplot2**, supporting either a
+#' [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**) or an
+#' [`sf`][sf::st_sf] object (plotted via `geom_sf()`). Instead of an HTML
+#' download button, the plot can optionally be exported directly to a PNG file
+#' by supplying `filepath`.
+#'
+#' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
+#' @param title A character string giving the overall map title, shown above the plot.
+#'   If `NULL` (default), no title is shown. This is independent of `legend`, which
+#'   labels the color bar.
+#' @param column A character string giving the name of the numeric column to plot
+#'   as the continuous fill/color variable. Required when `map` is an `sf` object;
+#'   ignored when `map` is a `SpatRaster`.
+#' @param legend A character string giving the legend title. If `NULL`, no legend title is shown.
+#' @param low A character string specifying the color for the low end of the gradient.
+#' @param high A character string specifying the color for the high end of the gradient.
+#' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
+#' @param filepath A string giving the file path (including extension, e.g. `"output/map.png"`)
+#'   to export the plot as a PNG. If `NULL` (default), no file is written.
+#' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
+#' @param height Numeric height (inches) for the exported PNG. Also used to size the
+#'   legend color bar, which is drawn at 80% of this height. Defaults to `5`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported PNG.
+#'   Defaults to `300`.
+#'
+#' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
+#'   as a PNG to that path as a side effect.
+#'
+#' @export
+plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, high, na_color = "white",
+                                filepath = NULL, width = 7, height = 5, dpi = 300) {
+  
+  if (inherits(map, "SpatRaster")) {
+    
+    plot_lc <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = map) +
+      ggplot2::scale_fill_gradient(
+        low = low,
+        high = high,
+        na.value = na_color,
+        name = if (!is.null(legend)) legend else NULL
+      )
+    
+  } else if (inherits(map, "sf")) {
+    
+    if (is.null(column)) {
+      stop("`column` must be specified when `map` is an sf object.")
+    }
+    if (!column %in% names(map)) {
+      stop(sprintf("Column '%s' not found in `map`.", column))
+    }
+    
+    map <- sf::st_zm(map, drop = TRUE, what = "ZM")
+    map <- sf::st_make_valid(map)
+    map <- map[!sf::st_is_empty(map), ]
+    map[[column]] <- as.numeric(map[[column]])
+    map[[column]][!is.finite(map[[column]])] <- NA
+    
+    geom_types <- unique(as.character(sf::st_geometry_type(map)))
+    is_polygon <- any(grepl("POLYGON", geom_types))
+    
+    if (is_polygon) {
+      plot_lc <- ggplot2::ggplot() +
+        ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
+        ggplot2::scale_fill_gradient(
+          low = low,
+          high = high,
+          na.value = na_color,
+          name = if (!is.null(legend)) legend else NULL
+        )
+    } else {
+      plot_lc <- ggplot2::ggplot() +
+        ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
+        ggplot2::scale_color_gradient(
+          low = low,
+          high = high,
+          na.value = na_color,
+          name = if (!is.null(legend)) legend else NULL
+        )
+    }
+    
+  } else {
+    stop("`map` must be a SpatRaster or an sf object.")
+  }
+  
+  plot_lc <- plot_lc +
+    ggplot2::theme_bw() +
+    ggplot2::labs(fill = NULL, title = title) +
+    ggplot2::scale_x_continuous(breaks = scales::breaks_pretty(n = 3)) +
+    ggplot2::coord_sf(expand = FALSE) +
+    ggplot2::guides(
+      fill = ggplot2::guide_colorbar(
+        title.position = "top",
+        direction = "vertical",
+        barwidth = grid::unit(0.4, "cm"),
+        barheight = grid::unit(0.8 * height, "in")
+      ),
+      color = ggplot2::guide_colorbar(
+        title.position = "top",
+        direction = "vertical",
+        barwidth = grid::unit(0.4, "cm"),
+        barheight = grid::unit(0.8 * height, "in")
+      )
+    ) +
+    ggplot2::theme(
+      axis.title.x = ggplot2::element_blank(),
+      axis.title.y = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(size = 8),
+      axis.text.y = ggplot2::element_text(size = 8),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+      legend.title = ggplot2::element_text(size = 12),
+      legend.text = ggplot2::element_text(size = 10),
+      legend.position = "right",
+      legend.justification = c(0, 0.5),
+      legend.box.spacing = grid::unit(0.5, "cm"),
+      legend.margin = ggplot2::margin(0, 0, 0, 0),
+      plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
+    )
+  
+  if (!is.null(filepath)) {
+    ggplot2::ggsave(filename = filepath, plot = plot_lc, width = width, height = height, dpi = dpi)
+  }
+  
+  return(plot_lc)
+}
+
+#' Plot Categorical Raster or Vector (sf) Map with Optional PNG Export
+#'
+#' This function creates a categorical (discrete class) map using **ggplot2**,
+#' supporting either a [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**)
+#' or an [`sf`][sf::st_sf] object (plotted via `geom_sf()`). It uses the same
+#' overall styling as [plot_continuous_map()]. Long class names in the legend are
+#' automatically wrapped so they aren't cropped by the map's dimensions, and the
+#' legend can be split into multiple columns if there are many categories.
+#'
+#' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
+#' @param title A character string giving the overall map title, shown above the plot,
+#'   left-justified. If `NULL` (default), no title is shown.
+#' @param column A character string giving the name of the categorical column to plot.
+#'   Required when `map` is an `sf` object; ignored when `map` is a `SpatRaster`.
+#' @param lookup For `SpatRaster` input **only** (required): a file path to a `.csv`,
+#'   `.xlsx`, or `.xls` file containing the raster's class table, with (at least) an
+#'   ID column matching the raster's integer cell values and a class-name column.
+#' @param id_col Column name in `lookup` holding the raster cell ID values.
+#'   Defaults to `"ID"`.
+#' @param class_col Column name in `lookup` holding the class name/label.
+#'   Defaults to `"class"`.
+#' @param legend A character string giving the legend title. If `NULL`, no legend title is shown.
+#' @param colors An optional named character vector of colors, with names matching the
+#'   category labels (from `class_col` for rasters, or the unique values of `column`
+#'   for `sf`). If `NULL` (default), a default discrete palette is generated automatically.
+#' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
+#' @param label_wrap_width Integer giving the number of characters after which legend
+#'   labels wrap onto a new line. Defaults to `15`. Increase for a wider legend column,
+#'   decrease if labels are still being cut off.
+#' @param legend_ncol Integer giving the number of columns to arrange legend keys into.
+#'   Defaults to `1`. Increase this if there are many categories and the legend is
+#'   taller than the map (getting cropped vertically).
+#' @param filepath A string giving the file path (including extension, e.g. `"output/map.png"`)
+#'   to export the plot as a PNG. If `NULL` (default), no file is written.
+#' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
+#' @param height Numeric height (inches) for the exported PNG. Defaults to `5`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported PNG.
+#'   Defaults to `300`.
+#'
+#' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
+#'   as a PNG to that path as a side effect.
+#'
+#' @export
+plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL,
+                                 id_col = "ID", class_col = "class", legend = NULL, colors = NULL,
+                                 na_color = "white", label_wrap_width = 30, legend_ncol = 1,
+                                 filepath = NULL, width = 7, height = 5, dpi = 300) {
+  
+  read_lookup <- function(path) {
+    ext <- tolower(tools::file_ext(path))
+    if (ext == "csv") {
+      utils::read.csv(path, stringsAsFactors = FALSE)
+    } else if (ext %in% c("xlsx", "xls")) {
+      if (!requireNamespace("readxl", quietly = TRUE)) {
+        stop("Package 'readxl' is required to read xlsx/xls lookup files.")
+      }
+      readxl::read_excel(path)
+    } else {
+      stop("`lookup` must be a .csv, .xlsx, or .xls file.")
+    }
+  }
+  
+  if (inherits(map, "SpatRaster")) {
+    
+    if (is.null(lookup)) {
+      stop("`lookup` (a .csv/.xlsx file with ID and class columns) is required for SpatRaster input.")
+    }
+    
+    lookup_df <- read_lookup(lookup)
+    if (!all(c(id_col, class_col) %in% names(lookup_df))) {
+      stop(sprintf("`lookup` must contain columns '%s' and '%s'.", id_col, class_col))
+    }
+    
+    cat_df <- data.frame(
+      id    = lookup_df[[id_col]],
+      class = as.character(lookup_df[[class_col]])
+    )
+    terra::levels(map) <- cat_df
+    
+    class_labels <- as.character(terra::levels(map)[[1]][[2]])
+    
+    if (is.null(colors)) {
+      pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+    } else {
+      pal <- colors
+    }
+    
+    plot_lc <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = map) +
+      ggplot2::scale_fill_manual(
+        values   = pal,
+        na.value = na_color,
+        labels   = scales::label_wrap(label_wrap_width),
+        name     = if (!is.null(legend)) legend else NULL
+      )
+    
+  } else if (inherits(map, "sf")) {
+    
+    if (is.null(column)) {
+      stop("`column` must be specified when `map` is an sf object.")
+    }
+    if (!column %in% names(map)) {
+      stop(sprintf("Column '%s' not found in `map`.", column))
+    }
+    
+    map <- sf::st_zm(map, drop = TRUE, what = "ZM")
+    map <- sf::st_make_valid(map)
+    map <- map[!sf::st_is_empty(map), ]
+    
+    map[[column]] <- factor(map[[column]])
+    class_labels <- levels(map[[column]])
+    
+    if (is.null(colors)) {
+      pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+    } else {
+      pal <- colors
+    }
+    
+    geom_types <- unique(as.character(sf::st_geometry_type(map)))
+    is_polygon <- any(grepl("POLYGON", geom_types))
+    
+    if (is_polygon) {
+      plot_lc <- ggplot2::ggplot() +
+        ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
+        ggplot2::scale_fill_manual(
+          values   = pal,
+          na.value = na_color,
+          labels   = scales::label_wrap(label_wrap_width),
+          name     = if (!is.null(legend)) legend else NULL
+        )
+    } else {
+      plot_lc <- ggplot2::ggplot() +
+        ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
+        ggplot2::scale_color_manual(
+          values   = pal,
+          na.value = na_color,
+          labels   = scales::label_wrap(label_wrap_width),
+          name     = if (!is.null(legend)) legend else NULL
+        )
+    }
+    
+  } else {
+    stop("`map` must be a SpatRaster or an sf object.")
+  }
+  
+  plot_lc <- plot_lc +
+    ggplot2::theme_bw() +
+    ggplot2::labs(title = title) +
+    ggplot2::scale_x_continuous(breaks = scales::breaks_pretty(n = 3)) +
+    ggplot2::coord_sf(expand = FALSE) +
+    ggplot2::guides(
+      fill = ggplot2::guide_legend(
+        title.position = "top",
+        ncol      = legend_ncol,
+        keywidth  = grid::unit(0.4, "cm"),
+        keyheight = grid::unit(0.4, "cm")
+      ),
+      color = ggplot2::guide_legend(
+        title.position = "top",
+        ncol      = legend_ncol,
+        keywidth  = grid::unit(0.4, "cm"),
+        keyheight = grid::unit(0.4, "cm")
+      )
+    ) +
+    ggplot2::theme(
+      axis.title.x = ggplot2::element_blank(),
+      axis.title.y = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(size = 8),
+      axis.text.y = ggplot2::element_text(size = 8),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+      legend.title = ggplot2::element_text(size = 12),
+      legend.text = ggplot2::element_text(size = 9),
+      legend.position = "right",
+      legend.justification = c(0, 0.5),
+      legend.box.spacing = grid::unit(0.5, "cm"),
+      legend.margin = ggplot2::margin(0, 0, 0, 0),
+      plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
+    )
+  
+  if (!is.null(filepath)) {
+    ggplot2::ggsave(filename = filepath, plot = plot_lc, width = width, height = height, dpi = dpi)
+  }
+  
+  return(plot_lc)
+}
