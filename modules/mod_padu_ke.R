@@ -100,7 +100,9 @@ padu_ke_server <- function(id, output_dir) {
       # step1 data
       idx_serasi_map = NULL,
       lulc_vect = NULL,
-      lulc_ref = NULL,
+      lulc_id_col = NULL,      
+      lulc_class_col = NULL,   
+      lulc_ref = NULL,           
       
       # step2 data
       matriks_padu_ke = NULL,
@@ -158,6 +160,9 @@ padu_ke_server <- function(id, output_dir) {
                   accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
                   multiple = TRUE),
         
+        # Dynamic dropdowns for LULC columns 
+        uiOutput(ns("lulc_column_selectors")),
+        
         hr(),
         
         div(
@@ -175,7 +180,7 @@ padu_ke_server <- function(id, output_dir) {
       )
     })
     
-    # ── Load SERASI map and LULC ──────────────────────────────
+    # ── Load SERASI map ───────────────────────────────────────
     observeEvent(input$idx_serasi_file, {
       req(input$idx_serasi_file)
       tryCatch({
@@ -189,22 +194,70 @@ padu_ke_server <- function(id, output_dir) {
       })
     })
     
+    # ── Load LULC and populate column dropdowns ──────────────
     observeEvent(input$lulc_file, {
       req(input$lulc_file)
       tryCatch({
         sf_obj <- load_and_validate_shapefile(extract_shp_path(input$lulc_file))
-        rv$lulc_vect <- ensure_geometry_name(sf_obj)  
-        # Extract LULC reference table
-        rv$lulc_ref <- rv$lulc_vect %>%
-          sf::st_drop_geometry() %>%
-          dplyr::distinct(ID, LC) %>%
-          dplyr::arrange(ID)
-        showNotification("Peta tutupan lahan berhasil dimuat.", type = "message")
+        rv$lulc_vect <- ensure_geometry_name(sf_obj)
+        
+        col_names <- names(rv$lulc_vect)
+        col_names <- col_names[!col_names %in% c("geometry", "geom")]
+        
+        # Render the column selectors
+        output$lulc_column_selectors <- renderUI({
+          req(rv$lulc_vect)
+          tagList(
+            selectInput(
+              ns("lulc_id_col"),
+              label = "Pilih kolom ID (numeric, untuk kode kelas)",
+              choices = col_names,
+              selected = if (!is.null(rv$lulc_id_col) && rv$lulc_id_col %in% col_names) rv$lulc_id_col else col_names[1]
+            ),
+            selectInput(
+              ns("lulc_class_col"),
+              label = "Pilih kolom Nama Kelas (teks)",
+              choices = col_names,
+              selected = if (!is.null(rv$lulc_class_col) && rv$lulc_class_col %in% col_names) rv$lulc_class_col else col_names[1]
+            )
+          )
+        })
+        
+        showNotification("Peta tutupan lahan berhasil dimuat. Silakan pilih kolom ID dan Nama Kelas.", type = "message")
       }, error = function(e) {
         rv$lulc_vect <- NULL
-        rv$lulc_ref <- NULL
+        output$lulc_column_selectors <- renderUI(NULL)
         showNotification(paste("Gagal memuat peta tutupan lahan:", e$message), type = "error")
       })
+    })
+    
+    # ── React to column selections ────────────────────────────
+    observeEvent(c(input$lulc_id_col, input$lulc_class_col), {
+      req(rv$lulc_vect, input$lulc_id_col, input$lulc_class_col)
+      
+      # Store selections
+      rv$lulc_id_col <- input$lulc_id_col
+      rv$lulc_class_col <- input$lulc_class_col
+      
+      # Validate that ID column is numeric
+      col_data <- rv$lulc_vect[[rv$lulc_id_col]]
+      if (!is.numeric(col_data)) {
+        showNotification(
+          paste("Kolom", rv$lulc_id_col, "harus bertipe numerik. Pilih kolom lain."),
+          type = "warning", duration = 8
+        )
+        rv$lulc_ref <- NULL
+        return()
+      }
+      
+      # Build lulc_ref
+      rv$lulc_ref <- rv$lulc_vect %>%
+        sf::st_drop_geometry() %>%
+        dplyr::select(ID = !!sym(rv$lulc_id_col), LC = !!sym(rv$lulc_class_col)) %>%
+        dplyr::distinct(ID, LC) %>%
+        dplyr::arrange(ID)
+      
+      showNotification("Kolom LULC diperbarui. Analisis ulang jika perlu.", type = "message")
     })
     
     # ── Generate matrix template ───────────────────────────────
@@ -236,7 +289,7 @@ padu_ke_server <- function(id, output_dir) {
       tryCatch({
         out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
         dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-
+        
         generate_matrix_padu_ke(rv$lulc_ref, file_path = out_path)
         
         matrix_template_path(out_path)
@@ -266,8 +319,8 @@ padu_ke_server <- function(id, output_dir) {
     # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
       
-      if (is.null(rv$idx_serasi_map) || is.null(rv$lulc_vect)) {
-        showNotification("Harap unggah peta SERASI dan peta tutupan lahan sebelum melanjutkan.",
+      if (is.null(rv$idx_serasi_map) || is.null(rv$lulc_vect) || is.null(rv$lulc_ref)) {
+        showNotification("Harap unggah peta SERASI, peta tutupan lahan, dan pilih kolom ID & kelas sebelum melanjutkan.",
                          type = "warning", duration = 8)
         return()
       }
@@ -347,9 +400,9 @@ padu_ke_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis ──────────────────────────
+    # ── Run analysis ──────────────────────────────────────────
     observeEvent(input$btn_run, {
-      req(rv$idx_serasi_map, rv$lulc_vect, rv$matriks_padu_ke)
+      req(rv$idx_serasi_map, rv$lulc_vect, rv$matriks_padu_ke, rv$lulc_id_col)
       
       # Store advanced settings
       rv$parallel <- input$parallel
@@ -373,7 +426,6 @@ padu_ke_server <- function(id, output_dir) {
           append_log(">> Memulai analisis PADU-KE...")
           
           # Step 1: Prepare data
-          # Conditional dissolve idx_serasi_map
           if ("length" %in% colnames(rv$idx_serasi_map)) {
             idx_map <- dissolve_id_pu(rv$idx_serasi_map)
           } else {
@@ -381,8 +433,8 @@ padu_ke_server <- function(id, output_dir) {
           }
           
           lulc_vect_data <- rv$lulc_vect
-          class_col <- intersect(c("ID", "Class", "class", "LULC", "Kelas"), names(lulc_vect_data))[1]
-          append_log(paste0("   Kolom kelas: ", class_col))
+          class_col <- rv$lulc_id_col 
+          append_log(paste0("   Kolom kelas (ID): ", class_col))
           
           # Step 2: Calculate adjacency (progress 30% → 70%)
           incProgress(0.2, detail = "Menghitung ketetanggaan tutupan lahan...")
@@ -421,7 +473,7 @@ padu_ke_server <- function(id, output_dir) {
           # Step 4: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
           append_log(">> Menyimpan hasil ke direktori...")
-
+          
           padu_ke_dir <- file.path(output_dir(), "Analisis PADU-KE")
           if (!dir.exists(padu_ke_dir)) {
             dir.create(padu_ke_dir, recursive = TRUE, showWarnings = FALSE)
@@ -437,17 +489,19 @@ padu_ke_server <- function(id, output_dir) {
           sf::st_write(idx_padu_ke_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           result_table <- as_tibble(idx_padu_ke_map %>% sf::st_drop_geometry())
           openxlsx::write.xlsx(result_table, xlsx_path)
-
+          
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_ke_map, table = result_table)
-
+          
           # ─── Store result for report generation ───
           out <- list(
             inputs = list(
               start_time = Sys.time(),
               idx_serasi_path = input$idx_serasi_file,
               lulc_map_path = input$lulc_file,
+              lulc_id_col = rv$lulc_id_col,
+              lulc_class_col = rv$lulc_class_col,
               matriks_padu_ke_path = input$matriks_padu_ke_file,
               output_dir = output_dir()
             ),
@@ -495,7 +549,7 @@ padu_ke_server <- function(id, output_dir) {
           lulc_viz <- plot_categorical_map(
             map      = lulc_vect_data,
             title    = "Peta Tutupan/Penggunaan Lahan",
-            column   = class_col,
+            column   = rv$lulc_class_col,  
             legend   = "Kelas Penutup Lahan",
             legend_ncol = 1,
             filepath = file.path(log_dir, "penutup_lahan.png")
@@ -515,7 +569,7 @@ padu_ke_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      })
     })
     
     # ── Status box ─────────────────────────────────────────────
