@@ -275,10 +275,11 @@ padu_se_server <- function(id, output_dir) {
           if (!dir.exists(log_dir)) {
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           }
-          log_path <- file.path(log_dir, "idx_padu_se_log.txt")
+          log_path <- file.path(log_dir, "idx_padu_se_log.rda")
           if (dir.exists(log_dir)) {
             tryCatch({
-              dput(out$inputs, file = log_path)
+              inputs <- out$inputs
+              save(inputs, file = log_path)
             }, error = function(e) {
               warning("Gagal menulis file log: ", e$message)
             })
