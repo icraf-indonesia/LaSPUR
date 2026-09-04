@@ -72,7 +72,7 @@ analysis_log %>%
 
 </details>
 
-# Ringkasan
+# Ringkasan Umum
 
 ```{r summary-calculation}
 #| error: true
@@ -82,31 +82,45 @@ analysis_log %>%
 idx_serasi_tbl <- params$result$idx_serasi_map %>% st_drop_geometry()
 
 summary <- list(
-  # Overall summary table
   overall = idx_serasi_tbl %>%
     summarise(
-      total_unit = n(),
+      total_unit = if (params$inputs$case == "adjacent") n_distinct(id_pu) else n(),
       total_rtrw = n_distinct(RTRW),
       total_rzwp3k = n_distinct(RZWP3K),
-      total_ha = sum(area_ha, na.rm = TRUE),
-      qualified_treshold_area = sum(area_flag == "luas terpenuhi", na.rm = TRUE)
+      total_ha = sum(area_ha, na.rm = TRUE)
     ) %>%
     as_tibble(),
   
-  # Combination count table (RTRW × RZWP3K)
-  combinations = idx_serasi_tbl %>%
-    group_by(RTRW, RZWP3K) %>%
-    summarise(
-      total_combination = n(),
-      total_area_ha = sum(area_ha, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
+  combinations = if (isTRUE(params$inputs$case == "adjacent")) {
+    idx_serasi_tbl %>%
+      group_by(id_pu) %>%
+      summarise(
+        RTRW = na.omit(RTRW)[1],
+        RZWP3K = na.omit(RZWP3K)[1],
+        area_ha = max(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      group_by(RTRW, RZWP3K) %>%
+      summarise(
+        total_combination = n_distinct(id_pu),
+        total_area_ha = sum(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } else {
+    idx_serasi_tbl %>%
+      group_by(RTRW, RZWP3K) %>%
+      summarise(
+        total_combination = n(),
+        total_area_ha = sum(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } %>%
     arrange(desc(total_combination)) %>%
     as_tibble()
 )
 ```
 
-## Ringkasan Identifikasi Tumpang Tindih
+## Ringkasan Identifikasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
 
 ```{r summary_overall}
 #| error: true
@@ -120,14 +134,13 @@ summary_overall_t <- summary$overall %>%
     Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
     Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
     Komponen == "total_ha"                   ~ "Luas Total Area Kasus (ha)",
-    Komponen == "qualified_treshold_area"    ~ "Jumlah Kasus Memenuhi Ambang Luas",
     TRUE                                   ~ Komponen  
   ))
 
 DT::datatable(summary_overall_t, rownames = FALSE)
 ```
 
-## Ringkasan Kombinasi Kasus
+## Ringkasan Kombinasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
 
 ```{r summary_combinations}
 #| error: true
@@ -219,30 +232,26 @@ pacman::p_load(
 
 idx_serasi_map <- params$result$idx_serasi_map
 
-# ── 1. Reproject to WGS84 (Leaflet requires lat/lng) ──────────────────────────
 map_data <- idx_serasi_map |>
   st_transform(crs = 4326) |>
   mutate(
     .row_id = row_number() - 1L
   )
 
-# ── 2. Colour palette (adjust field as needed) ─────────────────────────────────
 pal <- colorNumeric(
   palette = "RdYlGn",
   domain  = map_data$idx_serasi_final,
   na.color = "#808080"
 )
 
-# ── 3. Attribute table columns to display ─────────────────────────────────────
 tbl_cols <- c(
-  "id_pu", "stat_pu", "RTRW", "RZWP3K", "area_ha", "area_flag", "idx_serasi"
+  "id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi"
 )
 
 tbl_data <- map_data |>
   st_drop_geometry() |>
   select(all_of(tbl_cols))
 
-# ── 4. Build Leaflet map ───────────────────────────────────────────────────────
 leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
   addProviderTiles(providers$CartoDB.Positron, group = "Basemap") |>
   addPolygons(
@@ -266,11 +275,9 @@ leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
     ) |> lapply(HTML),
     popup = ~paste0(
       "<b>Planning Unit ", id_pu, "</b><hr>",
-      "<b>Status:</b> ", stat_pu, "<br>",
       "<b>RTRW:</b> ", RTRW, "<br>",
       "<b>RZWP3K:</b> ", RZWP3K, "<br>",
       "<b>Area (ha):</b> ", round(area_ha, 2), "<br>",
-      "<b>Area Flag:</b> ", area_flag, "<br>",
       "<hr>",
       "<b>idx_serasi:</b> ", round(idx_serasi, 3), "<br>"
     ) |> lapply(HTML),
@@ -289,7 +296,6 @@ leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
     options       = layersControlOptions(collapsed = FALSE)
   )
 
-# ── 5. Build DT table ──────────────────────────────────────────────────────────
 dt_table <- datatable(
   tbl_data,
   elementId  = "serasi-table",
@@ -315,11 +321,9 @@ dt_table <- datatable(
   )
 )
 
-# ── 6. JavaScript ───────────────────────────
 sync_js <- HTML("
 <script>
 (function() {
-  // Wait until both widgets are rendered
   function init() {
     var mapEl  = document.getElementById('serasi-map');
     var tblEl  = document.getElementById('serasi-table');
@@ -340,7 +344,7 @@ sync_js <- HTML("
 
     var dtApi = null;
     if (window.$) {
-      try { dtApi = $('#serasi-table').DataTable(); } catch(e) {}
+      try { dtApi = $('#serasi-table table').DataTable(); } catch(e) {}
     }
     if (!dtApi) { setTimeout(init, 300); return; }
 
@@ -410,7 +414,6 @@ sync_js <- HTML("
 </script>
 ")
 
-# ── 7. Assemble final widget ───────────────────────────────────────────────────
 tagList(
   tags$style("
     #serasi-map    { height: 500px; width: 100%; margin-bottom: 0; }
