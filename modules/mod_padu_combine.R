@@ -240,9 +240,18 @@ padu_combine_server <- function(id, output_dir) {
           
           # Step 5: Save results (progress 95%)
           incProgress(0.15, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padu.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_combine_dir <- file.path(output_dir(), "Analisis PADU-Kombinasi")
+          if (!dir.exists(padu_combine_dir)) {
+            dir.create(padu_combine_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_combine_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_combine_dir)
+          }
+          
+          gpkg_path <- file.path(padu_combine_dir, "idx_padu_combine.gpkg")
+          xlsx_path <- file.path(padu_combine_dir, "idx_padu_combine.xlsx")
           
           sf::st_write(idx_padu_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- sf::st_drop_geometry(idx_padu_map)
@@ -251,6 +260,57 @@ padu_combine_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_map, table = res_table)
+          
+          # Prepare input metadata
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file$datapath,
+              padu_folder_path = padu_folder_path(),
+              weight_table_path = if (!is.null(input$weight_table_file)) input$weight_table_file$datapath else NULL,
+              output_dir = output_dir(),
+              n_files = length(padu_files),
+              padu_files = basename(padu_files)
+            ),
+            result = list(
+              idx_serasi_map = idx_serasi_map,
+              idx_padu_map = idx_padu_map,
+              idx_padu_table = res_table,
+              weight_table = padu_idx_weight,
+              padu_files = padu_files
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_combine_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_combine_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment for report generation
+          session$userData$module_results$padu_combine <- out
+          
+          # Export static map 
+          idx_padu_combine_viz <- plot_continuous_map(
+            map      = idx_padu_map,
+            column   = "idx_padu_final",  
+            title    = "Peta Indeks PADU Gabungan",
+            legend   = "Indeks PADU",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_combine.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
@@ -267,7 +327,7 @@ padu_combine_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      })
     })
     
     # ── Status box ─────────────────────────────────────────────

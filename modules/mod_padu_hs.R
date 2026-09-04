@@ -345,7 +345,7 @@ padu_hs_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis ──────────────────────────
     observeEvent(input$btn_run, {
       
       # Check output directory 
@@ -401,9 +401,18 @@ padu_hs_server <- function(id, output_dir) {
           # Step 2: Save results (progress 90%)
           incProgress(0.2, detail = "Menyimpan hasil...")
           append_log("Menyimpan hasil ke disk...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_hs.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_hs.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_hs_dir <- file.path(output_dir(), "Analisis PADU-HS")
+          if (!dir.exists(padu_hs_dir)) {
+            dir.create(padu_hs_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_hs_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_hs_dir)
+          }
+          
+          gpkg_path <- file.path(padu_hs_dir, "idx_padu_hs.gpkg")
+          xlsx_path <- file.path(padu_hs_dir, "idx_padu_hs.xlsx")
           
           sf::st_write(idx_padu_hs_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(idx_padu_hs_table, xlsx_path)
@@ -411,6 +420,77 @@ padu_hs_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_hs_map, table = idx_padu_hs_table)
+          
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              tss_path = input$tss_file, 
+              estuari_path = input$estuari_file,
+              estuari_euc_path = input$euc_dist_file,
+              estuari_dist_max = input$estuari_dist_max,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = idx_serasi_map,
+              estuari_euc_dist  = rv$euc_dist_rast,
+              tss_rast          = rv$tss_rast,
+              idx_padu_hs_map = idx_padu_hs_map,
+              idx_padu_hs_table = idx_padu_hs_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_hs_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_hs_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_hs <- out
+          
+          # Export static maps 
+          idx_padu_hs_viz <- plot_continuous_map(
+            map      = idx_padu_hs_map,
+            column   = "idx_padu_hs",         
+            title    = "Peta Indeks PADU-HS",
+            legend   = "Indeks PADU-HS",
+            low      = "lightgreen",
+            high     = "red",
+            filepath = file.path(log_dir, "idx_padu_hs.png")
+          )
+          
+          euc_estuari_viz <- plot_continuous_map(
+            map      = rv$euc_dist_rast,
+            column   = NA,        
+            title    = "Peta Jarak ke Estuari",
+            legend   = "Meter",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "jarak_ke_estuari.png")
+          )
+          
+          tss_viz <- plot_continuous_map(
+            map      = rv$tss_rast,
+            column   = NA,        
+            title    = "Peta Total Suspended Solid (TSS)",
+            legend   = "TSS (mg/L)",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "tss.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))

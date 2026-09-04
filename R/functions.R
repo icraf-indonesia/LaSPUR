@@ -2463,7 +2463,7 @@ extract_sf_to_sf <- function(pu,
     value_col = value_col,
     pu_id = pu_id,
     .progress = progress,
-    .options = furrr::furrr_options(packages = "sf")
+    .options = furrr::furrr_options(packages = "sf", seed = TRUE)
   )
   
   all_agg <- do.call(rbind, agg_list)
@@ -2535,7 +2535,7 @@ calculate_padu_ki <- function(idx_serasi_map,
                               parallel = FALSE,
                               workers = NA) {
   
-  # Extract disaster risk values to overlap unit
+  # Extract disaster risk values
   disaster_risk_extracted <- extract_sf_to_sf(
     pu = idx_serasi_map,
     value_sf = disaster_risk_vect,
@@ -2546,31 +2546,31 @@ calculate_padu_ki <- function(idx_serasi_map,
     workers = workers
   )
   
-  # Calculate normalize risk value
+  # Get min and max of extracted values
   min_val <- min(disaster_risk_extracted[[new_col]], na.rm = TRUE)
   max_val <- max(disaster_risk_extracted[[new_col]], na.rm = TRUE)
   
-  # Calculate PADU-KI index
+  # Compute normalized risk (0–1)
+  normalized <- (disaster_risk_extracted[[new_col]] - min_val) / (max_val - min_val)
+  if (max_val == min_val) {
+    normalized <- 0
+  }
+  
+  # Build final index
   idx_padu_ki_map <- disaster_risk_extracted %>%
     dplyr::mutate(
       idx_padu_ki = dplyr::if_else(
         is.na(.data[[new_col]]),
         NA_real_,
-        1 - dplyr::if_else(
-          max_val > min_val,
-          (.data[[new_col]] - min_val) / (max_val - min_val),
-          0   # if all values equal, normalized value is 0
-        )
+        1 - normalized
       )
     ) %>%
     dplyr::select(-dplyr::all_of(new_col))
   
-  # Create geometry‑free tibble
   idx_padu_ki <- tibble::as_tibble(
     idx_padu_ki_map %>% sf::st_drop_geometry()
   )
   
-  # Return as a list
   list(
     idx_padu_ki_map = idx_padu_ki_map,
     idx_padu_ki     = idx_padu_ki

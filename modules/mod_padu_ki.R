@@ -114,8 +114,8 @@ padu_ki_server <- function(id, output_dir) {
       gpkg_path       = NULL,
       xlsx_path       = NULL,
       log_messages    = "",
-      dr_vect         = NULL,   # loaded disaster-risk sf object
-      risk_col        = NULL    # selected column name
+      dr_vect         = NULL, 
+      risk_col        = NULL    
     )
     
     # ── Robust helper to extract shapefile path ────────────────
@@ -224,7 +224,6 @@ padu_ki_server <- function(id, output_dir) {
           idx_map_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
           idx_map_raw <- ensure_geometry_name(idx_map_raw)
           
-          # Reuse the already-loaded sf object; fall back to re-reading if needed
           dr_vect <- if (!is.null(rv$dr_vect)) rv$dr_vect else {
             tmp <- load_and_validate_shapefile(extract_shp_path(input$disaster_risk_file))
             ensure_geometry_name(tmp)
@@ -261,9 +260,18 @@ padu_ki_server <- function(id, output_dir) {
           
           # Step 3: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_ki.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_ki.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_ki_dir <- file.path(output_dir(), "Analisis PADU-KI")
+          if (!dir.exists(padu_ki_dir)) {
+            dir.create(padu_ki_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_ki_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_ki_dir)
+          }
+          
+          gpkg_path <- file.path(padu_ki_dir, "idx_padu_ki.gpkg")
+          xlsx_path <- file.path(padu_ki_dir, "idx_padu_ki.xlsx")
           
           sf::st_write(idx_padu_ki_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_ki_map))
@@ -272,6 +280,61 @@ padu_ki_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_ki_map, table = res_table)
+          
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              disaster_risk_path = input$disaster_risk_file, 
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = idx_map,
+              disaster_risk_vect = dr_vect,
+              idx_padu_ki_map = idx_padu_ki_map,
+              idx_padu_ki_table = res_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_ki_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_ki_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_ki <- out
+          
+          # Export static maps 
+          idx_padu_ki_viz <- plot_continuous_map(
+            map      = idx_padu_ki_map,
+            column   = "idx_padu_ki",         
+            title    = "Peta Indeks PADU-KI",
+            legend   = "Indeks PADU-KI",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_ki.png")
+          )
+          
+          disaster_risk_viz <- plot_categorical_map(
+            map      = dr_vect,
+            title    = "Peta Kerawanan Bencana",
+            column   = risk_col,         
+            legend   = "Tingkat Kerawanan",
+            filepath = file.path(log_dir, "kerawanan_bencana.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
@@ -288,7 +351,7 @@ padu_ki_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      })
     })
     
     # ── Status box ─────────────────────────────────────────────

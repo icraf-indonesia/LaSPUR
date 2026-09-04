@@ -200,9 +200,18 @@ padu_kl_server <- function(id, output_dir) {
           
           # Step 3: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_kl.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_kl.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_kl_dir <- file.path(output_dir(), "Analisis PADU-KL")
+          if (!dir.exists(padu_kl_dir)) {
+            dir.create(padu_kl_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_kl_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_kl_dir)
+          }
+          
+          gpkg_path <- file.path(padu_kl_dir, "idx_padu_kl.gpkg")
+          xlsx_path <- file.path(padu_kl_dir, "idx_padu_kl.xlsx")
           
           sf::st_write(idx_padu_kl_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
@@ -211,6 +220,60 @@ padu_kl_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_kl_map, table = res_table)
+          
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              protected_area_path = input$protected_area_file, 
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = pu,
+              protected_area = overlay,
+              idx_padu_kl_map = idx_padu_kl_map,
+              idx_padu_kl_table = res_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_kl_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_kl_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_kl <- out
+          
+          # Export static maps 
+          idx_padu_kl_viz <- plot_continuous_map(
+            map      = idx_padu_kl_map,
+            column   = "idx_padu_kl",         
+            title    = "Peta Indeks PADU-KL",
+            legend   = "Indeks PADU-KL",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_kl.png")
+          )
+          
+          protected_viz <- plot_categorical_map(
+            map      = overlay,
+            title    = "Peta Kawasan Lindung",
+            column   = NA,  
+            filepath = file.path(log_dir, "penutup_lahan.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
@@ -227,7 +290,7 @@ padu_kl_server <- function(id, output_dir) {
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
         
-      }) # end withProgress
+      }) 
     })
     
     # ── Status box ─────────────────────────────────────────────

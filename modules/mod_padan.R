@@ -149,9 +149,18 @@ padan_server <- function(id, output_dir) {
           
           # Step 3: Save results (progress 90%)
           incProgress(0.3, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padan.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padan.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padan_dir <- file.path(output_dir(), "Analisis PADAN")
+          if (!dir.exists(padan_dir)) {
+            dir.create(padan_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padan_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padan_dir)
+          }
+          
+          gpkg_path <- file.path(padan_dir, "idx_padan.gpkg")
+          xlsx_path <- file.path(padan_dir, "idx_padan.xlsx")
           
           sf::st_write(idx_padan_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- sf::st_drop_geometry(idx_padan_map)
@@ -160,6 +169,51 @@ padan_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padan_map, table = res_table)
+          
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_padu_path = input$idx_padu_file,
+              alpha = input$alpha_val,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_padan_map = idx_padan_map,
+              idx_padan_table = res_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padan_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padan_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padan <- out
+          
+          # Export static maps 
+          idx_padan_viz <- plot_continuous_map(
+            map      = idx_padan_map,
+            column   = "idx_padan",         
+            title    = "Peta Indeks PADAN",
+            legend   = "Indeks PADAN",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padan.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))

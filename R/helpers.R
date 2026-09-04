@@ -1084,47 +1084,62 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
     
   } else if (inherits(map, "sf")) {
     
-    if (is.null(column)) {
-      stop("`column` must be specified when `map` is an sf object.")
-    }
-    if (!column %in% names(map)) {
-      stop(sprintf("Column '%s' not found in `map`.", column))
-    }
-    
-    map <- sf::st_zm(map, drop = TRUE, what = "ZM")
-    map <- sf::st_make_valid(map)
-    map <- map[!sf::st_is_empty(map), ]
-    
-    map[[column]] <- factor(map[[column]])
-    class_labels <- levels(map[[column]])
-    
-    if (is.null(colors)) {
-      pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+    if (is.null(column) || is.na(column) || column == "") {
+      map <- sf::st_zm(map, drop = TRUE, what = "ZM")
+      map <- sf::st_make_valid(map)
+      map <- map[!sf::st_is_empty(map), ]
+      
+      geom_types <- unique(as.character(sf::st_geometry_type(map)))
+      is_polygon <- any(grepl("POLYGON", geom_types))
+      
+      if (is_polygon) {
+        plot_lc <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = map, fill = "lightblue", color = "darkblue", size = 0.2)
+      } else {
+        plot_lc <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = map, color = "darkblue")
+      }
+      
     } else {
-      pal <- colors
-    }
-    
-    geom_types <- unique(as.character(sf::st_geometry_type(map)))
-    is_polygon <- any(grepl("POLYGON", geom_types))
-    
-    if (is_polygon) {
-      plot_lc <- ggplot2::ggplot() +
-        ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
-        ggplot2::scale_fill_manual(
-          values   = pal,
-          na.value = na_color,
-          labels   = scales::label_wrap(label_wrap_width),
-          name     = if (!is.null(legend)) legend else NULL
-        )
-    } else {
-      plot_lc <- ggplot2::ggplot() +
-        ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
-        ggplot2::scale_color_manual(
-          values   = pal,
-          na.value = na_color,
-          labels   = scales::label_wrap(label_wrap_width),
-          name     = if (!is.null(legend)) legend else NULL
-        )
+      if (!column %in% names(map)) {
+        stop(sprintf("Column '%s' not found in `map`.", column))
+      }
+      
+      map <- sf::st_zm(map, drop = TRUE, what = "ZM")
+      map <- sf::st_make_valid(map)
+      map <- map[!sf::st_is_empty(map), ]
+      
+      map[[column]] <- factor(map[[column]])
+      class_labels <- levels(map[[column]])
+      
+      if (is.null(colors)) {
+        pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+      } else {
+        pal <- colors
+      }
+      
+      geom_types <- unique(as.character(sf::st_geometry_type(map)))
+      is_polygon <- any(grepl("POLYGON", geom_types))
+      
+      if (is_polygon) {
+        plot_lc <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
+          ggplot2::scale_fill_manual(
+            values   = pal,
+            na.value = na_color,
+            labels   = scales::label_wrap(label_wrap_width),
+            name     = if (!is.null(legend)) legend else NULL
+          )
+      } else {
+        plot_lc <- ggplot2::ggplot() +
+          ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
+          ggplot2::scale_color_manual(
+            values   = pal,
+            na.value = na_color,
+            labels   = scales::label_wrap(label_wrap_width),
+            name     = if (!is.null(legend)) legend else NULL
+          )
+      }
     }
     
   } else {
@@ -1136,20 +1151,6 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
     ggplot2::labs(title = title) +
     ggplot2::scale_x_continuous(breaks = scales::breaks_pretty(n = 3)) +
     ggplot2::coord_sf(expand = FALSE) +
-    ggplot2::guides(
-      fill = ggplot2::guide_legend(
-        title.position = "top",
-        ncol      = legend_ncol,
-        keywidth  = grid::unit(0.4, "cm"),
-        keyheight = grid::unit(0.4, "cm")
-      ),
-      color = ggplot2::guide_legend(
-        title.position = "top",
-        ncol      = legend_ncol,
-        keywidth  = grid::unit(0.4, "cm"),
-        keyheight = grid::unit(0.4, "cm")
-      )
-    ) +
     ggplot2::theme(
       axis.title.x = ggplot2::element_blank(),
       axis.title.y = ggplot2::element_blank(),
@@ -1158,14 +1159,36 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
       panel.grid.major = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
       plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
-      legend.title = ggplot2::element_text(size = 12),
-      legend.text = ggplot2::element_text(size = 9),
-      legend.position = "right",
-      legend.justification = c(0, 0.5),
-      legend.box.spacing = grid::unit(0.5, "cm"),
-      legend.margin = ggplot2::margin(0, 0, 0, 0),
       plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
     )
+
+  if (inherits(map, "sf") && (is.null(column) || is.na(column) || column == "")) {
+    plot_lc <- plot_lc + ggplot2::theme(legend.position = "none")
+  } else {
+    plot_lc <- plot_lc +
+      ggplot2::guides(
+        fill = ggplot2::guide_legend(
+          title.position = "top",
+          ncol      = legend_ncol,
+          keywidth  = grid::unit(0.4, "cm"),
+          keyheight = grid::unit(0.4, "cm")
+        ),
+        color = ggplot2::guide_legend(
+          title.position = "top",
+          ncol      = legend_ncol,
+          keywidth  = grid::unit(0.4, "cm"),
+          keyheight = grid::unit(0.4, "cm")
+        )
+      ) +
+      ggplot2::theme(
+        legend.title = ggplot2::element_text(size = 12),
+        legend.text = ggplot2::element_text(size = 9),
+        legend.position = "right",
+        legend.justification = c(0, 0.5),
+        legend.box.spacing = grid::unit(0.5, "cm"),
+        legend.margin = ggplot2::margin(0, 0, 0, 0)
+      )
+  }
   
   if (!is.null(filepath)) {
     ggplot2::ggsave(filename = filepath, plot = plot_lc, width = width, height = height, dpi = dpi)

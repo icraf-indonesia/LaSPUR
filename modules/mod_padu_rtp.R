@@ -494,7 +494,9 @@ padu_rtp_server <- function(id, output_dir) {
           padu_rtp <- calculate_padu_rtp(
             idx_serasi_map      = idx_map,
             industry_euc_dist   = rv$industry_euc_dist,
-            pelayaran_euc_dist  = rv$pelayaran_euc_dist
+            pelayaran_euc_dist  = rv$pelayaran_euc_dist,
+            industry_max_dist   = input$max_ind_dist,
+            pelayaran_max_dist  = input$max_pel_dist,
           )
           
           incProgress(0.6, detail = "Perhitungan selesai...")
@@ -504,9 +506,18 @@ padu_rtp_server <- function(id, output_dir) {
           
           # Step 3: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_rtp.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_rtp.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_rtp_dir <- file.path(output_dir(), "Analisis PADU-RTp")
+          if (!dir.exists(padu_rtp_dir)) {
+            dir.create(padu_rtp_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_rtp_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_rtp_dir)
+          }
+          
+          gpkg_path <- file.path(padu_rtp_dir, "idx_padu_rtp.gpkg")
+          xlsx_path <- file.path(padu_rtp_dir, "idx_padu_rtp.xlsx")
           
           sf::st_write(idx_padu_rtp_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_rtp_map))
@@ -515,6 +526,79 @@ padu_rtp_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_rtp_map, table = res_table)
+          
+          # ─── Store result for report generation ───
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file,
+              ind_shp_path = input$ind_file_vect,
+              ind_tif_path = input$ind_file_rast,
+              pel_shp_path = input$pel_file_vect,
+              pel_tif_path =input$pel_file_rast,
+              max_ind_dist = input$max_ind_dist,
+              max_pel_dist = input$max_pel_dist,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = idx_map,
+              industry_euc_dist   = rv$industry_euc_dist,
+              pelayaran_euc_dist  = rv$pelayaran_euc_dist,
+              idx_padu_rtp_map = idx_padu_rtp_map,
+              idx_padu_rtp_table = res_table
+            )
+          )
+          
+          # Export log
+          log_dir <- file.path(padu_rtp_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_rtp_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment
+          session$userData$module_results$padu_rtp <- out
+          
+          # Export static maps 
+          idx_padu_rtp_viz <- plot_continuous_map(
+            map      = idx_padu_rtp_map,
+            column   = "idx_padu_rtp",         
+            title    = "Peta Indeks PADU-RTp",
+            legend   = "Indeks PADU-RTp",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_rtp.png")
+          )
+          
+          euc_industry_viz <- plot_continuous_map(
+            map      = rv$industry_euc_dist,
+            column   = NA,        
+            title    = "Peta Jarak ke Industri",
+            legend   = "Meter",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "jarak_ke_industri.png")
+          )
+          
+          euc_alur_pelayaran_viz <- plot_continuous_map(
+            map      = rv$pelayaran_euc_dist,
+            column   = NA,        
+            title    = "Peta Jarak ke Alur Pelayaran",
+            legend   = "Meter",
+            low      = "darkblue",
+            high     = "yellow",
+            filepath = file.path(log_dir, "jarak_ke_alur_pelayaran.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))

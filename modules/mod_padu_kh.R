@@ -506,9 +506,18 @@ padu_kh_server <- function(id, output_dir) {
           append_log("Perhitungan indeks selesai.")
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          gpkg_path <- file.path(output_dir(), "idx_padu_kh.gpkg")
-          xlsx_path <- file.path(output_dir(), "idx_padu_kh.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          padu_kh_dir <- file.path(output_dir(), "Analisis PADU-KH")
+          if (!dir.exists(padu_kh_dir)) {
+            dir.create(padu_kh_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          
+          if (!dir.exists(padu_kh_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", padu_kh_dir)
+          }
+          
+          gpkg_path <- file.path(padu_kh_dir, "idx_padu_kh.gpkg")
+          xlsx_path <- file.path(padu_kh_dir, "idx_padu_kh.xlsx")
           
           sf::st_write(res_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- sf::st_drop_geometry(res_map)
@@ -517,6 +526,79 @@ padu_kh_server <- function(id, output_dir) {
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = res_map, table = res_table)
+          
+          # Prepare input metadata for the log
+          if (input$habitat_source == "lulc") {
+            habitat_input <- list(
+              source = "lulc",
+              lulc_file = input$lulc_file$datapath[1],  
+              habitat_ids = rv$habitat_ids
+            )
+          } else {
+            habitat_input <- list(
+              source = "manual",
+              entries = lapply(1:rv$active_count, function(i) {
+                list(
+                  name = rv$entry_names[i],
+                  path = rv$entry_paths[[i]]
+                )
+              })
+            )
+          }
+          
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_serasi_path = input$idx_serasi_file$datapath[1],
+              habitat_source = input$habitat_source,
+              habitat_input = habitat_input,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_serasi_map = pu,
+              coastal_habitat = coastal_habitat,
+              idx_padu_kh_map = res_map,
+              idx_padu_kh_table = res_table
+            )
+          )
+          
+          # Export log 
+          log_dir <- file.path(padu_kh_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padu_kh_log.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) {
+              warning("Gagal menulis file log: ", e$message)
+            })
+          } else {
+            warning("Direktori log tidak tersedia, lewati penulisan log.")
+          }
+          
+          # Store in shared environment for report generation
+          session$userData$module_results$padu_kh <- out
+          
+          # Export static maps
+          idx_padu_kh_viz <- plot_continuous_map(
+            map      = res_map,
+            column   = "idx_padu_kh",
+            title    = "Peta Indeks PADU-KH",
+            legend   = "Indeks PADU-KH",
+            low      = "red",
+            high     = "lightgreen",
+            filepath = file.path(log_dir, "idx_padu_kh.png")
+          )
+          
+          habitat_viz <- plot_categorical_map(
+            map      = coastal_habitat,
+            title    = "Peta Habitat Pesisir",
+            column   = NA,  
+            filepath = file.path(log_dir, "habitat_pesisir.png")
+          )
           
           append_log(paste("Peta disimpan →", gpkg_path))
           append_log(paste("Tabel disimpan →", xlsx_path))
