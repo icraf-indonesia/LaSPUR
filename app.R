@@ -120,64 +120,54 @@ tab_config <- list(
 
 # ── Report module config ─────────────────────────────────────
 report_module_config <- list(
-  overlap = list(
-    label    = "1.1 Area Tumpang Tindih",
+  serasi = list(
+    label    = "Analisis SERASI",
     template = "report/LaSPUR_SERASI_report_template.Rmd"
   ),
-  adjacent = list(
-    label    = "1.2 Area Bertetangga",
-    template = "report/LaSPUR_adjacent_report_template.Rmd"
-  ),
-  interconnection = list(
-    label    = "1.3 Area Saling Terhubung",
-    template = ""
-  ),
-  padu_ke = list(
-    label    = "2.1 PADU-KE",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_hs = list(
-    label    = "2.2 PADU-HS",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_kl = list(
-    label    = "2.3 PADU-KL",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_kh = list(
-    label    = "2.4 PADU-KH",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_rtp = list(
-    label    = "2.5 PADU-RTp",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_se = list(
-    label    = "2.6 PADU-SE",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_ki = list(
-    label    = "2.7 PADU-KI",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
-  ),
-  padu_combine = list(
-    label    = "2.8 PADU-Kombinasi",
-    template = "report/LaSPUR_PADU_report_template.Rmd"
+  padu = list(
+    padu_ke = list(
+      label    = "PADU-KE",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_hs = list(
+      label    = "PADU-HS",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_kl = list(
+      label    = "PADU-KL",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_kh = list(
+      label    = "PADU-KH",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_rtp = list(
+      label    = "PADU-RTp",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_se = list(
+      label    = "PADU-SE",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_ki = list(
+      label    = "PADU-KI",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    ),
+    padu_combine = list(
+      label    = "PADU-Kombinasi",
+      template = "report/LaSPUR_PADU_report_template.Rmd"
+    )
   ),
   padan = list(
-    label    = "3. PADAN",
+    label    = "Analisis PADAN",
     template = "report/LaSPUR_PADAN_report_template.Rmd"
   ),
-  recommendation_overlaps = list(
-    label    = "4.1 Penyusunan Alternatif Tumpang Tindih",
-    template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
-  ),
-  recommendation_adjacent = list(
-    label    = "4.2 Penyusunan Alternatif Bertetangga",
+  recommendation = list(
+    label    = "Analisis Penyusunan Alternatif",
     template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
   ),
   reconcile = list(
-    label    = "5. Rekonsiliasi",
+    label    = "Rekonsiliasi",
     template = "report/LaSPUR_RECONCILLIATION_report_template.Rmd"
   )
 )
@@ -671,7 +661,7 @@ ui <- page_sidebar(
       style = "margin-bottom: 16px; padding: 16px; background-color: #F8FAFC; border-radius: 12px; border: 1px dashed #CBD5E1; transition: all 0.3s ease;",
       tags$label("Direktori Output",
                  style = paste("font-size: 0.8rem; font-weight: 700; color: #64748B;",
-                               "margin-bottom: 10px; display: block; text-transform: uppercase; letter-spacing: 0.5px;")),
+                               "margin-bottom: 10px; display: block; text-transform: letter-spacing: 0.5px;")),
       shinyDirButton(
         id    = "btn_browse_output",
         label = "Pilih Folder",
@@ -1113,8 +1103,81 @@ server <- function(input, output, session) {
   observeEvent(input$nav_recommendation_adjacent,  { add_tab("recommendation_adjacent") })
   observeEvent(input$nav_reconcile,    { add_tab("reconcile") })
   
-  # ── Report Generation ────────────────────────────────────────
+  # ── Helper to create standard dynamic checkbox item ──────────
+  make_cb_item <- function(val_id, label_text, is_ready, indent = FALSE) {
+    badge <- if (is_ready) {
+      tags$span(
+        class = "badge ms-2",
+        style = "background-color:#106665; font-size:0.7rem; vertical-align:middle;",
+        "Siap"
+      )
+    } else {
+      tags$span(
+        class = "badge ms-2",
+        style = "background-color:#94A3B8; font-size:0.7rem; vertical-align:middle;",
+        "Belum dijalankan"
+      )
+    }
+    
+    tags$div(
+      class = "form-check mb-2",
+      style = if (indent) "margin-left: 24px;" else NULL,
+      tags$input(
+        class    = "form-check-input report-mod-cb",
+        type     = "checkbox",
+        id       = paste0("cb_mod_", gsub("\\$", "_", val_id)),
+        value    = val_id,
+        checked  = if (is_ready) NA else NULL,
+        disabled = if (!is_ready) NA else NULL
+      ),
+      tags$label(
+        class = "form-check-label",
+        `for` = paste0("cb_mod_", gsub("\\$", "_", val_id)),
+        style = if (!is_ready) "color:#94A3B8;" else "",
+        label_text,
+        badge
+      )
+    )
+  }
   
+  # ── Helper to create standard dynamic checkbox item ──────────
+  make_cb_item <- function(val_id, label_text, is_ready, indent = FALSE, extra_class = "") {
+    badge <- if (is_ready) {
+      tags$span(
+        class = "badge ms-2",
+        style = "background-color:#106665; font-size:0.7rem; vertical-align:middle;",
+        "Siap"
+      )
+    } else {
+      tags$span(
+        class = "badge ms-2",
+        style = "background-color:#94A3B8; font-size:0.7rem; vertical-align:middle;",
+        "Belum dijalankan"
+      )
+    }
+    
+    tags$div(
+      class = "form-check mb-2",
+      style = if (indent) "margin-left: 24px;" else NULL,
+      tags$input(
+        class    = trimws(paste("form-check-input report-mod-cb", extra_class)),
+        type     = "checkbox",
+        id       = paste0("cb_mod_", gsub("\\$", "_", val_id)),
+        value    = val_id,
+        checked  = if (is_ready) NA else NULL,
+        disabled = if (!is_ready) NA else NULL
+      ),
+      tags$label(
+        class = "form-check-label",
+        `for` = paste0("cb_mod_", gsub("\\$", "_", val_id)),
+        style = if (!is_ready) "color:#94A3B8;" else "",
+        label_text,
+        badge
+      )
+    )
+  }
+  
+  # ── Dynamic Report Generation UI ────────────────────────────────
   observeEvent(input$btn_generate_report, {
     if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
       showNotification(
@@ -1124,58 +1187,110 @@ server <- function(input, output, session) {
       return()
     }
     
-    mod_ids    <- names(report_module_config)
-    has_result <- vapply(mod_ids, function(m)
-      !is.null(session$userData$module_results[[m]]), logical(1))
+    check_ready <- function(res_obj) {
+      if (is.null(res_obj)) return(FALSE)
+      if (is.list(res_obj)) return(length(res_obj) > 0)
+      length(res_obj) > 0
+    }
     
-    # Create labelled choices with status badges
-    choices_ui <- lapply(seq_along(mod_ids), function(i) {
-      mod_id  <- mod_ids[[i]]
-      cfg     <- report_module_config[[mod_id]]
-      ready   <- has_result[[i]]
+    mod_ids    <- names(report_module_config)
+    choices_ui <- list()
+    
+    for (m_id in mod_ids) {
+      cfg <- report_module_config[[m_id]]
       
-      badge <- if (ready) {
-        tags$span(
-          class = "badge ms-2",
-          style = "background-color:#106665; font-size:0.7rem; vertical-align:middle;",
-          "Siap"
+      if (!is.null(cfg$label) == FALSE || (is.list(cfg[[1]]) && is.null(cfg$label))) {
+        
+        any_ready <- any(vapply(names(cfg), function(c_id) {
+          check_ready(session$userData$module_results[[m_id]][[c_id]])
+        }, logical(1)))
+        
+        # Render Parent Checkbox 
+        choices_ui[[length(choices_ui) + 1]] <- tags$div(
+          class = "form-check mt-2 mb-1",
+          tags$input(
+            class = "form-check-input parent-mod-cb",
+            type = "checkbox",
+            id = paste0("cb_parent_", m_id),
+            `data-target-class` = paste0("child-of-", m_id),
+            disabled = if (!any_ready) NA else NULL
+          ),
+          tags$label(
+            class = "form-check-label",
+            `for` = paste0("cb_parent_", m_id),
+            style = if (!any_ready) "color:#94A3B8;" else "color: #334155;",
+            if (m_id == "padu") "Analisis PADU" else toupper(m_id)
+          )
         )
-      } else {
-        tags$span(
-          class = "badge ms-2",
-          style = "background-color:#94A3B8; font-size:0.7rem; vertical-align:middle;",
-          "Belum dijalankan"
+        
+        # Render Child Checkboxes
+        for (child_id in names(cfg)) {
+          child_cfg   <- cfg[[child_id]]
+          child_res   <- session$userData$module_results[[m_id]][[child_id]]
+          is_ready    <- check_ready(child_res)
+          val_string  <- paste0(m_id, "$", child_id)
+          
+          choices_ui[[length(choices_ui) + 1]] <- make_cb_item(
+            val_id      = val_string,
+            label_text  = child_cfg$label,
+            is_ready    = is_ready,
+            indent      = TRUE,
+            extra_class = paste0("child-of-", m_id) 
+          )
+        }
+      } 
+      else {
+        res      <- session$userData$module_results[[m_id]]
+        is_ready <- check_ready(res)
+        
+        choices_ui[[length(choices_ui) + 1]] <- make_cb_item(
+          val_id     = m_id,
+          label_text = cfg$label,
+          is_ready   = is_ready,
+          indent     = FALSE
         )
       }
-      
-      tags$div(
-        class = "form-check mb-2",
-        tags$input(
-          class    = "form-check-input report-mod-cb",
-          type     = "checkbox",
-          id       = paste0("cb_mod_", mod_id),
-          value    = mod_id,
-          checked  = if (ready) NA else NULL,
-          disabled = if (!ready) NA else NULL
-        ),
-        tags$label(
-          class  = "form-check-label",
-          `for`  = paste0("cb_mod_", mod_id),
-          style  = if (!ready) "color:#94A3B8;" else "",
-          cfg$label,
-          badge
-        )
-      )
-    })
+    }
     
+    # JS to handle Parent/Child toggle and form submission
     sync_js <- tags$script(HTML("
-      $(document).off('click', '#btn_report_generate').on('click', '#btn_report_generate', function() {
+      function updateSelectedModules() {
         var selected = [];
         $('.report-mod-cb:checked').each(function() {
           selected.push($(this).val());
         });
-        Shiny.setInputValue('report_modules_selected', selected, {priority: 'event'});
+        // Send array to Shiny every time a change happens
+        Shiny.setInputValue('report_modules_selected', selected);
+      }
+  
+      // 1. Parent toggles all enabled children
+      $(document).off('change', '.parent-mod-cb').on('change', '.parent-mod-cb', function() {
+        var isChecked = $(this).is(':checked');
+        var targetClass = $(this).attr('data-target-class');
+        $('.' + targetClass).not(':disabled').prop('checked', isChecked);
+        updateSelectedModules();
       });
+  
+      // 2. Child unchecks parent if unselected, checks if all are selected
+      $(document).off('change', '.report-mod-cb').on('change', '.report-mod-cb', function() {
+        var classes = $(this).attr('class').split(' ');
+        var parentClass = null;
+        for (var i = 0; i < classes.length; i++) {
+          if (classes[i].indexOf('child-of-') === 0) {
+            parentClass = classes[i];
+            break;
+          }
+        }
+        if (parentClass) {
+           var allEnabled = $('.' + parentClass).not(':disabled');
+           var allChecked = allEnabled.length > 0 && (allEnabled.length === allEnabled.filter(':checked').length);
+           $('.parent-mod-cb[data-target-class=\"' + parentClass + '\"]').prop('checked', allChecked);
+        }
+        updateSelectedModules();
+      });
+  
+      // 3. Initialize state immediately when modal opens
+      setTimeout(updateSelectedModules, 100);
     "))
     
     showModal(
@@ -1189,7 +1304,7 @@ server <- function(input, output, session) {
           "Centang modul yang ingin disertakan dalam laporan. Modul yang belum dijalankan tidak dapat dipilih."
         ),
         tags$div(
-          style = "padding: 8px 4px;",
+          style = "padding: 8px 4px; max-height: 400px; overflow-y: auto;",
           if (length(choices_ui) > 0) choices_ui else
             tags$p(class = "text-muted", "Tidak ada modul yang terdaftar.")
         ),
@@ -1209,7 +1324,7 @@ server <- function(input, output, session) {
     )
   })
   
-  observeEvent(input$report_modules_selected, {
+  observeEvent(input$btn_report_generate, {
     selected <- input$report_modules_selected
     
     if (length(selected) == 0) {
@@ -1218,25 +1333,36 @@ server <- function(input, output, session) {
     }
     
     removeModal()
-    
     n <- length(selected)
     
     withProgress(message = "Membuat laporan...", value = 0, {
       success_count <- 0
       
       for (i in seq_along(selected)) {
-        mod <- selected[[i]]
-        cfg <- report_module_config[[mod]]
+        item_path <- selected[[i]]
+        
+        if (grepl("\\$", item_path)) {
+          parts     <- strsplit(item_path, "\\$")[[1]]
+          parent    <- parts[1]
+          child     <- parts[2]
+          
+          cfg       <- report_module_config[[parent]][[child]]
+          out       <- session$userData$module_results[[parent]][[child]]
+          mod_name  <- paste0(parent, "_", child)
+        } else {
+          cfg       <- report_module_config[[item_path]]
+          out       <- session$userData$module_results[[item_path]]
+          mod_name  <- item_path
+        }
         
         incProgress(
           amount = 1 / n,
           detail = paste0("Modul: ", cfg$label, " (", i, "/", n, ")")
         )
         
-        out <- session$userData$module_results[[mod]]
         if (is.null(out)) {
           showNotification(
-            paste("Hasil untuk modul", mod, "tidak ditemukan. Dilewati."),
+            paste("Hasil untuk modul", item_path, "tidak ditemukan. Dilewati."),
             type = "warning", duration = 6
           )
           next
@@ -1246,13 +1372,13 @@ server <- function(input, output, session) {
           generate_report(
             output        = out,
             dir           = output_dir(),
-            module_name   = mod,
+            module_name   = mod_name,
             template_path = cfg$template
           )
           success_count <- success_count + 1
         }, error = function(e) {
           showNotification(
-            paste0("Gagal membuat laporan untuk modul '", mod, "': ", conditionMessage(e)),
+            paste0("Gagal membuat laporan untuk modul '", item_path, "': ", conditionMessage(e)),
             type = "error", duration = 10
           )
         })
