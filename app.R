@@ -248,7 +248,8 @@ ui <- page_sidebar(
   useShinyjs(), 
   
   tags$head(
-    tags$link(rel = "icon", type = "image/png", href = "logotype_laspur.png"),
+    tags$link(rel = "icon", type = "image/x-icon", href = "icon_web.ico"),
+    tags$link(rel = "icon", type = "image/png", href = "icon_web.png"),
     tags$link(rel = "stylesheet", href = "icons/bootstrap-icons.css"),
     tags$style(HTML("
       @font-face {
