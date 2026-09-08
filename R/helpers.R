@@ -450,11 +450,6 @@ load_and_validate_raster <- function(raster_path,
 generate_report <- function(output, dir,
                             module_name   = NULL,
                             template_path = "report/LaSPUR_SERASI_report_template.Rmd") {
-  report_params <- list(
-    inputs = output$inputs,
-    result = output$result
-  )
-  
   # Fallback for modules that don't have a template yet
   if (is.null(template_path) || !nzchar(template_path) || !file.exists(template_path)) {
     template_path <- tempfile(fileext = ".Rmd")
@@ -462,12 +457,42 @@ generate_report <- function(output, dir,
       "---",
       paste0("title: \"Laporan Modul ", module_name, "\""),
       "output: html_document",
+      "params:",
+      "  inputs: NA",
+      "  result: NA",
+      "  module_name: NA",
       "---",
       "",
       "### Laporan Belum Tersedia",
       "",
       "Template laporan spesifik untuk modul ini sedang dalam tahap pengembangan."
     ), template_path)
+  }
+
+  # Prepare inputs payload
+  inputs_payload <- output$inputs
+  if (is.null(inputs_payload) || !is.list(inputs_payload)) {
+    inputs_payload <- list()
+  }
+
+  # Build all possible parameters
+  all_params <- list(
+    start_time  = Sys.time(),
+    end_time    = Sys.time(),
+    inputs      = inputs_payload,
+    result      = output$result,
+    module_name = module_name
+  )
+
+  declared_params <- tryCatch({
+    yml <- rmarkdown::yaml_front_matter(template_path)
+    if (!is.null(yml$params) && is.list(yml$params)) names(yml$params) else NULL
+  }, error = function(e) NULL)
+
+  if (!is.null(declared_params)) {
+    report_params <- all_params[intersect(names(all_params), declared_params)]
+  } else {
+    report_params <- list(inputs = inputs_payload, result = output$result, module_name = module_name)
   }
   
   timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
@@ -1195,4 +1220,251 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
   }
   
   return(plot_lc)
+}
+
+# Module file paths and result variable names
+module_file_config <- list(
+  serasi = list(
+    folder  = "Analisis SERASI",
+    rda     = "log/idx_serasi_log.rda",
+    png_dir = "log"
+  ),
+  padu_ke = list(
+    folder  = "Analisis PADU-KE",
+    gpkg    = "idx_padu_ke.gpkg",
+    xlsx    = "idx_padu_ke.xlsx",
+    rda     = "log/idx_padu_ke_log.rda",
+    png_dir = "log"
+  ),
+  padu_hs = list(
+    folder  = "Analisis PADU-HS",
+    gpkg    = "idx_padu_hs.gpkg",
+    xlsx    = "idx_padu_hs.xlsx",
+    rda     = "log/idx_padu_hs_log.rda",
+    png_dir = "log"
+  ),
+  padu_kl = list(
+    folder  = "Analisis PADU-KL",
+    gpkg    = "idx_padu_kl.gpkg",
+    xlsx    = "idx_padu_kl.xlsx",
+    rda     = "log/idx_padu_kl_log.rda",
+    png_dir = "log"
+  ),
+  padu_kh = list(
+    folder  = "Analisis PADU-KH",
+    gpkg    = "idx_padu_kh.gpkg",
+    xlsx    = "idx_padu_kh.xlsx",
+    rda     = "log/idx_padu_kh_log.rda",
+    png_dir = "log"
+  ),
+  padu_rtp = list(
+    folder  = "Analisis PADU-RTp",
+    gpkg    = "idx_padu_rtp.gpkg",
+    xlsx    = "idx_padu_rtp.xlsx",
+    rda     = "log/idx_padu_rtp_log.rda",
+    png_dir = "log"
+  ),
+  padu_se = list(
+    folder  = "Analisis PADU-SE",
+    gpkg    = "idx_padu_se.gpkg",
+    xlsx    = "idx_padu_se.xlsx",
+    rda     = "log/idx_padu_se_log.rda",
+    png_dir = "log"
+  ),
+  padu_ki = list(
+    folder  = "Analisis PADU-KI",
+    gpkg    = "idx_padu_ki.gpkg",
+    xlsx    = "idx_padu_ki.xlsx",
+    rda     = "log/idx_padu_ki_log.rda",
+    png_dir = "log"
+  ),
+  padu_combine = list(
+    folder  = "Analisis PADU-Kombinasi",
+    gpkg    = "idx_padu_combine.gpkg",
+    xlsx    = "idx_padu_combine.xlsx",
+    rda     = "log/idx_padu_combine_log.rda",
+    png_dir = "log"
+  ),
+  padan = list(
+    folder  = "Analisis PADAN",
+    gpkg    = "idx_padan.gpkg",
+    xlsx    = "idx_padan.xlsx",
+    rda     = "log/idx_padan_log.rda",
+    png_dir = "log"
+  ),
+  recommendation_overlaps = list(
+    folder  = "Analisis Alternatif",
+    gpkg    = "idx_alternative_overlaps.gpkg",
+    xlsx    = "idx_alternative_overlaps.xlsx",
+    rda     = "log/idx_alternative_overlaps_log.rda",
+    png_dir = "log"
+  ),
+  recommendation_adjacent = list(
+    folder  = "Analisis Alternatif",
+    gpkg    = "idx_alternative_adjacent.gpkg",
+    xlsx    = "idx_alternative_adjacent.xlsx",
+    rda     = "log/idx_alternative_adjacent_log.rda",
+    png_dir = "log"
+  ),
+  reconcile = list(
+    folder  = "Analisis Rekonsiliasi",
+    gpkg    = "idx_reconcile.gpkg",
+    xlsx    = "idx_reconcile.xlsx",
+    rda     = "log/idx_reconcile_log.rda",
+    png_dir = "log"
+  )
+)
+
+module_result_names <- list(
+  serasi              = list(map = "idx_serasi_map",    table = "idx_serasi_table"),
+  padu_ke             = list(map = "idx_padu_ke_map",   table = "idx_padu_ke_table"),
+  padu_hs             = list(map = "idx_padu_hs_map",   table = "idx_padu_hs_table"),
+  padu_kl             = list(map = "idx_padu_kl_map",   table = "idx_padu_kl_table"),
+  padu_kh             = list(map = "idx_padu_kh_map",   table = "idx_padu_kh_table"),
+  padu_rtp            = list(map = "idx_padu_rtp_map",  table = "idx_padu_rtp_table"),
+  padu_se             = list(map = "idx_padu_se_map",   table = "idx_padu_se_table"),
+  padu_ki             = list(map = "idx_padu_ki_map",   table = "idx_padu_ki_table"),
+  padu_combine        = list(map = "idx_padu_map",      table = "idx_padu_table"),
+  padan               = list(map = "idx_padan_map",     table = "idx_padan_table"),
+  recommendation_overlaps = list(map = "idx_alternative_overlaps_map", table = "idx_alternative_overlaps_table"),
+  recommendation_adjacent = list(map = "idx_alternative_adjacent_map", table = "idx_alternative_adjacent_table"),
+  reconcile           = list(map = "idx_reconcile_map", table = "idx_reconcile_table")
+)
+
+#' Validate that the output directory exists and is writable
+validate_output_dir <- function(dir) {
+  if (is.null(dir) || !nzchar(dir)) return(FALSE)
+  if (!dir.exists(dir)) return(FALSE)
+  return(TRUE)
+}
+
+#' Special loading for SERASI module (overlap/adjacent)
+load_serasi_from_files <- function(base_dir, cfg) {
+  rda_path <- file.path(base_dir, cfg$rda)
+  if (!file.exists(rda_path)) return(list(ready = FALSE, data = NULL))
+  
+  env <- new.env()
+  load(rda_path, envir = env)
+  inputs <- env$inputs
+  case <- inputs$case  # "overlap" or "adjacent"
+  
+  case_plural <- paste0(case, "s")
+  gpkg_name_plural <- paste0("idx_serasi_", case_plural, ".gpkg")
+  xlsx_name_plural <- paste0("idx_serasi_", case_plural, ".xlsx")
+  gpkg_path_plural <- file.path(base_dir, gpkg_name_plural)
+  xlsx_path_plural <- file.path(base_dir, xlsx_name_plural)
+  
+  gpkg_name <- paste0("idx_serasi_", case, ".gpkg")
+  xlsx_name <- paste0("idx_serasi_", case, ".xlsx")
+  gpkg_path <- file.path(base_dir, gpkg_name)
+  xlsx_path <- file.path(base_dir, xlsx_name)
+  
+  if (file.exists(gpkg_path_plural) && file.exists(xlsx_path_plural)) {
+    gpkg_path <- gpkg_path_plural
+    xlsx_path <- xlsx_path_plural
+  } else if (!file.exists(gpkg_path) || !file.exists(xlsx_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) || length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    map_obj <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    names_list <- module_result_names[["serasi"]]
+    result <- list()
+    result[[names_list$map]] <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    matriks_xlsx <- file.path(base_dir, "matriks_serasi_input.xlsx")
+    if (file.exists(matriks_xlsx)) {
+      result$matriks_serasi <- openxlsx::read.xlsx(matriks_xlsx)
+    }
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load SERASI from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+module_ready_and_data <- function(module_id, output_dir, session) {
+  mod_key <- module_id
+  parent <- NULL
+  child <- NULL
+  
+  if (!is.null(module_id) && grepl("$", module_id, fixed = TRUE)) {
+    parts <- strsplit(module_id, "$", fixed = TRUE)[[1]]
+    if (length(parts) == 2) {
+      parent <- parts[1]
+      child <- parts[2]
+      mod_key <- child
+    } else {
+      mod_key <- module_id
+    }
+  } else {
+    mod_key <- module_id
+  }
+  
+  mem_data <- session$userData$module_results[[mod_key]]
+  if (!is.null(mem_data) && length(mem_data) > 0) {
+    return(list(ready = TRUE, data = mem_data, source = "memory"))
+  }
+  
+  if (is.null(output_dir) || !nzchar(output_dir)) {
+    return(list(ready = FALSE, data = NULL, source = NULL))
+  }
+  
+  cfg <- module_file_config[[mod_key]]
+  if (is.null(cfg)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  base_dir <- file.path(output_dir, cfg$folder)
+  if (!dir.exists(base_dir)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  if (mod_key == "serasi") {
+    return(load_serasi_from_files(base_dir, cfg))
+  }
+  
+  gpkg_path <- file.path(base_dir, cfg$gpkg)
+  xlsx_path <- file.path(base_dir, cfg$xlsx)
+  rda_path  <- file.path(base_dir, cfg$rda)
+  png_dir   <- file.path(base_dir, cfg$png_dir)
+  
+  if (!file.exists(gpkg_path) || !file.exists(xlsx_path) || !file.exists(rda_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  if (!dir.exists(png_dir) || length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    env <- new.env()
+    load(rda_path, envir = env)
+    inputs <- env$inputs
+    
+    map_obj <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    names_list <- module_result_names[[mod_key]]
+    if (is.null(names_list)) {
+      stop("No variable name mapping for module: ", mod_key)
+    }
+    result <- list()
+    result[[names_list$map]] <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load module from files: ", mod_key, " - ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
 }

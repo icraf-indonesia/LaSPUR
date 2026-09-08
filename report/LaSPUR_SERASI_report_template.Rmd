@@ -15,6 +15,7 @@ params:
   end_time: NA
   inputs: NA
   result: NA
+  module_name: NA
 ---
 
 ```{r setup}
@@ -41,7 +42,7 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
 }
 ```
 
-untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong
+<!-- untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong -->
 
 ```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
 source(here::here("R/functions.R"))
@@ -174,8 +175,25 @@ Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja y
 #| error: false
 #| warning: false
 #| message: false
-rtrw <- params$result$rtrw_vect["RTRW"]
-plot_with_autokey(rtrw)
+
+if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+  log_dir <- file.path(params$inputs$output_dir, "Analisis SERASI", "log")
+} else {
+  log_dir <- file.path(getwd(), "Analisis SERASI", "log")
+}
+
+rtrw_png_path <- file.path(log_dir, "rtrw.png")
+
+if (file.exists(rtrw_png_path)) {
+  # Use the exported PNG image
+  knitr::include_graphics(rtrw_png_path)
+} else if (!is.null(params$result$rtrw_vect)) {
+  # Fallback: render from vector data if available
+  rtrw <- params$result$rtrw_vect["RTRW"]
+  plot_with_autokey(rtrw)
+} else {
+  cat("Peta RTRW tidak tersedia.")
+}
 ```
 
 </details>
@@ -188,8 +206,19 @@ plot_with_autokey(rtrw)
 #| error: false
 #| warning: false
 #| message: false
-rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
-plot_with_autokey(rzwp3k)
+
+rzwp3k_png_path <- file.path(log_dir, "rzwp3k.png")
+
+if (file.exists(rzwp3k_png_path)) {
+  # Use the exported PNG image
+  knitr::include_graphics(rzwp3k_png_path)
+} else if (!is.null(params$result$rzwp3k_vect)) {
+  # Fallback: render from vector data if available
+  rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
+  plot_with_autokey(rzwp3k)
+} else {
+  cat("Peta RZWP3K tidak tersedia.")
+}
 ```
 
 </details>
@@ -202,14 +231,19 @@ plot_with_autokey(rzwp3k)
 #| error: false
 #| warning: false
 #| message: false
-DT::datatable(params$result$matriks_serasi)
+
+if (!is.null(params$result$matriks_serasi)) {
+  DT::datatable(params$result$matriks_serasi)
+} else {
+  cat("Matriks SERASI tidak tersedia.")
+}
 ```
 
 </details>
 
 ## Metodologi
 
-
+Metodologi analisis SERASI menggunakan matriks kompatibilitas untuk mengevaluasi keserasian antar pola ruang darat (RTRW) dan laut (RZWP3K) pada setiap unit perencanaan.
 
 # Hasil
 
@@ -240,7 +274,7 @@ map_data <- idx_serasi_map |>
 
 pal <- colorNumeric(
   palette = "RdYlGn",
-  domain  = map_data$idx_serasi_final,
+  domain  = map_data$idx_serasi,
   na.color = "#808080"
 )
 
@@ -431,7 +465,7 @@ tagList(
 
 <!-- Mandatory closing statement for all module -->
 
-<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LUMENS sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). Umpan balik dan pertanyaan dipersilakan [Contact Us URL]. </font size>
+<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LaSPUR sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). </font size>
 
 
 

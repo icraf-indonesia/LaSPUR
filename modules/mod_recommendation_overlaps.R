@@ -681,6 +681,26 @@ recommendation_overlaps_server <- function(id, output_dir) {
             xlsx_path = out_xlsx
           )
           rv$final_log <- paste(log_lines, collapse = "\n")
+
+          # ── Store result for report generation ──
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_padan_file = input$idx_padan_file$name,
+              rtrw_priority_file = input$rtrw_priority_file$name,
+              rzwp3k_priority_file = input$rzwp3k_priority_file$name,
+              alpha = input$alpha_val,
+              threshold_serasi = input$threshold_serasi,
+              threshold_padu = input$threshold_padu,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_alternative_overlaps_map = df,
+              idx_alternative_overlaps_table = sf::st_drop_geometry(df)
+            )
+          )
+          session$userData$module_results$recommendation_overlaps <- out
+
           showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           

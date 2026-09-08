@@ -492,6 +492,33 @@ reconcile_server <- function(id, output_dir) {
           
           incProgress(0.9, detail = "Menyelesaikan log...")
           rv$final_log <- paste(log_lines, collapse = "\n")
+
+          # ── Store result for report generation ──
+          recon_map_obj <- if (!is.null(rv$resolved_integrated)) {
+            rv$resolved_integrated
+          } else {
+            # For step 1, combine or use list of rtrw and rzwp3k
+            rv$resolved_rtrw
+          }
+          recon_table_obj <- sf::st_drop_geometry(recon_map_obj)
+
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              recon_step = rv$detected_step,
+              recon_table_filled = input$recon_table_filled_file$name,
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_reconcile_map = recon_map_obj,
+              idx_reconcile_table = recon_table_obj,
+              resolved_rtrw = rv$resolved_rtrw,
+              resolved_rzwp3k = rv$resolved_rzwp3k,
+              resolved_integrated = rv$resolved_integrated
+            )
+          )
+          session$userData$module_results$reconcile <- out
+
           showNotification("Proses Penyelesaian Konflik Peta Selesai.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           

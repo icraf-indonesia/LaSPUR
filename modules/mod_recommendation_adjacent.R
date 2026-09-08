@@ -809,6 +809,28 @@ recommendation_adjacent_server <- function(id, output_dir) {
             xlsx_path = out_xlsx
           )
           rv$final_log <- paste(log_lines, collapse = "\n")
+
+          # ── Store result for report generation ──
+          out <- list(
+            inputs = list(
+              start_time = Sys.time(),
+              idx_padan_file = input$idx_padan_file$name,
+              rtrw_priority_file = input$rtrw_priority_file$name,
+              rzwp3k_priority_file = input$rzwp3k_priority_file$name,
+              alpha = input$alpha_val,
+              th_high = input$th_high,
+              th_med = input$th_med,
+              th_low = input$th_low,
+              npv_enabled = isTRUE(input$npv_enable),
+              output_dir = output_dir()
+            ),
+            result = list(
+              idx_alternative_adjacent_map = adjacent_recom_map,
+              idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)
+            )
+          )
+          session$userData$module_results$recommendation_adjacent <- out
+
           showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           

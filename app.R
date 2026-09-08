@@ -1,4 +1,6 @@
-# ui/app.R
+# app.R
+# ============================================================
+# LaSPUR – Land and Seascape Planning Unit Reconciliation
 # ============================================================
 
 library(shiny)
@@ -6,16 +8,15 @@ library(bslib)
 library(future)
 library(promises)
 library(shinyFiles)
-library(shinyjs) 
+library(shinyjs)
+
+source("R/helpers.R")
 
 plan(multisession)
-
 options(shiny.maxRequestSize = 2000 * 1024^2)
 
-# ── small utility ─────────────────────────────────────────────
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-# ── safe_source ──────────────────────────────────────────────
 safe_source <- function(file, ui_fn_name, srv_fn_name) {
   if (file.exists(file)) {
     source(file)
@@ -43,7 +44,6 @@ safe_source <- function(file, ui_fn_name, srv_fn_name) {
   }
 }
 
-# ── Source all modules ───────────────────────────────────────
 safe_source("modules/mod_overlap.R",         "overlap_ui",         "overlap_server")
 safe_source("modules/mod_adjacent.R",        "adjacent_ui",        "adjacent_server")
 safe_source("modules/mod_interconnection.R", "interconnection_ui", "interconnection_server")
@@ -58,9 +58,7 @@ safe_source("modules/mod_padu_combine.R",    "padu_combine_ui",    "padu_combine
 safe_source("modules/mod_padan.R",           "padan_ui",           "padan_server")
 safe_source("modules/mod_recommendation_overlaps.R",  "recommendation_overlaps_ui",  "recommendation_overlaps_server")
 safe_source("modules/mod_recommendation_adjacent.R",  "recommendation_adjacent_ui",  "recommendation_adjacent_server")
-safe_source("modules/mod_reconcile.R",    "reconcile_ui",    "reconcile_server")  
-
-# ── UI Helpers ───────────────────────────────────────────────
+safe_source("modules/mod_reconcile.R",    "reconcile_ui",    "reconcile_server")
 
 nav_item <- function(input_id, number, label) {
   div(
@@ -163,8 +161,14 @@ report_module_config <- list(
     template = "report/LaSPUR_PADAN_report_template.Rmd"
   ),
   recommendation = list(
-    label    = "Analisis Penyusunan Alternatif",
-    template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+    recommendation_overlaps = list(
+      label    = "Alternatif Tumpang Tindih",
+      template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+    ),
+    recommendation_adjacent = list(
+      label    = "Alternatif Bertetangga",
+      template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+    )
   ),
   reconcile = list(
     label    = "Rekonsiliasi",
@@ -180,8 +184,6 @@ landing_page <- tabPanel(
     style = "padding: 60px 20px; max-width: 1100px; margin: 0 auto; text-align: center;",
     
     tags$img(src = "logo_laspur.png", style = "max-width: 600px; margin-bottom: 24px; border-radius: 20px;"),
-    
-    # h1("LaSPUR", style = "color: #1b75ba; font-weight: 800; font-size: 3.5rem; margin-bottom: 16px; letter-spacing: -1px;"),
     
     p(
       "Land and Seascape Planning Unit Reconciliation adalah alat bantu perancangan tata ruang darat (RTRWP) dengan tata ruang laut (RZWP3K).",
@@ -263,10 +265,8 @@ ui <- page_sidebar(
     class = "d-flex align-items-center",
     style = "padding-left: 10px; cursor: pointer;",
     tags$img(src = "logotype_laspur.png", style = "height: 25px; margin-right: 12px; border-radius: 6px;"),
-    # tags$span("LaSPUR", style = "font-weight: 800; font-size: 1.4rem; color: #1b75ba; letter-spacing: -0.5px;"),
     uiOutput("active_path_indicator", inline = TRUE)
   ),
-  # window_title = "LaSPUR",
   
   theme = bs_theme(
     version = 5,
@@ -775,7 +775,6 @@ ui <- page_sidebar(
     )
   ),
   
-  # ── Modal Informasi Konfirmasi Awal ─────────────────────────
   tags$div(
     id = "info_confirm_modal", class = "modal fade",
     tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
@@ -806,7 +805,6 @@ ui <- page_sidebar(
     )
   ),
   
-  # ── Tombol Panduan ──────────────────────────────────────────
   tags$a(
     id = "user-guide-link",
     href = "https://laspur.landseascape.id/",
@@ -825,29 +823,24 @@ ui <- page_sidebar(
 # ── Server ───────────────────────────────────────────────────
 server <- function(input, output, session) {
   
-  # ── Shared storage for module results ──────────────────────
   session$userData$module_results <- reactiveValues()
   
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
-  pending_action <- reactiveVal(NULL)   # "overlap" or "adjacent"
-  
+  pending_action <- reactiveVal(NULL)
   active_path   <- reactiveVal("") 
   
   output$active_path_indicator <- renderUI({
     path <- active_path()
     if (path == "") return(NULL)
-    
     if (path == "overlap") {
       tags$div(class = "pulse-badge pulse-overlap",
                tags$div(class = "pulse-dot"),
-               "Jalur: Tumpang Tindih"
-      )
+               "Jalur: Tumpang Tindih")
     } else if (path == "adjacent") {
       tags$div(class = "pulse-badge pulse-adjacent",
                tags$div(class = "pulse-dot"),
-               "Jalur: Bertetangga"
-      )
+               "Jalur: Bertetangga")
     }
   })
   
@@ -868,9 +861,7 @@ server <- function(input, output, session) {
   destroy_tab_observers <- function(tab_id) {
     obs_list <- tab_state$observers[[tab_id]]
     if (!is.null(obs_list)) {
-      for (o in obs_list) {
-        if (!is.null(o)) o$destroy()
-      }
+      for (o in obs_list) if (!is.null(o)) o$destroy()
     }
     tab_state$observers[[tab_id]] <- NULL
   }
@@ -890,12 +881,9 @@ server <- function(input, output, session) {
       }
     }
     open_tabs(current_open)
-    if (closed_any) {
-      showNotification(warning_message, type = "warning", duration = 8)
-    }
+    if (closed_any) showNotification(warning_message, type = "warning", duration = 8)
   }
   
-  # ── Function to perform the actual path switch ──────────────
   perform_action <- function(action) {
     if (action == "overlap") {
       active_path("overlap")
@@ -916,11 +904,9 @@ server <- function(input, output, session) {
       disable_tabs(c("overlap", "recommendation_overlaps"), "Jalur diubah ke Bertetangga. Tab Area Tumpang Tindih ditutup.")
       add_tab("adjacent")
     }
-    # also expand sidebar if mini
     session$sendCustomMessage("expand_sidebar", list())
   }
   
-  # ── Observers for the landing page buttons ──────────────────
   observeEvent(input$btn_path_overlap, {
     pending_action("overlap")
     session$sendCustomMessage("show_info_modal", list(
@@ -941,18 +927,14 @@ server <- function(input, output, session) {
     ))
   })
   
-  # ── Confirm button on info modal ────────────────────────────
   observeEvent(input$confirm_info_yes, {
     req(!is.null(pending_action()))
     action <- pending_action()
-    # hide modal
     session$sendCustomMessage("hide_info_modal", list())
-    # perform action
     perform_action(action)
-    pending_action(NULL)  # clear after execution
+    pending_action(NULL)
   })
   
-  # ── Dismiss modal (via backdrop/close) clears pending action ──
   observeEvent(input$info_modal_dismissed, {
     pending_action(NULL)
   })
@@ -997,15 +979,12 @@ server <- function(input, output, session) {
   })
   session$userData$output_dir <- output_dir
   
-  # ── Add tab ───────────────────────────────────────────────────
   add_tab <- function(tab_id) {
     cfg <- tab_config[[tab_id]]
-    
     if (tab_id %in% open_tabs()) {
       updateTabsetPanel(session, "tabs", selected = tab_id)
       return()
     }
-    
     destroy_tab_observers(tab_id)
     gen <- (tab_state$gen[[tab_id]] %||% 0L) + 1L
     tab_state$gen[[tab_id]] <- gen
@@ -1031,10 +1010,7 @@ server <- function(input, output, session) {
         div(
           style = "padding: 16px 20px; background-color: #FFFFFF; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0; border-top: none;",
           nav_buttons,
-          div(
-            class = "module-panel-wrapper",
-            cfg$ui_fn(instance_id)
-          )
+          div(class = "module-panel-wrapper", cfg$ui_fn(instance_id))
         )
       ),
       select = TRUE
@@ -1042,7 +1018,6 @@ server <- function(input, output, session) {
     
     open_tabs(c(open_tabs(), tab_id))
     cfg$srv_fn(instance_id, session$userData$output_dir)
-    
     session$sendCustomMessage("add_close_buttons", list())
     
     obs_back <- observeEvent(input[[paste0("btn_back_", tab_id)]], {
@@ -1063,7 +1038,6 @@ server <- function(input, output, session) {
         if (!is.na(idx) && idx < length(seq)) add_tab(seq[idx + 1]) 
       }, ignoreInit = TRUE)
     }
-    
     tab_state$observers[[tab_id]] <- list(obs_back, obs_next)
   }
   
@@ -1103,44 +1077,6 @@ server <- function(input, output, session) {
   observeEvent(input$nav_recommendation_adjacent,  { add_tab("recommendation_adjacent") })
   observeEvent(input$nav_reconcile,    { add_tab("reconcile") })
   
-  # ── Helper to create standard dynamic checkbox item ──────────
-  make_cb_item <- function(val_id, label_text, is_ready, indent = FALSE) {
-    badge <- if (is_ready) {
-      tags$span(
-        class = "badge ms-2",
-        style = "background-color:#106665; font-size:0.7rem; vertical-align:middle;",
-        "Siap"
-      )
-    } else {
-      tags$span(
-        class = "badge ms-2",
-        style = "background-color:#94A3B8; font-size:0.7rem; vertical-align:middle;",
-        "Belum dijalankan"
-      )
-    }
-    
-    tags$div(
-      class = "form-check mb-2",
-      style = if (indent) "margin-left: 24px;" else NULL,
-      tags$input(
-        class    = "form-check-input report-mod-cb",
-        type     = "checkbox",
-        id       = paste0("cb_mod_", gsub("\\$", "_", val_id)),
-        value    = val_id,
-        checked  = if (is_ready) NA else NULL,
-        disabled = if (!is_ready) NA else NULL
-      ),
-      tags$label(
-        class = "form-check-label",
-        `for` = paste0("cb_mod_", gsub("\\$", "_", val_id)),
-        style = if (!is_ready) "color:#94A3B8;" else "",
-        label_text,
-        badge
-      )
-    )
-  }
-  
-  # ── Helper to create standard dynamic checkbox item ──────────
   make_cb_item <- function(val_id, label_text, is_ready, indent = FALSE, extra_class = "") {
     badge <- if (is_ready) {
       tags$span(
@@ -1177,7 +1113,7 @@ server <- function(input, output, session) {
     )
   }
   
-  # ── Dynamic Report Generation UI ────────────────────────────────
+  # ---- Report Generation ----
   observeEvent(input$btn_generate_report, {
     if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
       showNotification(
@@ -1187,25 +1123,40 @@ server <- function(input, output, session) {
       return()
     }
     
-    check_ready <- function(res_obj) {
-      if (is.null(res_obj)) return(FALSE)
-      if (is.list(res_obj)) return(length(res_obj) > 0)
-      length(res_obj) > 0
-    }
-    
-    mod_ids    <- names(report_module_config)
     choices_ui <- list()
     
-    for (m_id in mod_ids) {
+    for (m_id in names(report_module_config)) {
       cfg <- report_module_config[[m_id]]
       
-      if (!is.null(cfg$label) == FALSE || (is.list(cfg[[1]]) && is.null(cfg$label))) {
+      is_group <- is.list(cfg) && length(cfg) > 0 &&
+        all(sapply(cfg, function(x) is.list(x) && !is.null(x$label) && !is.null(x$template)))
+      
+      if (is_group) {
+        any_ready <- FALSE
+        child_choices <- list()
+        for (child_id in names(cfg)) {
+          child_cfg <- cfg[[child_id]]
+          full_id <- paste0(m_id, "$", child_id)
+          ready_info <- module_ready_and_data(full_id, output_dir(), session)
+          is_ready <- ready_info$ready
+          any_ready <- any_ready || is_ready
+          
+          child_choices[[length(child_choices) + 1]] <- make_cb_item(
+            val_id      = full_id,
+            label_text  = child_cfg$label,
+            is_ready    = is_ready,
+            indent      = TRUE,
+            extra_class = paste0("child-of-", m_id)
+          )
+        }
         
-        any_ready <- any(vapply(names(cfg), function(c_id) {
-          check_ready(session$userData$module_results[[m_id]][[c_id]])
-        }, logical(1)))
-        
-        # Render Parent Checkbox 
+        parent_label <- if (m_id == "padu") {
+          "Analisis PADU"
+        } else if (m_id == "recommendation") {
+          "Analisis Penyusunan Alternatif"
+        } else {
+          toupper(m_id)
+        }
         choices_ui[[length(choices_ui) + 1]] <- tags$div(
           class = "form-check mt-2 mb-1",
           tags$input(
@@ -1219,30 +1170,15 @@ server <- function(input, output, session) {
             class = "form-check-label",
             `for` = paste0("cb_parent_", m_id),
             style = if (!any_ready) "color:#94A3B8;" else "color: #334155;",
-            if (m_id == "padu") "Analisis PADU" else toupper(m_id)
+            parent_label
           )
         )
+        choices_ui <- c(choices_ui, child_choices)
         
-        # Render Child Checkboxes
-        for (child_id in names(cfg)) {
-          child_cfg   <- cfg[[child_id]]
-          child_res   <- session$userData$module_results[[m_id]][[child_id]]
-          is_ready    <- check_ready(child_res)
-          val_string  <- paste0(m_id, "$", child_id)
-          
-          choices_ui[[length(choices_ui) + 1]] <- make_cb_item(
-            val_id      = val_string,
-            label_text  = child_cfg$label,
-            is_ready    = is_ready,
-            indent      = TRUE,
-            extra_class = paste0("child-of-", m_id) 
-          )
-        }
-      } 
-      else {
-        res      <- session$userData$module_results[[m_id]]
-        is_ready <- check_ready(res)
-        
+      } else {
+        # Single module
+        ready_info <- module_ready_and_data(m_id, output_dir(), session)
+        is_ready <- ready_info$ready
         choices_ui[[length(choices_ui) + 1]] <- make_cb_item(
           val_id     = m_id,
           label_text = cfg$label,
@@ -1252,26 +1188,20 @@ server <- function(input, output, session) {
       }
     }
     
-    # JS to handle Parent/Child toggle and form submission
     sync_js <- tags$script(HTML("
       function updateSelectedModules() {
         var selected = [];
         $('.report-mod-cb:checked').each(function() {
           selected.push($(this).val());
         });
-        // Send array to Shiny every time a change happens
         Shiny.setInputValue('report_modules_selected', selected);
       }
-  
-      // 1. Parent toggles all enabled children
       $(document).off('change', '.parent-mod-cb').on('change', '.parent-mod-cb', function() {
         var isChecked = $(this).is(':checked');
         var targetClass = $(this).attr('data-target-class');
         $('.' + targetClass).not(':disabled').prop('checked', isChecked);
         updateSelectedModules();
       });
-  
-      // 2. Child unchecks parent if unselected, checks if all are selected
       $(document).off('change', '.report-mod-cb').on('change', '.report-mod-cb', function() {
         var classes = $(this).attr('class').split(' ');
         var parentClass = null;
@@ -1288,21 +1218,14 @@ server <- function(input, output, session) {
         }
         updateSelectedModules();
       });
-  
-      // 3. Initialize state immediately when modal opens
       setTimeout(updateSelectedModules, 100);
     "))
     
     showModal(
       modalDialog(
-        title = tagList(
-          icon("file-lines", class = "me-2"),
-          "Buat Laporan — Pilih Modul"
-        ),
-        tags$p(
-          style = "color:#64748B; font-size:0.9rem; margin-bottom:16px;",
-          "Centang modul yang ingin disertakan dalam laporan. Modul yang belum dijalankan tidak dapat dipilih."
-        ),
+        title = tagList(icon("file-lines", class = "me-2"), "Buat Laporan — Pilih Modul"),
+        tags$p(style = "color:#64748B; font-size:0.9rem; margin-bottom:16px;",
+               "Centang modul yang ingin disertakan dalam laporan. Modul yang belum dijalankan tidak dapat dipilih."),
         tags$div(
           style = "padding: 8px 4px; max-height: 400px; overflow-y: auto;",
           if (length(choices_ui) > 0) choices_ui else
@@ -1326,51 +1249,39 @@ server <- function(input, output, session) {
   
   observeEvent(input$btn_report_generate, {
     selected <- input$report_modules_selected
-    
     if (length(selected) == 0) {
       showNotification("Pilih setidaknya satu modul.", type = "warning")
       return()
     }
-    
     removeModal()
     n <- length(selected)
     
     withProgress(message = "Membuat laporan...", value = 0, {
       success_count <- 0
-      
       for (i in seq_along(selected)) {
         item_path <- selected[[i]]
-        
-        if (grepl("\\$", item_path)) {
-          parts     <- strsplit(item_path, "\\$")[[1]]
-          parent    <- parts[1]
-          child     <- parts[2]
-          
-          cfg       <- report_module_config[[parent]][[child]]
-          out       <- session$userData$module_results[[parent]][[child]]
-          mod_name  <- paste0(parent, "_", child)
-        } else {
-          cfg       <- report_module_config[[item_path]]
-          out       <- session$userData$module_results[[item_path]]
-          mod_name  <- item_path
-        }
-        
-        incProgress(
-          amount = 1 / n,
-          detail = paste0("Modul: ", cfg$label, " (", i, "/", n, ")")
-        )
-        
-        if (is.null(out)) {
-          showNotification(
-            paste("Hasil untuk modul", item_path, "tidak ditemukan. Dilewati."),
-            type = "warning", duration = 6
-          )
+        data_info <- module_ready_and_data(item_path, output_dir(), session)
+        if (!data_info$ready) {
+          showNotification(paste("Modul", item_path, "tidak siap. Dilewati."),
+                           type = "warning", duration = 6)
           next
         }
         
+        if (grepl("$", item_path, fixed = TRUE)) {
+          parts <- strsplit(item_path, "$", fixed = TRUE)[[1]]
+          parent <- parts[1]; child <- parts[2]
+          cfg <- report_module_config[[parent]][[child]]
+          mod_name <- paste0(parent, "_", child)
+        } else {
+          cfg <- report_module_config[[item_path]]
+          mod_name <- item_path
+        }
+        
+        incProgress(amount = 1/n, detail = paste0("Modul: ", cfg$label, " (", i, "/", n, ")"))
+        
         tryCatch({
           generate_report(
-            output        = out,
+            output        = data_info$data,
             dir           = output_dir(),
             module_name   = mod_name,
             template_path = cfg$template
@@ -1383,7 +1294,6 @@ server <- function(input, output, session) {
           )
         })
       }
-      
       if (success_count > 0) {
         showNotification(
           paste0(success_count, " laporan berhasil dibuat di folder: ", output_dir()),
@@ -1410,17 +1320,14 @@ $(document).ready(function() {
   }
   addUserGuideButton();
 
-  // Toggle Mode Sidebar Mini
   $(document).on('click', '#sidebar-toggle-btn', function() {
     $('body').toggleClass('sidebar-mini');
   });
 
-  // ── Expand sidebar (used after confirm) ──
   Shiny.addCustomMessageHandler('expand_sidebar', function(msg) {
     $('body').removeClass('sidebar-mini');
   });
 
-  // ── Collapsible Left Panel ──────────────────────────────
   function injectToggleButtons() {
     $('.module-panel-wrapper').each(function() {
       var $wrapper = $(this);
@@ -1510,7 +1417,6 @@ $(document).ready(function() {
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ── Info Modal ──────────────────────────────────────────────
   Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
     document.getElementById('info_modal_title').innerText = msg.title;
     document.getElementById('info_modal_body_text').innerHTML = msg.body_text;
@@ -1526,12 +1432,10 @@ $(document).ready(function() {
     if (modal) modal.hide();
   });
 
-  // Send signal when modal is hidden (user clicks backdrop, close, or Kembali)
   $('#info_confirm_modal').on('hidden.bs.modal', function() {
     Shiny.setInputValue('info_modal_dismissed', Math.random());
   });
 
-  // ── Close Tab Modal ─────────────────────────────────────────
   Shiny.addCustomMessageHandler('show_close_modal', function(msg) {
     var modal = new bootstrap.Modal(document.getElementById('close_confirm_modal'));
     modal.show();

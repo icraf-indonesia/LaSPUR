@@ -535,6 +535,14 @@ adjacent_server <- function(id, output_dir) {
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
             openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
             
+            # Save matriks for report generation
+            matriks_xlsx <- file.path(serasi_dir, "matriks_serasi_input.xlsx")
+            tryCatch({
+              openxlsx::write.xlsx(rv$matriks_serasi, matriks_xlsx)
+            }, error = function(e) {
+              warning("Gagal menyimpan matriks SERASI: ", e$message)
+            })
+            
             rv$gpkg_path <- gpkg_path
             rv$xlsx_path <- xlsx_path
             
