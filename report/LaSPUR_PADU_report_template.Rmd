@@ -1,0 +1,273 @@
+---
+title: "LaSPUR - Laporan Analisis PADU"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(
+          obj,
+          key.pos   = 4,        
+          key.width = lcm(width) 
+        )
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+```
+
+```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+```{r detect-padus, include=FALSE}
+# Detect which PADU modules are available
+padu_ke_available <- !is.null(params$result$idx_padu_ke_map)
+padu_hs_available <- !is.null(params$result$idx_padu_hs_map)
+padu_kl_available <- !is.null(params$result$idx_padu_kl_map)
+padu_kh_available <- !is.null(params$result$idx_padu_kh_map)
+padu_rtp_available <- !is.null(params$result$idx_padu_rtp_map)
+padu_se_available <- !is.null(params$result$idx_padu_se_map)
+padu_ki_available <- !is.null(params$result$idx_padu_ki_map)
+padu_combine_available <- !is.null(params$result$idx_padu_map)
+
+available_count <- sum(padu_ke_available, padu_hs_available, padu_kl_available, 
+                       padu_kh_available, padu_rtp_available, padu_se_available,
+                       padu_ki_available, padu_combine_available)
+```
+
+# Ringkasan Laporan
+
+Laporan ini menampilkan hasil analisis PADU untuk modul-modul berikut:
+
+```{r summary-available-modules, results='asis'}
+if (available_count > 0) {
+  if (padu_ke_available) cat("- **PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)**\n")
+  if (padu_hs_available) cat("- **PADU-HS (Hidrologi dan Sedimentasi)**\n")
+  if (padu_kl_available) cat("- **PADU-KL (Kawasan Lindung)**\n")
+  if (padu_kh_available) cat("- **PADU-KH (Komposisi Habitat)**\n")
+  if (padu_rtp_available) cat("- **PADU-RTp (Risiko dan Tekanan)**\n")
+  if (padu_se_available) cat("- **PADU-SE (Sosial & Ekonomi)**\n")
+  if (padu_ki_available) cat("- **PADU-KI (Ketahanan Iklim)**\n")
+  if (padu_combine_available) cat("- **PADU-Kombinasi**\n")
+} else {
+  cat("*Tidak ada modul PADU yang tersedia dalam laporan ini.*\n")
+}
+```
+
+------------------------------------------------------------------------
+
+# Tentang Modul PADU
+
+Modul PADU adalah serangkaian analisis yang mengevaluasi kepaduan lingkungan pada unit perencanaan berdasarkan berbagai aspek ekologis, sosial-ekonomi, dan keberlanjutan untuk mendukung pengambilan keputusan tata ruang terpadu darat dan laut.
+
+------------------------------------------------------------------------
+
+# Hasil Analisis PADU
+
+```{r check-results, results='asis'}
+if (available_count == 0) {
+  cat("\n*Tidak ada hasil analisis PADU yang tersedia.*\n")
+}
+```
+
+```{r padu-toggle-function, include=FALSE}
+# Renders one PADU module as a single, self-contained <details> toggle.
+render_padu_toggle <- function(data, id, title, description, index_col,
+                                legend_title, decimals = 3) {
+  if (is.null(data)) {
+    return(invisible(NULL))
+  }
+
+  if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+  pacman::p_load(leaflet, htmltools, htmlwidgets, DT, RColorBrewer, sf, dplyr)
+
+  idx_tbl <- sf::st_drop_geometry(data)
+
+  summary_stats <- data.frame(
+    Statistik = c(
+      "Jumlah Unit Perencanaan", "Indeks Rata-rata",
+      "Indeks Minimum", "Indeks Maksimum", "Total Luas (ha)"
+    ),
+    Nilai = c(
+      nrow(idx_tbl),
+      round(mean(idx_tbl[[index_col]], na.rm = TRUE), decimals),
+      round(min(idx_tbl[[index_col]], na.rm = TRUE), decimals),
+      round(max(idx_tbl[[index_col]], na.rm = TRUE), decimals),
+      round(sum(idx_tbl$area_ha, na.rm = TRUE), 2)
+    )
+  )
+
+  stats_table <- DT::datatable(
+    summary_stats, rownames = FALSE,
+    options = list(dom = 't', pageLength = 10)
+  )
+
+  map_data <- data %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+
+  values_vec <- map_data[[index_col]]
+
+  pal <- leaflet::colorNumeric(
+    palette = "RdYlGn",
+    domain = values_vec,
+    na.color = "#808080"
+  )
+
+  map_widget <- leaflet::leaflet(map_data, elementId = paste0("padu-", id, "-map")) %>%
+    leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+    leaflet::addPolygons(
+      fillColor = pal(values_vec),
+      fillOpacity = 0.7,
+      color = "#444",
+      weight = 0.8,
+      label = lapply(
+        paste0("PU ", map_data$id_pu, " - Indeks: ", round(values_vec, decimals)),
+        htmltools::HTML
+      )
+    ) %>%
+    leaflet::addLegend(
+      pal = pal,
+      values = values_vec,
+      title = legend_title,
+      position = "bottomright"
+    )
+
+  htmltools::tags$details(
+    style = "margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;",
+    htmltools::tags$summary(
+      style = paste(
+        "font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px;",
+        "background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;"
+      ),
+      title
+    ),
+    htmltools::tags$p(description),
+    htmltools::tags$h3("Ringkasan Statistik"),
+    stats_table,
+    htmltools::tags$h3("Peta Interaktif"),
+    map_widget
+  )
+}
+```
+
+```{r padu-ke-toggle, results='asis', eval=padu_ke_available}
+render_padu_toggle(
+  data = params$result$idx_padu_ke_map,
+  id = "ke",
+  title = "PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)",
+  description = "Menilai kepaduan lingkungan berdasarkan keterpaduan penggunaan lahan dan lautan.",
+  index_col = "idx_padu_ke",
+  legend_title = "Indeks PADU-KE"
+)
+```
+
+```{r padu-hs-toggle, results='asis', eval=padu_hs_available}
+render_padu_toggle(
+  data = params$result$idx_padu_hs_map,
+  id = "hs",
+  title = "PADU-HS (Hidrologi dan Sedimentasi)",
+  description = "Menilai kepaduan lingkungan berdasarkan kondisi hidrologis dan sedimentasi.",
+  index_col = "idx_padu_hs",
+  legend_title = "Indeks PADU-HS"
+)
+```
+
+```{r padu-kl-toggle, results='asis', eval=padu_kl_available}
+render_padu_toggle(
+  data = params$result$idx_padu_kl_map,
+  id = "kl",
+  title = "PADU-KL (Kawasan Lindung)",
+  description = "Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung.",
+  index_col = "idx_padu_kl",
+  legend_title = "Indeks PADU-KL"
+)
+```
+
+```{r padu-kh-toggle, results='asis', eval=padu_kh_available}
+render_padu_toggle(
+  data = params$result$idx_padu_kh_map,
+  id = "kh",
+  title = "PADU-KH (Komposisi Habitat)",
+  description = "Menilai kepaduan lingkungan berdasarkan komposisi habitat pesisir.",
+  index_col = "idx_padu_kh",
+  legend_title = "Indeks PADU-KH"
+)
+```
+
+```{r padu-rtp-toggle, results='asis', eval=padu_rtp_available}
+render_padu_toggle(
+  data = params$result$idx_padu_rtp_map,
+  id = "rtp",
+  title = "PADU-RTp (Risiko dan Tekanan)",
+  description = "Menilai kepaduan lingkungan berdasarkan potensi risiko dan tekanan pembangunan.",
+  index_col = "idx_padu_rtp",
+  legend_title = "Indeks PADU-RTp"
+)
+```
+
+```{r padu-se-toggle, results='asis', eval=padu_se_available}
+render_padu_toggle(
+  data = params$result$idx_padu_se_map,
+  id = "se",
+  title = "PADU-SE (Sosial & Ekonomi)",
+  description = "Menilai kepaduan wilayah berdasarkan aktivitas sosial dan ekonomi.",
+  index_col = "idx_padu_se",
+  legend_title = "Indeks PADU-SE"
+)
+```
+
+```{r padu-ki-toggle, results='asis', eval=padu_ki_available}
+render_padu_toggle(
+  data = params$result$idx_padu_ki_map,
+  id = "ki",
+  title = "PADU-KI (Ketahanan Iklim)",
+  description = "Menilai kepaduan lingkungan berdasarkan ketahanan iklim suatu daerah.",
+  index_col = "idx_padu_ki",
+  legend_title = "Indeks PADU-KI"
+)
+```
+
+```{r padu-combine-toggle, results='asis', eval=padu_combine_available}
+render_padu_toggle(
+  data = params$result$idx_padu_map,
+  id = "combine",
+  title = "PADU-Kombinasi",
+  description = "Mengombinasikan hasil analisis PADU dari semua modul yang tersedia.",
+  index_col = "idx_padu_final",
+  legend_title = "Indeks PADU Final"
+)
+```
+
+------------------------------------------------------------------------
+
+<!-- Mandatory closing statement for all module -->
+
+<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LaSPUR sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). </font size>

@@ -1,0 +1,150 @@
+---
+title: "LaSPUR - Laporan Terpadu Antar Modul"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  serasi: NA
+  padu: NA
+  padan: NA
+  recommendation: NA
+  reconcile: NA
+---
+
+```{r setup, include=FALSE}
+options(knitr.duplicate.label = 'allow')
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE, results = 'asis')
+
+# Load required libraries
+if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+pacman::p_load(knitr, rmarkdown, here)
+source(here::here("R/helpers.R"))
+
+module_available <- function(x) {
+  tryCatch(is.list(x), error = function(e) FALSE)
+}
+
+# Safe wrapper for knitting a child module
+safe_child_knit <- function(template_path, module_params, module_name = "unknown") {
+  tryCatch({
+    if (is.null(module_params$start_time)) module_params$start_time <- Sys.time()
+    if (is.null(module_params$end_time))   module_params$end_time   <- Sys.time()
+    if (is.null(module_params$module_name)) module_params$module_name <- module_name
+
+    knit_child_module(template_path, module_params, envir = environment())
+  }, error = function(e) {
+    paste0(
+      "\n\n**Error knitting module '", module_name, "':** ", 
+      conditionMessage(e), "\n\n",
+      "Please check that the module data is complete and the template is valid.\n\n"
+    )
+  })
+}
+```
+
+# Pendahuluan
+
+Laporan ini menyajikan hasil analisis terpadu dari beberapa modul LaSPUR yang dipilih. Setiap modul disajikan dalam bagian terpisah dengan ringkasan, metodologi, dan hasil visualisasi interaktif.
+
+```{r}
+# SERASI module
+if (module_available(params$serasi)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_SERASI_report_template.Rmd",
+    module_params = list(
+      inputs = params$serasi$inputs,
+      result = params$serasi$result,
+      module_name = "SERASI"
+    ),
+    module_name = "SERASI"
+  ))
+}
+```
+
+```{r}
+# PADU module
+if (module_available(params$padu)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_PADU_report_template.Rmd",
+    module_params = list(
+      inputs = params$padu$inputs,
+      result = params$padu$result,
+      module_name = "PADU"
+    ),
+    module_name = "PADU"
+  ))
+}
+```
+
+```{r}
+# PADAN module
+if (module_available(params$padan)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_PADAN_report_template.Rmd",
+    module_params = list(
+      inputs = params$padan$inputs,
+      result = params$padan$result,
+      module_name = "PADAN"
+    ),
+    module_name = "PADAN"
+  ))
+}
+```
+
+```{r}
+# Rekomendasi Tumpang Tindih
+if (module_available(params$recommendation) && module_available(params$recommendation$overlaps)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_Alternative_report_template.Rmd",
+    module_params = list(
+      inputs = params$recommendation$overlaps$inputs,
+      result = params$recommendation$overlaps$result,
+      module_name = "Rekomendasi_Tumpang_Tindih"
+    ),
+    module_name = "Rekomendasi Tumpang Tindih"
+  ))
+}
+```
+
+```{r}
+# Rekomendasi Bertetangga
+if (module_available(params$recommendation) && module_available(params$recommendation$adjacent)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_Alternative_report_template.Rmd",
+    module_params = list(
+      inputs = params$recommendation$adjacent$inputs,
+      result = params$recommendation$adjacent$result,
+      module_name = "Rekomendasi_Bertetangga"
+    ),
+    module_name = "Rekomendasi Bertetangga"
+  ))
+}
+```
+
+```{r}
+# Rekonsiliasi
+if (module_available(params$reconcile)) {
+  cat(safe_child_knit(
+    template_path = "report/LaSPUR_Reconcilliation_report_template.Rmd",
+    module_params = list(
+      inputs = params$reconcile$inputs,
+      result = params$reconcile$result,
+      module_name = "Rekonsiliasi"
+    ),
+    module_name = "Rekonsiliasi"
+  ))
+}
+```
+
+------------------------------------------------------------------------
+
+<!-- Mandatory closing statement for all module -->
+
+<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LaSPUR sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). </font size>

@@ -1,5 +1,5 @@
 ---
-title: "LaSPUR - Land & Sea Planning Unit Reconcilliation Report"
+title: "LaSPUR - Laporan Analisis SERASI"
 output: 
   html_document:
     toc: true
@@ -42,7 +42,6 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
 }
 ```
 
-<!-- untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong -->
 
 ```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
 source(here::here("R/functions.R"))
@@ -185,10 +184,8 @@ if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
 rtrw_png_path <- file.path(log_dir, "rtrw.png")
 
 if (file.exists(rtrw_png_path)) {
-  # Use the exported PNG image
   knitr::include_graphics(rtrw_png_path)
 } else if (!is.null(params$result$rtrw_vect)) {
-  # Fallback: render from vector data if available
   rtrw <- params$result$rtrw_vect["RTRW"]
   plot_with_autokey(rtrw)
 } else {
@@ -210,10 +207,8 @@ if (file.exists(rtrw_png_path)) {
 rzwp3k_png_path <- file.path(log_dir, "rzwp3k.png")
 
 if (file.exists(rzwp3k_png_path)) {
-  # Use the exported PNG image
   knitr::include_graphics(rzwp3k_png_path)
 } else if (!is.null(params$result$rzwp3k_vect)) {
-  # Fallback: render from vector data if available
   rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
   plot_with_autokey(rzwp3k)
 } else {
