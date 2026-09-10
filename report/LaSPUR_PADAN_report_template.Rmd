@@ -1,0 +1,291 @@
+---
+title: "LaSPUR - Laporan Analisis PADAN"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(
+          obj,
+          key.pos   = 4,
+          key.width = lcm(width)
+        )
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+```
+
+```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Analisis PADAN
+
+```{r include=FALSE}
+padan_available <- !is.null(params$result$idx_padan_map) &&
+                   !is.null(params$result$idx_padan_table)
+
+alpha_raw <- tryCatch(params$inputs$alpha, error = function(e) NA_real_)
+alpha_val <- if (is.null(alpha_raw) || length(alpha_raw) == 0 || any(is.na(alpha_raw))) {
+  NA_real_
+} else {
+  as.numeric(alpha_raw[1])
+}
+
+padu_src_raw <- tryCatch(params$inputs$idx_padu_path, error = function(e) NA_character_)
+padu_src_path <- if (is.null(padu_src_raw) || length(padu_src_raw) == 0 || any(is.na(padu_src_raw))) {
+  NA_character_
+} else {
+  as.character(padu_src_raw[1])
+}
+
+padan_output_dir_raw <- tryCatch(params$inputs$output_dir, error = function(e) NA_character_)
+padan_output_dir <- if (is.null(padan_output_dir_raw) || length(padan_output_dir_raw) == 0 || any(is.na(padan_output_dir_raw))) {
+  NA_character_
+} else {
+  as.character(padan_output_dir_raw[1])
+}
+
+alpha_txt       <- if (is.na(alpha_val)) "tidak diketahui" else format(alpha_val, nsmall = 2)
+one_minus_alpha <- if (is.na(alpha_val)) NA_real_ else round(1 - alpha_val, 10)
+oma_txt         <- if (is.na(one_minus_alpha)) "tidak diketahui" else format(one_minus_alpha, nsmall = 2)
+```
+
+```{r}
+if (!padan_available) {
+  cat("\n*Tidak ada hasil analisis PADAN yang tersedia dalam laporan ini.*\n")
+} else {
+
+  padan_map <- params$result$idx_padan_map
+  padan_tbl <- params$result$idx_padan_table
+
+  if (is.null(padan_tbl)) {
+    padan_tbl <- sf::st_drop_geometry(padan_map)
+  }
+
+  has_area <- "area_ha" %in% names(padan_tbl)
+
+  total_area <- if (has_area) round(sum(padan_tbl$area_ha, na.rm = TRUE), 2) else NA_real_
+
+  summary_stats <- data.frame(
+    Statistik = c(
+      "Jumlah Unit Perencanaan",
+      "Indeks PADAN Rata-rata",
+      "Indeks PADAN Minimum",
+      "Indeks PADAN Maksimum",
+      "Total Luas (ha)"
+    ),
+    Nilai = c(
+      as.character(nrow(padan_tbl)),
+      as.character(round(mean(padan_tbl$idx_padan, na.rm = TRUE), 3)),
+      as.character(round(min(padan_tbl$idx_padan, na.rm = TRUE), 3)),
+      as.character(round(max(padan_tbl$idx_padan, na.rm = TRUE), 3)),
+      if (is.na(total_area)) "tidak tersedia" else as.character(total_area)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  DT::datatable(
+    summary_stats,
+    rownames  = FALSE,
+    options   = list(dom = 't', pageLength = 10, ordering = FALSE),
+    caption   = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: 600;",
+      "Ringkasan Statistik Indeks PADAN"
+    )
+  )
+}
+```
+
+## Tentang Modul
+
+Modul Analisis PADAN menghasilkan nilai akhir integrasi antara Indeks SERASI (keserasian pola ruang darat–laut) dan Indeks PADU Final (kepaduan lingkungan) untuk setiap unit perencanaan (planning unit). Indeks PADAN merepresentasikan skor gabungan yang dapat digunakan sebagai dasar penilaian prioritas rekonsiliasi ruang darat dan laut.
+
+## Data dan Metode
+
+### Data
+
+```{r}
+if (!padan_available) {
+  cat("\n*Data analisis PADAN tidak tersedia.*\n")
+} else {
+  cat("Analisis PADAN menggunakan sumber data berupa peta hasil **Analisis PADU** ")
+  cat("(*idx_padu.gpkg*) yang dihasilkan dari modul **2.8 (Analisis PADU)**. ")
+  cat("Peta tersebut telah memuat kolom `idx_serasi` dan `idx_padu_final` untuk setiap unit perencanaan.\n\n")
+
+  if (!is.na(padu_src_path)) {
+    cat("**Berkas sumber:** `", padu_src_path, "`\n\n", sep = "")
+  } else {
+    cat("**Berkas sumber:** *tidak tercatat pada log analisis.*\n\n")
+  }
+
+  if (!is.na(padan_output_dir)) {
+    cat("**Direktori output:** `", padan_output_dir, "`\n\n", sep = "")
+  }
+
+  if (!is.na(alpha_val)) {
+    cat("**Parameter alpha (\u03B1):** `", alpha_txt, "`\n\n", sep = "")
+    cat("Nilai \u03B1 merepresentasikan bobot untuk **Indeks SERASI**, sedangkan ")
+    cat("nilai (1 \u2212 \u03B1) = `", oma_txt, "` menjadi bobot untuk **Indeks PADU Final**.\n\n", sep = "")
+  } else {
+    cat("**Parameter alpha (\u03B1):** *tidak tercatat pada log analisis.*\n\n")
+  }
+}
+```
+
+### Metode
+
+```{r}
+if (!padan_available) {
+  cat("\n*Metode tidak dapat ditampilkan.*\n")
+} else {
+  cat("Indeks PADAN dihitung sebagai kombinasi linier dari Indeks SERASI dan ")
+  cat("Indeks PADU Final dengan parameter bobot \u03B1:\n\n")
+
+  cat("$$\n\\text{idx\\_padan} = (\\alpha \\times \\text{idx\\_serasi}) + ")
+  cat("\\big((1 - \\alpha) \\times \\text{idx\\_padu\\_final}\\big)\n$$\n\n")
+
+  if (!is.na(alpha_val)) {
+    cat("Dengan nilai \u03B1 = `", alpha_txt, "` yang digunakan pada analisis ini, ", sep = "")
+    cat("formula yang diterapkan menjadi:\n\n")
+    cat("$$\n\\text{idx\\_padan} = (", alpha_txt, " \\times \\text{idx\\_serasi}) + (",
+        oma_txt, " \\times \\text{idx\\_padu\\_final})\n$$\n\n", sep = "")
+  }
+}
+```
+
+## Hasil Analisis PADAN
+
+```{r}
+if (!padan_available) {
+  cat("\n*Hasil analisis PADAN tidak tersedia.*\n")
+} else {
+  if (!requireNamespace("pacman", quietly = TRUE)) {
+    install.packages("pacman")
+  }
+  pacman::p_load(leaflet, htmltools, htmlwidgets, DT, RColorBrewer, sf, dplyr)
+
+  padan_map <- params$result$idx_padan_map
+
+  map_data <- padan_map %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+
+  values_vec <- map_data$idx_padan
+
+  pal <- leaflet::colorNumeric(
+    palette  = "RdYlGn",
+    domain   = values_vec,
+    na.color = "#808080"
+  )
+
+  map_widget <- leaflet::leaflet(map_data, width = "100%", height = "500px", elementId = "padan-map") %>%
+    leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+    leaflet::addPolygons(
+      fillColor   = pal(values_vec),
+      fillOpacity = 0.7,
+      color       = "#444",
+      weight      = 0.8,
+      label = lapply(
+        paste0(
+          "PU ", map_data$id_pu,
+          " – Indeks PADAN: ", round(values_vec, 3)
+        ),
+        htmltools::HTML
+      ),
+      highlightOptions = leaflet::highlightOptions(
+        color        = "#ff6600",
+        weight       = 3,
+        fillOpacity  = 0.9,
+        bringToFront = TRUE
+      )
+    ) %>%
+    leaflet::addLegend(
+      pal      = pal,
+      values   = values_vec,
+      title    = "Indeks PADAN",
+      position = "bottomright"
+    )
+
+  htmltools::browsable(
+    htmltools::tags$div(style = "width: 100%; margin-bottom: 20px;", map_widget)
+  )
+}
+```
+
+```{r}
+if (padan_available) {
+  padan_tbl <- params$result$idx_padan_table
+  if (is.null(padan_tbl)) {
+    padan_tbl <- sf::st_drop_geometry(params$result$idx_padan_map)
+  }
+
+  preferred_cols <- c(
+    "id_pu", "RTRW", "RZWP3K",
+    "area_ha", "idx_serasi", "idx_padu_final", "idx_padan"
+  )
+  kept_cols <- intersect(preferred_cols, names(padan_tbl))
+  extra_cols <- setdiff(names(padan_tbl), kept_cols)
+  padan_tbl_view <- padan_tbl[, c(kept_cols, extra_cols), drop = FALSE]
+
+  display_names <- c(
+    id_pu           = "ID PU",
+    RTRW            = "RTRW",
+    RZWP3K          = "RZWP3K",
+    area_ha         = "Luas (ha)",
+    idx_serasi      = "Indeks SERASI",
+    idx_padu_final  = "Indeks PADU",
+    idx_padan       = "Indeks PADAN"
+  )
+  for (nm in names(display_names)) {
+    if (nm %in% names(padan_tbl_view)) {
+      names(padan_tbl_view)[names(padan_tbl_view) == nm] <- display_names[[nm]]
+    }
+  }
+
+  for (col in c("Indeks SERASI", "Indeks PADU", "Indeks PADAN")) {
+    if (col %in% names(padan_tbl_view)) {
+      padan_tbl_view[[col]] <- round(padan_tbl_view[[col]], 3)
+    }
+  }
+
+  DT::datatable(
+    padan_tbl_view,
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(
+      pageLength = 10,
+      scrollX    = TRUE,
+      scrollY    = "350px",
+      scroller   = TRUE
+    )
+  )
+}
+```
