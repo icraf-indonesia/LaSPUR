@@ -1,6 +1,4 @@
-# Helper Functions for Data Loading and Validation ------------------------
-
-# Load libraries 
+# Load libraries
 if (!requireNamespace("pacman", quietly = TRUE)) {
   install.packages("pacman")
 }
@@ -428,96 +426,22 @@ load_and_validate_raster <- function(raster_path,
   return(r)
 }
 
-# 5. export_table()
-# 6. export_map()
-# 7. generate_report()
-
-#' Generate LaSPUR Report
-#' 
-#' Generates an HTML report for a LaSPUR module using R Markdown.
-#' The output is always HTML because the templates use interactive widgets
-#' (Leaflet maps, DT tables) that are not compatible with PDF output.
+#' Validate and Create Output Directory
 #'
-#' @param output List. Output from LaSPUR module.
-#' @param dir Character string. Directory to save the report.
-#' @param module_name Character string. Optional name of the module (used in filename).
-#' @param template_path Character string. Path to the R Markdown template file.
-#'   Defaults to "report/LaSPUR_SERASI_report_template.Rmd" for backward compatibility.
-#' 
-#' @importFrom rmarkdown render
+#' @description
+#' Validates whether an output directory exists, and creates it (recursively)
+#' if it does not.
 #'
-#' @export
-generate_report <- function(output, dir,
-                            module_name   = NULL,
-                            template_path = "report/LaSPUR_SERASI_report_template.Rmd") {
-  # Fallback for modules that don't have a template yet
-  if (is.null(template_path) || !nzchar(template_path) || !file.exists(template_path)) {
-    template_path <- tempfile(fileext = ".Rmd")
-    writeLines(c(
-      "---",
-      paste0("title: \"Laporan Modul ", module_name, "\""),
-      "output: html_document",
-      "params:",
-      "  inputs: NA",
-      "  result: NA",
-      "  module_name: NA",
-      "---",
-      "",
-      "### Laporan Belum Tersedia",
-      "",
-      "Template laporan spesifik untuk modul ini sedang dalam tahap pengembangan."
-    ), template_path)
-  }
-
-  # Prepare inputs payload
-  inputs_payload <- output$inputs
-  if (is.null(inputs_payload) || !is.list(inputs_payload)) {
-    inputs_payload <- list()
-  }
-
-  # Build all possible parameters
-  all_params <- list(
-    start_time  = Sys.time(),
-    end_time    = Sys.time(),
-    inputs      = inputs_payload,
-    result      = output$result,
-    module_name = module_name
-  )
-
-  declared_params <- tryCatch({
-    yml <- rmarkdown::yaml_front_matter(template_path)
-    if (!is.null(yml$params) && is.list(yml$params)) names(yml$params) else NULL
-  }, error = function(e) NULL)
-
-  if (!is.null(declared_params)) {
-    report_params <- all_params[intersect(names(all_params), declared_params)]
-  } else {
-    report_params <- list(inputs = inputs_payload, result = output$result, module_name = module_name)
-  }
-  
-  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
-  if (!is.null(module_name) && nzchar(module_name)) {
-    base_name <- paste0("LaSPUR_", module_name, "_Report_", timestamp)
-  } else {
-    base_name <- paste0("LaSPUR_Report_", timestamp)
-  }
-  
-  output_file <- paste0(base_name, ".html")
-  
-  rmarkdown::render(
-    input         = template_path,
-    output_format = "html_document",
-    output_file   = output_file,
-    output_dir    = dir,
-    params        = report_params,
-    knit_root_dir = getwd()
-  )
-}
-
-#' Validate and create output directory if missing
+#' @param dir_path Character string. Path to the output directory.
 #'
-#' @param dir_path Character string: path to the output directory.
-#' @return Logical: TRUE if directory is valid/exists/created, FALSE otherwise.
+#' @return Logical. `TRUE` if the directory is valid/exists/created,
+#'   `FALSE` otherwise.
+#'
+#' @examples
+#' \dontrun{
+#' validate_output_dir("output/Analisis SERASI")
+#' }
+#'
 #' @export
 validate_output_dir <- function(dir_path) {
   if (is.null(dir_path) || dir_path == "") {
@@ -534,7 +458,20 @@ validate_output_dir <- function(dir_path) {
   return(TRUE)
 }
 
-# Ensure geometry column is named "geometry"
+#' Ensure the Geometry Column is Named "geometry"
+#'
+#' @description
+#' Renames the active simple features geometry column to `"geometry"` if it
+#' currently has a different name.
+#'
+#' @param sf_obj An `sf` object.
+#'
+#' @return The input `sf` object with its geometry column renamed to
+#'   `"geometry"` (if it wasn't already).
+#'
+#' @importFrom sf st_set_geometry
+#'
+#' @export
 ensure_geometry_name <- function(sf_obj) {
   geom_col <- attr(sf_obj, "sf_column")
   if (!is.null(geom_col) && geom_col != "geometry") {
@@ -544,11 +481,22 @@ ensure_geometry_name <- function(sf_obj) {
   return(sf_obj)
 }
 
-# ── Shared UI for Result Visualization ──────────────────────────
 #' Create Result Visualization UI
 #'
-#' @param ns Namespace function of the module calling this.
-#' @return A Shiny UI object containing the map, table, log, and download buttons.
+#' @description
+#' Builds the shared Shiny UI used across modules to display analysis results:
+#' a Leaflet map, a DT table, a validation log, and download buttons.
+#'
+#' @param ns Namespace function of the module calling this helper.
+#'
+#' @return A Shiny UI object containing the map, table, log, and download
+#'   buttons.
+#'
+#' @importFrom shiny tagList fluidRow column div hr downloadButton
+#' @importFrom bslib navset_tab nav_panel
+#' @importFrom leaflet leafletOutput
+#' @importFrom DT DTOutput
+#'
 #' @export
 create_result_ui <- function(ns) {
   tagList(
@@ -562,7 +510,7 @@ create_result_ui <- function(ns) {
             leafletOutput(ns("result_map"), height = "450px")
           )
         ),
-        hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"), 
+        hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
         fluidRow(
           column(
             width = 12,
@@ -590,18 +538,46 @@ create_result_ui <- function(ns) {
   )
 }
 
-# ── Shared Server for Result Visualization ──────────────────────
 #' Render Result Visualization Server Logic
 #'
-#' @param input,output,session Standard shiny server arguments from the calling module.
-#' @param rv Reactive values object containing analysis_result$map, analysis_result$table, log_messages, gpkg_path, xlsx_path.
-#' @param config A list containing configuration options:
-#'   - map_color_col: Column to use for map coloring.
-#'   - map_title: Title for the map legend.
-#'   - map_label_cols: Named list or vector of columns for labels/popups. Example: c("ID PU: " = "id_pu", "Indeks: " = "idx_padu_se").
-#'   - map_palette: Palette name (e.g., "RdYlGn"). Default is "RdYlGn".
-#'   - table_cols: Named vector for subsetting and renaming table columns. c("colname" = "Display Name").
-#'   - table_round_cols: Character vector of display column names to round to 2 digits.
+#' @description
+#' Registers the shared Shiny server-side outputs used across analysis modules:
+#' a Leaflet map, a DT table, a validation log, and download handlers. Renders
+#' map geometry with optional simplification, dynamic popups/labels, table
+#' column subsetting and rounding, and synchronized table-to-map selection.
+#'
+#' @param input,output,session Standard Shiny server arguments from the calling
+#'   module.
+#' @param rv Reactive values object containing `analysis_result$map`,
+#'   `analysis_result$table`, `log_messages`, `gpkg_path`, and `xlsx_path`.
+#' @param config A list of configuration options:
+#'   \describe{
+#'     \item{map_color_col}{Column used for map coloring.}
+#'     \item{map_title}{Title for the map legend.}
+#'     \item{map_label_cols}{Named list or vector of columns used for
+#'       labels/popups. Example: `c("ID PU: " = "id_pu", "Indeks: " = "idx_padu_se")`.}
+#'     \item{map_palette}{Palette name (e.g., `"RdYlGn"`). Default `"RdYlGn"`.}
+#'     \item{map_simplify_tolerance}{Simplification tolerance (map units) used
+#'       only for the Leaflet display copy of the geometry. Default `5`.}
+#'     \item{table_cols}{Named vector for subsetting/renaming table columns.}
+#'     \item{table_round_cols}{Character vector of display column names to round
+#'       to 2 digits.}
+#'   }
+#'
+#' @return Invisibly `NULL`. Called for its side effects of registering
+#'   outputs and observers on `output` and `session`.
+#'
+#' @importFrom shiny req renderPrint observeEvent observe invalidateLater
+#' @importFrom leaflet renderLeaflet leaflet addProviderTiles addPolygons
+#'   addLegend colorNumeric colorFactor leafletProxy clearGroup setView
+#'   highlightOptions leafletOptions providers
+#' @importFrom leaflet.extras addSearchFeatures searchFeaturesOptions
+#'   addResetMapButton
+#' @importFrom DT renderDT datatable formatRound
+#' @importFrom sf st_is_longlat st_transform st_simplify st_is_valid
+#'   st_make_valid st_centroid st_geometry st_coordinates
+#' @importFrom htmltools HTML
+#'
 #' @export
 render_result_server <- function(input, output, session, rv, config) {
   
@@ -612,14 +588,13 @@ render_result_server <- function(input, output, session, rv, config) {
   table_cols <- config$table_cols
   table_round_cols <- config$table_round_cols
   
-  # Simplification tolerance (map units, typically meters for UTM data) used only for the Leaflet display copy of the geometry. 
+  # Simplification tolerance (map units, typically meters for UTM data) used only for the Leaflet display copy of the geometry.
   map_simplify_tolerance <- if (!is.null(config$map_simplify_tolerance)) {
     config$map_simplify_tolerance
   } else {
     5 # meters
   }
   
-  # ── Map output ──────────────────
   output$result_map <- renderLeaflet({
     req(rv$analysis_result)
     
@@ -649,7 +624,7 @@ render_result_server <- function(input, output, session, rv, config) {
     }
     
     if (!map_color_col %in% names(map_sf)) {
-      return(leaflet::leaflet() %>% 
+      return(leaflet::leaflet() %>%
                leaflet::addControl(paste("Kolom", map_color_col, "tidak ditemukan."), position = "topright"))
     }
     
@@ -712,14 +687,14 @@ render_result_server <- function(input, output, session, rv, config) {
     ) %>%
       leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
       leaflet::addPolygons(
-        layerId     = ~id_pu, 
+        layerId     = ~id_pu,
         group       = "result_layer",
         fillColor   = ~pal(get(map_color_col)),
         fillOpacity = 0.7,
         weight      = 1,
         color       = "black",
         stroke      = FALSE,
-        label       = ~search_label, 
+        label       = ~search_label,
         popup       = ~popup_html,
         highlightOptions = leaflet::highlightOptions(
           weight = 3,
@@ -731,14 +706,14 @@ render_result_server <- function(input, output, session, rv, config) {
       leaflet.extras::addSearchFeatures(
         targetGroups = "result_layer",
         options = leaflet.extras::searchFeaturesOptions(
-          propertyName = "label",    
-          zoom = 15,                 
-          openPopup = TRUE,           
+          propertyName = "label",
+          zoom = 15,
+          openPopup = TRUE,
           firstTipSubmit = TRUE,
           autoCollapse = FALSE,
           hideMarkerOnCollapse = TRUE
         )
-      ) %>% leaflet.extras::addResetMapButton() %>% 
+      ) %>% leaflet.extras::addResetMapButton() %>%
       leaflet::addLegend(
         position = "bottomright",
         pal      = pal,
@@ -748,7 +723,6 @@ render_result_server <- function(input, output, session, rv, config) {
       )
   })
   
-  # ── Table output ───────────────────────────────────────────
   output$result_table <- DT::renderDT({
     req(rv$analysis_result)
     
@@ -761,7 +735,7 @@ render_result_server <- function(input, output, session, rv, config) {
     
     dt <- DT::datatable(
       df_subset,
-      selection = "single", 
+      selection = "single",
       extensions = c('FixedColumns', 'FixedHeader'),
       options = list(
         pageLength = 10,
@@ -853,13 +827,11 @@ render_result_server <- function(input, output, session, rv, config) {
     }
   })
   
-  # ── Validation log ─────────────────────────────────────────
   output$validation_log <- renderPrint({
     invalidateLater(100, session)
     cat(rv$log_messages)
   })
   
-  # ── Download handlers ──────────────────────────────────────
   output$dl_gpkg <- downloadHandler(
     filename = function() {
       if(!is.null(rv$gpkg_path)) basename(rv$gpkg_path) else "result.gpkg"
@@ -883,33 +855,44 @@ render_result_server <- function(input, output, session, rv, config) {
 
 #' Plot Continuous Raster or Vector (sf) Map with Optional PNG Export
 #'
-#' This function creates a continuous map using **ggplot2**, supporting either a
+#' @description
+#' Creates a continuous map using **ggplot2**, supporting either a
 #' [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**) or an
 #' [`sf`][sf::st_sf] object (plotted via `geom_sf()`). Instead of an HTML
 #' download button, the plot can optionally be exported directly to a PNG file
 #' by supplying `filepath`.
 #'
 #' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
-#' @param title A character string giving the overall map title, shown above the plot.
-#'   If `NULL` (default), no title is shown. This is independent of `legend`, which
-#'   labels the color bar.
-#' @param column A character string giving the name of the numeric column to plot
-#'   as the continuous fill/color variable. Required when `map` is an `sf` object;
-#'   ignored when `map` is a `SpatRaster`.
-#' @param legend A character string giving the legend title. If `NULL`, no legend title is shown.
+#' @param title A character string giving the overall map title, shown above
+#'   the plot. If `NULL` (default), no title is shown. Independent of `legend`,
+#'   which labels the color bar.
+#' @param column A character string giving the name of the numeric column to
+#'   plot as the continuous fill/color variable. Required when `map` is an `sf`
+#'   object; ignored when `map` is a `SpatRaster`.
+#' @param legend A character string giving the legend title. If `NULL`, no
+#'   legend title is shown.
 #' @param low A character string specifying the color for the low end of the gradient.
 #' @param high A character string specifying the color for the high end of the gradient.
 #' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
-#' @param filepath A string giving the file path (including extension, e.g. `"output/map.png"`)
-#'   to export the plot as a PNG. If `NULL` (default), no file is written.
+#' @param filepath A string giving the file path (including extension, e.g.
+#'   `"output/map.png"`) to export the plot as a PNG. If `NULL` (default), no
+#'   file is written.
 #' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
-#' @param height Numeric height (inches) for the exported PNG. Also used to size the
-#'   legend color bar, which is drawn at 80% of this height. Defaults to `5`.
-#' @param dpi An integer giving the resolution (dots per inch) for the exported PNG.
-#'   Defaults to `300`.
+#' @param height Numeric height (inches) for the exported PNG. Also used to size
+#'   the legend color bar, which is drawn at 80% of this height. Defaults to `5`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported
+#'   PNG. Defaults to `300`.
 #'
 #' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
 #'   as a PNG to that path as a side effect.
+#'
+#' @importFrom ggplot2 ggplot aes geom_sf scale_fill_gradient scale_color_gradient
+#'   scale_x_continuous theme_bw labs coord_sf guides guide_colorbar theme
+#'   element_blank element_text margin ggsave
+#' @importFrom tidyterra geom_spatraster
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
+#' @importFrom scales breaks_pretty
+#' @importFrom grid unit
 #'
 #' @export
 plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, high, na_color = "white",
@@ -1013,45 +996,63 @@ plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, h
 
 #' Plot Categorical Raster or Vector (sf) Map with Optional PNG Export
 #'
-#' This function creates a categorical (discrete class) map using **ggplot2**,
-#' supporting either a [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**)
-#' or an [`sf`][sf::st_sf] object (plotted via `geom_sf()`). It uses the same
-#' overall styling as [plot_continuous_map()]. Long class names in the legend are
+#' @description
+#' Creates a categorical (discrete class) map using **ggplot2**, supporting
+#' either a [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**) or an
+#' [`sf`][sf::st_sf] object (plotted via `geom_sf()`). Uses the same overall
+#' styling as [plot_continuous_map()]. Long class names in the legend are
 #' automatically wrapped so they aren't cropped by the map's dimensions, and the
 #' legend can be split into multiple columns if there are many categories.
 #'
 #' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
-#' @param title A character string giving the overall map title, shown above the plot,
-#'   left-justified. If `NULL` (default), no title is shown.
-#' @param column A character string giving the name of the categorical column to plot.
-#'   Required when `map` is an `sf` object; ignored when `map` is a `SpatRaster`.
-#' @param lookup For `SpatRaster` input **only** (required): a file path to a `.csv`,
-#'   `.xlsx`, or `.xls` file containing the raster's class table, with (at least) an
-#'   ID column matching the raster's integer cell values and a class-name column.
+#' @param title A character string giving the overall map title, shown above the
+#'   plot, left-justified. If `NULL` (default), no title is shown.
+#' @param column A character string giving the name of the categorical column to
+#'   plot. Required when `map` is an `sf` object; ignored when `map` is a
+#'   `SpatRaster`.
+#' @param lookup For `SpatRaster` input **only** (required): a file path to a
+#'   `.csv`, `.xlsx`, or `.xls` file containing the raster's class table, with
+#'   (at least) an ID column matching the raster's integer cell values and a
+#'   class-name column.
 #' @param id_col Column name in `lookup` holding the raster cell ID values.
 #'   Defaults to `"ID"`.
 #' @param class_col Column name in `lookup` holding the class name/label.
 #'   Defaults to `"class"`.
-#' @param legend A character string giving the legend title. If `NULL`, no legend title is shown.
-#' @param colors An optional named character vector of colors, with names matching the
-#'   category labels (from `class_col` for rasters, or the unique values of `column`
-#'   for `sf`). If `NULL` (default), a default discrete palette is generated automatically.
+#' @param legend A character string giving the legend title. If `NULL`, no
+#'   legend title is shown.
+#' @param colors An optional named character vector of colors, with names
+#'   matching the category labels (from `class_col` for rasters, or the unique
+#'   values of `column` for `sf`). If `NULL` (default), a default discrete
+#'   palette is generated automatically.
 #' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
-#' @param label_wrap_width Integer giving the number of characters after which legend
-#'   labels wrap onto a new line. Defaults to `15`. Increase for a wider legend column,
-#'   decrease if labels are still being cut off.
-#' @param legend_ncol Integer giving the number of columns to arrange legend keys into.
-#'   Defaults to `1`. Increase this if there are many categories and the legend is
-#'   taller than the map (getting cropped vertically).
-#' @param filepath A string giving the file path (including extension, e.g. `"output/map.png"`)
-#'   to export the plot as a PNG. If `NULL` (default), no file is written.
+#' @param label_wrap_width Integer giving the number of characters after which
+#'   legend labels wrap onto a new line. Defaults to `15`. Increase for a wider
+#'   legend column, decrease if labels are still being cut off.
+#' @param legend_ncol Integer giving the number of columns to arrange legend
+#'   keys into. Defaults to `1`. Increase this if there are many categories and
+#'   the legend is taller than the map (getting cropped vertically).
+#' @param filepath A string giving the file path (including extension, e.g.
+#'   `"output/map.png"`) to export the plot as a PNG. If `NULL` (default), no
+#'   file is written.
 #' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
 #' @param height Numeric height (inches) for the exported PNG. Defaults to `5`.
-#' @param dpi An integer giving the resolution (dots per inch) for the exported PNG.
-#'   Defaults to `300`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported
+#'   PNG. Defaults to `300`.
 #'
 #' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
 #'   as a PNG to that path as a side effect.
+#'
+#' @importFrom ggplot2 ggplot aes geom_sf scale_fill_manual scale_color_manual
+#'   scale_x_continuous theme_bw labs coord_sf guides guide_legend theme
+#'   element_blank element_text margin ggsave
+#' @importFrom tidyterra geom_spatraster
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
+#' @importFrom scales hue_pal label_wrap breaks_pretty
+#' @importFrom grid unit
+#' @importFrom terra levels
+#' @importFrom stats setNames
+#' @importFrom tools file_ext
+#' @importFrom utils read.csv
 #'
 #' @export
 plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL,
@@ -1186,7 +1187,7 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
       plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
       plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
     )
-
+  
   if (inherits(map, "sf") && (is.null(column) || is.na(column) || column == "")) {
     plot_lc <- plot_lc + ggplot2::theme(legend.position = "none")
   } else {
@@ -1222,7 +1223,14 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
   return(plot_lc)
 }
 
-# Module file paths and result variable names
+#' Module File Paths and Result Variable Names
+#'
+#' @description
+#' Configuration mapping each analysis module to its folder name and expected
+#' output file names (GPKG, XLSX, RDA log, and PNG directory).
+#'
+#' @format A named list of lists.
+#' @keywords internal
 module_file_config <- list(
   serasi = list(
     folder  = "Analisis SERASI",
@@ -1315,6 +1323,14 @@ module_file_config <- list(
   )
 )
 
+#' Module Result Variable Names
+#'
+#' @description
+#' Maps each analysis module to the variable names used inside its result list
+#' for the map (`sf`) and table objects.
+#'
+#' @format A named list of lists, each containing `map` and `table` entries.
+#' @keywords internal
 module_result_names <- list(
   serasi              = list(map = "idx_serasi_map",    table = "idx_serasi_table"),
   padu_ke             = list(map = "idx_padu_ke_map",   table = "idx_padu_ke_table"),
@@ -1331,14 +1347,44 @@ module_result_names <- list(
   reconcile           = list(map = "idx_reconcile_map", table = "idx_reconcile_table")
 )
 
-#' Validate that the output directory exists and is writable
+#' Validate that the Output Directory Exists and is Writable
+#'
+#' @description
+#' Lightweight validator that returns `TRUE` only when a non-empty directory
+#' path is supplied and the directory currently exists.
+#'
+#' @param dir Character string. Directory path to validate.
+#'
+#' @return Logical. `TRUE` if `dir` is non-empty and exists, otherwise `FALSE`.
+#'
+#' @keywords internal
 validate_output_dir <- function(dir) {
   if (is.null(dir) || !nzchar(dir)) return(FALSE)
   if (!dir.exists(dir)) return(FALSE)
   return(TRUE)
 }
 
-#' Special loading for SERASI module (overlap/adjacent)
+#' Special Loading for SERASI Module (Overlap/Adjacent)
+#'
+#' @description
+#' Loads the SERASI module's saved results from disk. Because SERASI output
+#' filenames depend on the chosen case (`"overlap"` or `"adjacent"`), this
+#' helper inspects the saved `inputs` object in the log RDA to determine which
+#' files to load.
+#'
+#' @param base_dir Character. Base output directory for the SERASI module.
+#' @param cfg List. The module's file configuration (as stored in
+#'   `module_file_config$serasi`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'   Returns `list(ready = FALSE, data = NULL)` when the required files are
+#'   missing or loading fails.
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
 load_serasi_from_files <- function(base_dir, cfg) {
   rda_path <- file.path(base_dir, cfg$rda)
   if (!file.exists(rda_path)) return(list(ready = FALSE, data = NULL))
@@ -1392,6 +1438,29 @@ load_serasi_from_files <- function(base_dir, cfg) {
   })
 }
 
+#' Check Module Readiness and Load Data
+#'
+#' @description
+#' Determines whether a module has completed results available, preferring
+#' in-memory results stored in `session$userData$module_results` and falling
+#' back to reading the module's output files from `output_dir`.
+#'
+#' @param module_id Character. The module identifier. May include a parent and
+#'   child separated by `"$"` (e.g. `"parent$child"`).
+#' @param output_dir Character. Root output directory.
+#' @param session Shiny session object, used to look up in-memory results.
+#'
+#' @return A list with elements:
+#'   \describe{
+#'     \item{ready}{Logical. Whether the module results are available.}
+#'     \item{data}{The module result payload when `ready = TRUE`, else `NULL`.}
+#'     \item{source}{Either `"memory"`, `"files"`, or `NULL`.}
+#'   }
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
 module_ready_and_data <- function(module_id, output_dir, session) {
   mod_key <- module_id
   parent <- NULL
@@ -1467,4 +1536,171 @@ module_ready_and_data <- function(module_id, output_dir, session) {
     warning("Failed to load module from files: ", mod_key, " - ", e$message)
     return(list(ready = FALSE, data = NULL))
   })
+}
+
+#' Knit an Rmd Module as a Child Document
+#'
+#' @description
+#' Reads an R Markdown template, strips its YAML front matter, and knits the
+#' remaining body as a child document using the supplied module parameters.
+#'
+#' @param template_path Character. Path to the Rmd template file.
+#' @param module_params List. Parameters to expose to the child document via
+#'   `params`.
+#' @param envir Environment in which to evaluate the child. Defaults to the
+#'   parent frame.
+#'
+#' @return A character vector/string containing the rendered Markdown.
+#'
+#' @importFrom knitr knit_child
+#'
+#' @keywords internal
+knit_child_module <- function(template_path, module_params, envir = parent.frame()) {
+  if (!file.exists(template_path)) {
+    return(paste0("\n\n*Template tidak ditemukan: ", template_path, "*\n\n"))
+  }
+  
+  # Read the template file
+  lines <- readLines(template_path, warn = FALSE)
+  
+  # Find the YAML front matter (between --- lines)
+  yaml_start <- which(lines == "---")[1]
+  yaml_end <- which(lines == "---")[2]
+  
+  if (!is.na(yaml_start) && !is.na(yaml_end) && yaml_start < yaml_end) {
+    # Remove the YAML front matter
+    body_lines <- lines[-(yaml_start:yaml_end)]
+  } else {
+    body_lines <- lines
+  }
+  
+  # Combine into a single string
+  body_text <- paste(body_lines, collapse = "\n")
+  
+  # Create a new environment with the params set
+  child_env <- new.env(parent = envir)
+  child_env$params <- module_params
+  
+  # Knit the body text with the child environment
+  # quiet = TRUE suppresses the child's progress bar / processing messages,
+  # which would otherwise be captured as stdout inside this chunk's output.
+  result <- knitr::knit_child(text = body_text, envir = child_env, quiet = TRUE)
+  
+  return(result)
+}
+
+#' Generate a Module or Master Report
+#'
+#' @description
+#' Renders an HTML report for a specific module or, when `master_params` is
+#' supplied, renders the master report template. Falls back to a minimal
+#' placeholder template when the module-specific template cannot be found.
+#'
+#' @param output The output object returned by a module (expected to contain
+#'   `inputs` and `result` elements).
+#' @param dir Character. Directory where the rendered HTML report will be
+#'   written.
+#' @param module_name Character. Optional module name used in the output file
+#'   name and passed to the template as `module_name`.
+#' @param template_path Character. Path to the module-specific Rmd template.
+#'   Defaults to the SERASI report template.
+#' @param master_params List. When provided, forces rendering of the master
+#'   report template with these parameters.
+#'
+#' @return Invisibly `NULL`. Called for its side effect of rendering an HTML
+#'   report.
+#'
+#' @importFrom rmarkdown render yaml_front_matter
+#'
+#' @export
+generate_report <- function(output, dir, module_name = NULL,
+                            template_path = "report/LaSPUR_SERASI_report_template.Rmd",
+                            master_params = NULL) {
+  
+  # If master_params is provided, use the master template
+  if (!is.null(master_params)) {
+    # Use the master template (override template_path if provided)
+    template_path <- "report/LaSPUR_master_report_template.Rmd"
+    if (!file.exists(template_path)) {
+      stop("Master template not found: ", template_path)
+    }
+    
+    timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
+    output_file <- paste0("LaSPUR_Master_Report_", timestamp, ".html")
+    
+    rmarkdown::render(
+      input         = template_path,
+      output_format = "html_document",
+      output_file   = output_file,
+      output_dir    = dir,
+      params        = master_params,
+      knit_root_dir = getwd(),
+      quiet         = TRUE
+    )
+    return(invisible())
+  }
+  
+  # Fallback for modules that don't have a template yet
+  if (is.null(template_path) || !nzchar(template_path) || !file.exists(template_path)) {
+    template_path <- tempfile(fileext = ".Rmd")
+    writeLines(c(
+      "---",
+      paste0("title: \"Laporan Modul ", module_name, "\""),
+      "output: html_document",
+      "params:",
+      "  inputs: NA",
+      "  result: NA",
+      "  module_name: NA",
+      "---",
+      "",
+      "### Laporan Belum Tersedia",
+      "",
+      "Template laporan spesifik untuk modul ini sedang dalam tahap pengembangan."
+    ), template_path)
+  }
+  
+  # Prepare inputs payload
+  inputs_payload <- output$inputs
+  if (is.null(inputs_payload) || !is.list(inputs_payload)) {
+    inputs_payload <- list()
+  }
+  
+  # Build all possible parameters
+  all_params <- list(
+    start_time  = Sys.time(),
+    end_time    = Sys.time(),
+    inputs      = inputs_payload,
+    result      = output$result,
+    module_name = module_name
+  )
+  
+  declared_params <- tryCatch({
+    yml <- rmarkdown::yaml_front_matter(template_path)
+    if (!is.null(yml$params) && is.list(yml$params)) names(yml$params) else NULL
+  }, error = function(e) NULL)
+  
+  if (!is.null(declared_params)) {
+    report_params <- all_params[intersect(names(all_params), declared_params)]
+  } else {
+    report_params <- list(inputs = inputs_payload, result = output$result, module_name = module_name)
+  }
+  
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
+  if (!is.null(module_name) && nzchar(module_name)) {
+    base_name <- paste0("LaSPUR_", module_name, "_Report_", timestamp)
+  } else {
+    base_name <- paste0("LaSPUR_Report_", timestamp)
+  }
+  
+  output_file <- paste0(base_name, ".html")
+  
+  rmarkdown::render(
+    input         = template_path,
+    output_format = "html_document",
+    output_file   = output_file,
+    output_dir    = dir,
+    params        = report_params,
+    knit_root_dir = getwd(),
+    quiet         = TRUE
+  )
 }

@@ -163,16 +163,16 @@ report_module_config <- list(
   recommendation = list(
     recommendation_overlaps = list(
       label    = "Alternatif Tumpang Tindih",
-      template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+      template = "report/LaSPUR_Alternative_report_template.Rmd"
     ),
     recommendation_adjacent = list(
       label    = "Alternatif Bertetangga",
-      template = "report/LaSPUR_ALTERNATIVE_report_template.Rmd"
+      template = "report/LaSPUR_Alternative_report_template.Rmd"
     )
   ),
   reconcile = list(
     label    = "Rekonsiliasi",
-    template = "report/LaSPUR_RECONCILLIATION_report_template.Rmd"
+    template = "report/LaSPUR_Reconcilliation_report_template.Rmd"
   )
 )
 
@@ -1255,52 +1255,139 @@ server <- function(input, output, session) {
       return()
     }
     removeModal()
-    n <- length(selected)
     
-    withProgress(message = "Membuat laporan...", value = 0, {
-      success_count <- 0
-      for (i in seq_along(selected)) {
-        item_path <- selected[[i]]
-        data_info <- module_ready_and_data(item_path, output_dir(), session)
-        if (!data_info$ready) {
-          showNotification(paste("Modul", item_path, "tidak siap. Dilewati."),
-                           type = "warning", duration = 6)
-          next
-        }
-        
-        if (grepl("$", item_path, fixed = TRUE)) {
-          parts <- strsplit(item_path, "$", fixed = TRUE)[[1]]
-          parent <- parts[1]; child <- parts[2]
-          cfg <- report_module_config[[parent]][[child]]
-          mod_name <- paste0(parent, "_", child)
+    master_params <- list()
+    any_ready <- FALSE
+    
+    withProgress(message = "Mengumpulkan data modul...", value = 0, {
+      
+      # Helper to add module data to master_params
+      add_module_data <- function(key, module_id) {
+        info <- module_ready_and_data(module_id, output_dir(), session)
+        if (info$ready) {
+          master_params[[key]] <<- info$data
+          any_ready <<- TRUE
         } else {
-          cfg <- report_module_config[[item_path]]
-          mod_name <- item_path
+          showNotification(paste("Modul", module_id, "tidak siap. Dilewati."), type = "warning", duration = 6)
         }
-        
-        incProgress(amount = 1/n, detail = paste0("Modul: ", cfg$label, " (", i, "/", n, ")"))
-        
-        tryCatch({
-          generate_report(
-            output        = data_info$data,
-            dir           = output_dir(),
-            module_name   = mod_name,
-            template_path = cfg$template
-          )
-          success_count <- success_count + 1
-        }, error = function(e) {
-          showNotification(
-            paste0("Gagal membuat laporan untuk modul '", item_path, "': ", conditionMessage(e)),
-            type = "error", duration = 10
-          )
-        })
       }
-      if (success_count > 0) {
+      
+      # Group selected items by top-level module type
+      # Map from selection ID to master_params key
+      # For SERASI: selection "serasi" -> key "serasi"
+      # For PADU submodules: selection "padu$ke", "padu$hs", ... -> key "padu" (combine all)
+      # For PADAN: "padan" -> key "padan"
+      # For recommendation: "recommendation_overlaps" -> key "recommendation$overlaps", "recommendation_adjacent" -> key "recommendation$adjacent"
+      # For reconcile: "reconcile" -> key "reconcile"
+      
+      # Initialize combined PADU result
+      padu_combined <- list(inputs = list(), result = list())
+      padu_selected <- FALSE
+      
+      # Initialize recommendation sub-keys
+      rec_overlaps <- NULL
+      rec_adjacent <- NULL
+      
+      for (sel in selected) {
+        if (sel == "serasi") {
+          info <- module_ready_and_data("serasi", output_dir(), session)
+          if (info$ready) {
+            master_params$serasi <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification("Modul SERASI tidak siap. Dilewati.", type = "warning")
+          }
+        } else if (grepl("^padu\\$", sel)) {
+          padu_selected <- TRUE
+          sub_key <- gsub("^padu\\$", "", sel)
+          info <- module_ready_and_data(sel, output_dir(), session)
+          if (info$ready) {
+            if (length(padu_combined$inputs) == 0) {
+              padu_combined$inputs <- info$data$inputs
+            }
+            for (res_name in names(info$data$result)) {
+              if (grepl("_map$", res_name)) {
+                padu_combined$result[[res_name]] <- info$data$result[[res_name]]
+              }
+            }
+            any_ready <- TRUE
+          } else {
+            showNotification(paste("Modul PADU", sub_key, "tidak siap. Dilewati."), type = "warning")
+          }
+        } else if (sel == "padan") {
+          info <- module_ready_and_data("padan", output_dir(), session)
+          if (info$ready) {
+            master_params$padan <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification("Modul PADAN tidak siap. Dilewati.", type = "warning")
+          }
+        } else if (sel == "recommendation_overlaps") {
+          info <- module_ready_and_data("recommendation_overlaps", output_dir(), session)
+          if (info$ready) {
+            rec_overlaps <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification("Modul Alternatif Tumpang Tindih tidak siap. Dilewati.", type = "warning")
+          }
+        } else if (sel == "recommendation_adjacent") {
+          info <- module_ready_and_data("recommendation_adjacent", output_dir(), session)
+          if (info$ready) {
+            rec_adjacent <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification("Modul Alternatif Bertetangga tidak siap. Dilewati.", type = "warning")
+          }
+        } else if (sel == "reconcile") {
+          info <- module_ready_and_data("reconcile", output_dir(), session)
+          if (info$ready) {
+            master_params$reconcile <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification("Modul Rekonsiliasi tidak siap. Dilewati.", type = "warning")
+          }
+        }
+      }
+      
+      if (padu_selected && length(padu_combined$result) > 0) {
+        master_params$padu <- padu_combined
+      }
+      
+      if (!is.null(rec_overlaps) || !is.null(rec_adjacent)) {
+        master_params$recommendation <- list()
+        if (!is.null(rec_overlaps)) master_params$recommendation$overlaps <- rec_overlaps
+        if (!is.null(rec_adjacent)) master_params$recommendation$adjacent <- rec_adjacent
+      }
+      
+      incProgress(1)
+    })
+    
+    if (!any_ready) {
+      showNotification("Tidak ada modul yang siap untuk dibuat laporannya.", type = "error", duration = 7)
+      return()
+    }
+    
+    # Generate the master report
+    withProgress(message = "Membuat laporan terpadu...", value = 0, {
+      tryCatch({
+        generate_report(
+          output        = NULL,         
+          dir           = output_dir(),
+          module_name   = "Master",    
+          template_path = NULL,      
+          master_params = master_params
+        )
         showNotification(
-          paste0(success_count, " laporan berhasil dibuat di folder: ", output_dir()),
+          paste("Laporan terpadu berhasil dibuat di folder:", output_dir()),
           type = "message", duration = 7
         )
-      }
+      }, error = function(e) {
+        showNotification(
+          paste("Gagal membuat laporan terpadu:", conditionMessage(e)),
+          type = "error", duration = 10
+        )
+      })
+      incProgress(1)
     })
   })
 }
