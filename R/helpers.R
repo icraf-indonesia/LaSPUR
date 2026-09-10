@@ -32,7 +32,9 @@ pacman::p_load(
   shinyjs,
   shinyFiles,
   promises,
-  bslib
+  bslib,
+  slickR,
+  base64enc
 )
 
 #' Load and Validate a Shapefile

@@ -1,5 +1,5 @@
 ---
-title: "LaSPUR - Laporan Terpadu Antar Modul"
+title: "Laporan Analisis - Land and Sea Planning Unit Reconciliation (LaSPUR)"
 output: 
   html_document:
     toc: true

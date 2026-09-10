@@ -18,8 +18,7 @@ params:
   module_name: NA
 ---
 
-```{r setup}
-#| include: false
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
 
 plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
@@ -42,11 +41,12 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
 }
 ```
 
-
-```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
 source(here::here("R/functions.R"))
 source(here::here("R/helpers.R"))
 ```
+
+# Analisis SERASI
 
 <details>
 
@@ -72,7 +72,7 @@ analysis_log %>%
 
 </details>
 
-# Ringkasan Umum
+## Ringkasan Umum
 
 ```{r summary-calculation}
 #| error: true
@@ -120,7 +120,7 @@ summary <- list(
 )
 ```
 
-## Ringkasan Identifikasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
+### Identifikasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
 
 ```{r summary_overall}
 #| error: true
@@ -140,7 +140,7 @@ summary_overall_t <- summary$overall %>%
 DT::datatable(summary_overall_t, rownames = FALSE)
 ```
 
-## Ringkasan Kombinasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
+### Kombinasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
 
 ```{r summary_combinations}
 #| error: true
@@ -158,13 +158,13 @@ summary_combinations_t <- summary$combinations %>%
 DT::datatable(summary_combinations_t, rownames = FALSE)
 ```
 
-# Tentang Modul
+## Tentang Modul
 
 Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
 
-# Data dan Metode
+## Data dan Metode
 
-## Data Utama
+### Data
 
 <details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
 <summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RTRW</summary>
@@ -236,11 +236,11 @@ if (!is.null(params$result$matriks_serasi)) {
 
 </details>
 
-## Metodologi
+### Metode
 
 Metodologi analisis SERASI menggunakan matriks kompatibilitas untuk mengevaluasi keserasian antar pola ruang darat (RTRW) dan laut (RZWP3K) pada setiap unit perencanaan.
 
-# Hasil
+## Hasil Analisi SERASI `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
 
 ```{r interactive-map-serasi}
 #| echo: false
@@ -455,12 +455,6 @@ tagList(
   sync_js
 )
 ```
-
-------------------------------------------------------------------------
-
-<!-- Mandatory closing statement for all module -->
-
-<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LaSPUR sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). </font size>
 
 
 

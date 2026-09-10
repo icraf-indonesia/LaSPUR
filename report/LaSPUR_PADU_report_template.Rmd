@@ -26,11 +26,7 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
   repeat {
     result <- tryCatch(
       {
-        plot(
-          obj,
-          key.pos   = 4,        
-          key.width = lcm(width) 
-        )
+        plot(obj, key.pos = 4, key.width = lcm(width))
         "ok"
       },
       error = function(e) "retry"
@@ -39,6 +35,181 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
     width <- width + step
   }
 }
+
+# Resolve output_dir from params 
+resolve_padu_output_dir <- function() {
+  candidates <- list(
+    tryCatch(params$inputs$output_dir, error = function(e) NULL),
+    tryCatch(params$result$output_dir, error = function(e) NULL),
+    tryCatch(params$output_dir,        error = function(e) NULL)
+  )
+  for (c in candidates) {
+    if (is.null(c) || length(c) == 0) next
+    c <- c[1]
+    if (is.na(c) || !nzchar(c)) next
+    return(c)
+  }
+  NULL
+}
+
+# Locate the log folder for a module
+find_padu_log_dir <- function(output_dir, module_dir) {
+  if (is.null(output_dir)) return(NULL)
+  candidates <- c(
+    file.path(output_dir, module_dir, "log"),
+    file.path(output_dir, "Analisis", module_dir, "log"),
+    file.path(output_dir, "output",  module_dir, "log"),
+    file.path(output_dir, module_dir)
+  )
+  for (p in candidates) if (dir.exists(p)) return(p)
+
+  hits <- list.files(output_dir,
+                     pattern = "^idx_padu_.+\\.png$",
+                     recursive = TRUE, full.names = TRUE)
+  hits <- hits[grepl(module_dir, hits, fixed = TRUE)]
+  if (length(hits) > 0) return(dirname(hits[1]))
+  NULL
+}
+
+# Carousel fallback 
+css_carousel <- function(paths) {
+  enc_ok <- requireNamespace("base64enc", quietly = TRUE)
+  imgs <- lapply(paths, function(p) {
+    src <- if (enc_ok) {
+      paste0("data:image/png;base64,",
+             base64enc::base64encode(p))
+    } else {
+      p
+    }
+    htmltools::tags$img(
+      src = src,
+      style = paste(
+        "width: 100%; height: auto; display: block;",
+        "scroll-snap-align: center; border-radius: 4px;"
+      )
+    )
+  })
+  htmltools::tags$div(
+    style = paste(
+      "display: flex; overflow-x: auto;",
+      "scroll-snap-type: x mandatory; gap: 12px; padding: 8px 0;"
+    ),
+    imgs
+  )
+}
+
+# Renders PADU input figures 
+render_padu_data_toggle <- function(output_dir, module_dir, title, figure_files) {
+  log_dir <- find_padu_log_dir(output_dir, module_dir)
+
+  existing <- character(0)
+  if (!is.null(log_dir)) {
+    paths    <- file.path(log_dir, figure_files)
+    existing <- paths[file.exists(paths)]
+    if (length(existing) > 0)
+      existing <- normalizePath(existing, mustWork = FALSE)
+  }
+
+  slick_ok <- requireNamespace("slickR", quietly = TRUE)
+
+  content <- if (length(existing) == 0) {
+    htmltools::tags$div(
+      htmltools::tags$p(
+        style = "color: #6c757d; font-style: italic; margin: 0;",
+        "Tidak ada data tersedia."
+      ),
+      htmltools::tags$p(
+        style = "color: #adb5bd; font-size: 0.78em; margin: 4px 0 0 0;",
+        paste0(
+          "output_dir = ", if (is.null(output_dir)) "<NULL>" else output_dir,
+          " | log_dir = ", if (is.null(log_dir)) "<not found>" else log_dir,
+          " | found = 0 files | slickR = ", slick_ok
+        )
+      )
+    )
+    } else if (slick_ok) {
+    htmltools::tagList(
+      htmltools::tags$style(htmltools::HTML("
+        .padu-data-carousel { 
+          position: relative;
+          overflow: hidden !important;
+          margin-bottom: 20px;
+        }
+        .padu-data-carousel .slick-list { 
+          overflow: hidden !important; 
+        }
+        .padu-data-carousel .slick-track { 
+          display: flex !important;
+          align-items: center !important;
+        }
+        .padu-data-carousel .slick-slide {
+          height: auto !important;
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          float: none !important;
+        }
+        .padu-data-carousel .slick-slide > div { 
+          width: 100% !important; 
+          display: flex !important;
+          justify-content: center !important;
+        }
+        .padu-data-carousel img,
+        .padu-data-carousel .html-widget {
+          max-width: 100% !important;
+          height: auto !important;
+          max-height: 550px !important;
+          object-fit: contain !important;
+          margin: 0 auto !important;
+          display: block !important;
+        }
+        .padu-data-carousel .slick-prev {
+          left: 10px;
+          z-index: 10;
+        }
+        .padu-data-carousel .slick-next {
+          right: 10px;
+          z-index: 10;
+        }
+        .padu-data-carousel .slick-dots { 
+          position: relative !important; 
+          margin-top: 15px !important; 
+        }
+      ")),
+      htmltools::tags$div(
+        class = "padu-data-carousel",
+        slickR::slickR(existing) +
+          slickR::settings(slidesToShow = 1, dots = TRUE, infinite = TRUE)
+      )
+    )
+  } else {
+    htmltools::tagList(
+      css_carousel(existing),
+      htmltools::tags$p(
+        style = "color: #adb5bd; font-size: 0.78em; margin: 4px 0 0 0;",
+        "Paket 'slickR' tidak tersedia — menggunakan carousel CSS sederhana."
+      )
+    )
+  }
+
+  htmltools::tags$details(
+    style = paste(
+      "margin-bottom: 20px; border: 1px solid #ddd;",
+      "border-radius: 5px; padding: 10px;"
+    ),
+    htmltools::tags$summary(
+      style = paste(
+        "font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px;",
+        "background-color: #f8f9fa; border-radius: 3px;",
+        "margin: -10px -10px 15px -10px;"
+      ),
+      title
+    ),
+    content
+  )
+}
+
+padu_data_output_dir <- resolve_padu_output_dir()
 ```
 
 ```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
@@ -46,50 +217,116 @@ source(here::here("R/functions.R"))
 source(here::here("R/helpers.R"))
 ```
 
+# Analisis PADU
+
 ```{r detect-padus, include=FALSE}
-# Detect which PADU modules are available
-padu_ke_available <- !is.null(params$result$idx_padu_ke_map)
-padu_hs_available <- !is.null(params$result$idx_padu_hs_map)
-padu_kl_available <- !is.null(params$result$idx_padu_kl_map)
-padu_kh_available <- !is.null(params$result$idx_padu_kh_map)
-padu_rtp_available <- !is.null(params$result$idx_padu_rtp_map)
-padu_se_available <- !is.null(params$result$idx_padu_se_map)
-padu_ki_available <- !is.null(params$result$idx_padu_ki_map)
+padu_ke_available      <- !is.null(params$result$idx_padu_ke_map)
+padu_hs_available      <- !is.null(params$result$idx_padu_hs_map)
+padu_kl_available      <- !is.null(params$result$idx_padu_kl_map)
+padu_kh_available      <- !is.null(params$result$idx_padu_kh_map)
+padu_rtp_available     <- !is.null(params$result$idx_padu_rtp_map)
+padu_se_available      <- !is.null(params$result$idx_padu_se_map)
+padu_ki_available      <- !is.null(params$result$idx_padu_ki_map)
 padu_combine_available <- !is.null(params$result$idx_padu_map)
 
-available_count <- sum(padu_ke_available, padu_hs_available, padu_kl_available, 
+available_count <- sum(padu_ke_available, padu_hs_available, padu_kl_available,
                        padu_kh_available, padu_rtp_available, padu_se_available,
                        padu_ki_available, padu_combine_available)
 ```
 
-# Ringkasan Laporan
+## Ringkasan Umum
 
 Laporan ini menampilkan hasil analisis PADU untuk modul-modul berikut:
 
 ```{r summary-available-modules, results='asis'}
 if (available_count > 0) {
-  if (padu_ke_available) cat("- **PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)**\n")
-  if (padu_hs_available) cat("- **PADU-HS (Hidrologi dan Sedimentasi)**\n")
-  if (padu_kl_available) cat("- **PADU-KL (Kawasan Lindung)**\n")
-  if (padu_kh_available) cat("- **PADU-KH (Komposisi Habitat)**\n")
-  if (padu_rtp_available) cat("- **PADU-RTp (Risiko dan Tekanan)**\n")
-  if (padu_se_available) cat("- **PADU-SE (Sosial & Ekonomi)**\n")
-  if (padu_ki_available) cat("- **PADU-KI (Ketahanan Iklim)**\n")
+  if (padu_ke_available)      cat("- **PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)**\n")
+  if (padu_hs_available)      cat("- **PADU-HS (Hidrologi dan Sedimentasi)**\n")
+  if (padu_kl_available)      cat("- **PADU-KL (Kawasan Lindung)**\n")
+  if (padu_kh_available)      cat("- **PADU-KH (Komposisi Habitat)**\n")
+  if (padu_rtp_available)     cat("- **PADU-RTp (Risiko dan Tekanan)**\n")
+  if (padu_se_available)      cat("- **PADU-SE (Sosial & Ekonomi)**\n")
+  if (padu_ki_available)      cat("- **PADU-KI (Ketahanan Iklim)**\n")
   if (padu_combine_available) cat("- **PADU-Kombinasi**\n")
 } else {
   cat("*Tidak ada modul PADU yang tersedia dalam laporan ini.*\n")
 }
 ```
 
-------------------------------------------------------------------------
-
-# Tentang Modul PADU
+## Tentang Modul
 
 Modul PADU adalah serangkaian analisis yang mengevaluasi kepaduan lingkungan pada unit perencanaan berdasarkan berbagai aspek ekologis, sosial-ekonomi, dan keberlanjutan untuk mendukung pengambilan keputusan tata ruang terpadu darat dan laut.
 
-------------------------------------------------------------------------
+## Data dan Metode
 
-# Hasil Analisis PADU
+### Data
+
+```{r padu-data-ke, results='asis', eval=padu_ke_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-KE",
+  title        = "PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)",
+  figure_files = c("penutup_lahan.png")
+)
+```
+
+```{r padu-data-hs, results='asis', eval=padu_hs_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-HS",
+  title        = "PADU-HS (Hidrologi dan Sedimentasi)",
+  figure_files = c("jarak_ke_estuari.png", "tss.png")
+)
+```
+
+```{r padu-data-kl, results='asis', eval=padu_kl_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-KL",
+  title        = "PADU-KL (Kawasan Lindung)",
+  figure_files = c("penutup_lahan.png")
+)
+```
+
+```{r padu-data-kh, results='asis', eval=padu_kh_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-KH",
+  title        = "PADU-KH (Komposisi Habitat)",
+  figure_files = c("habitat_pesisir.png")
+)
+```
+
+```{r padu-data-rtp, results='asis', eval=padu_rtp_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-RTp",
+  title        = "PADU-RTp (Risiko dan Tekanan)",
+  figure_files = c("jarak_ke_industri.png", "jarak_ke_alur_pelayaran.png")
+)
+```
+
+```{r padu-data-se, results='asis', eval=padu_se_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-SE",
+  title        = "PADU-SE (Sosial & Ekonomi)",
+  figure_files = c("cahaya_malam.png", "kepadatan_penduduk.png")
+)
+```
+
+```{r padu-data-ki, results='asis', eval=padu_ki_available}
+render_padu_data_toggle(
+  output_dir   = padu_data_output_dir,
+  module_dir   = "Analisis PADU-KI",
+  title        = "PADU-KI (Ketahanan Iklim)",
+  figure_files = c("kerawanan_bencana.png")
+)
+```
+
+### Metode
+
+## Hasil Analisis PADU
 
 ```{r check-results, results='asis'}
 if (available_count == 0) {
@@ -98,12 +335,9 @@ if (available_count == 0) {
 ```
 
 ```{r padu-toggle-function, include=FALSE}
-# Renders one PADU module as a single, self-contained <details> toggle.
 render_padu_toggle <- function(data, id, title, description, index_col,
                                 legend_title, decimals = 3) {
-  if (is.null(data)) {
-    return(invisible(NULL))
-  }
+  if (is.null(data)) return(invisible(NULL))
 
   if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
   pacman::p_load(leaflet, htmltools, htmlwidgets, DT, RColorBrewer, sf, dplyr)
@@ -265,9 +499,3 @@ render_padu_toggle(
   legend_title = "Indeks PADU Final"
 )
 ```
-
-------------------------------------------------------------------------
-
-<!-- Mandatory closing statement for all module -->
-
-<font size="1"> LaSPUR adalah perangkat lunak gratis dan disediakan TANPA GARANSI APAPUN. Pengguna bertanggung jawab penuh atas setiap produk yang dihasilkan. Hasil sangat bergantung pada kualitas data yang digunakan ("garbage in, garbage out") dan dapat bervariasi atau sensitif terhadap parameter yang digunakan. Harap laporkan setiap masalah yang ditemui saat menggunakan LaSPUR sebagai [a GitHub issue](https://github.com/icraf-indonesia/LaSPUR/issues). </font size>
