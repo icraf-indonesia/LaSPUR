@@ -10,21 +10,21 @@ Halaman ini menyediakan seluruh dokumen pendukung yang diperlukan untuk melakuka
 
 ---
 
-# Panduan Penyiapan Modul
+# Panduan Penyiapan LaSPUR
 
-Dokumen ini menjelaskan langkah-langkah menyiapkan Portable Module LaSPUR sebelum digunakan, mulai dari struktur folder, persiapan data, hingga menjalankan aplikasi.
+Dokumen ini menjelaskan langkah-langkah menyiapkan alat bantu LaSPUR sebelum digunakan, mulai dari struktur folder, persiapan data, hingga menjalankan aplikasi.
 
 ::: {.callout-tip}
 
-## Unduh Panduan Penyiapan Modul
+## Unduh Panduan Penyiapan
 
 **Dokumen:**
 
-- Panduan Penyiapan Modul LaSPUR (.pdf)
+- Panduan Penyiapan LaSPUR (.pdf)
 
 **Link Unduh**
 
-> Tambahkan tautan Google Drive / OneDrive / GitHub Release.
+> [**Unduh Panduan Penyiapan**](https://drive.google.com/uc?export=download&id=18slj8UemAR_TAgKPs7w6IjHtfLw7pIgu){target="_blank"}
 
 :::
 
@@ -32,7 +32,7 @@ Dokumen ini menjelaskan langkah-langkah menyiapkan Portable Module LaSPUR sebelu
 
 # Panduan Pengguna
 
-Panduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses impor data, menjalankan setiap modul analisis, hingga interpretasi hasil keluaran.
+Panduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses impor data, menjalankan setiap analisis, hingga interpretasi hasil keluaran.
 
 ::: {.callout-note}
 
@@ -40,11 +40,11 @@ Panduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses i
 
 **Dokumen:**
 
-- User Manual LaSPUR (.pdf)
+- Panduan Pengguna LaSPUR Komponen 1 (.pdf)
 
 **Link Unduh**
 
-> Tambahkan tautan menuju User Manual.
+> [**Unduh Panduan Pengguna**](https://drive.google.com/uc?export=download&id=1seV3PvkmCUVAV7gaSjWEcFQR75vx0uad){target="_blank"}
 
 :::
 
@@ -52,7 +52,7 @@ Panduan ini berisi petunjuk penggunaan seluruh fitur LaSPUR, mulai dari proses i
 
 # Bahan Ajar
 
-Materi pelatihan yang digunakan pada kegiatan sosialisasi maupun pelatihan penggunaan LaSPUR.
+Materi pelatihan yang digunakan pada kegiatan pelatihan penggunaan LaSPUR.
 
 ::: {.callout-important}
 
@@ -61,12 +61,18 @@ Materi pelatihan yang digunakan pada kegiatan sosialisasi maupun pelatihan pengg
 **Dokumen:**
 
 - Slide Presentasi LaSPUR (.pptx)
-- Modul Pelatihan (.pdf)
+
+**Link Unduh**
+
+> [**Unduh Materi**](){target="_blank"}
+
+**Dokumen:**
+
 - Contoh Studi Kasus (.pdf)
 
 **Link Unduh**
 
-> Tambahkan tautan menuju folder bahan ajar.
+> [**Unduh Contoh Hasil**](https://drive.google.com/drive/folders/10GiHR57ogqHa4HEJMKYgqV6FLVoup1Lq?usp=sharing){target="_blank"}
 
 :::
 
@@ -86,41 +92,12 @@ Referensi dapat berupa:
 
 ::: {.callout-tip}
 
-## Referensi
+## Unduh Referensi
 
-### Regulasi
+**Link Unduh**
 
-- Undang-Undang
-- Peraturan Pemerintah
-- Peraturan Menteri
-- Peraturan Daerah
-
-### Pedoman Teknis
-
-- Pedoman Penyusunan RTRW
-- Pedoman Penyusunan RZWP3K
-- Pedoman Analisis Spasial
-
-### Publikasi
-
-- Artikel ilmiah
-- Buku
-- Technical Report
-- Working Paper
-
-### Link Unduh
-
-> Tambahkan tautan menuju folder referensi.
+> [**Unduh disini**](){target="_blank"}
 
 :::
 
 ---
-
-# Ringkasan Dokumen
-
-| Dokumen | Format | Keterangan |
-|----------|--------|------------|
-| Panduan Penyiapan Modul | PDF | Langkah instalasi dan konfigurasi aplikasi |
-| Panduan Pengguna | PDF | Petunjuk penggunaan seluruh fitur LaSPUR |
-| Bahan Ajar | PPTX / PDF | Materi pelatihan dan presentasi |
-| Referensi | PDF / URL | Regulasi, pedoman teknis, dan bahan bacaan pendukung |
