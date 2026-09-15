@@ -22,11 +22,11 @@ Bagian ini berisi tabel yang **wajib tersedia** sebelum proses analisis dapat di
 
 ---
 
-## Tabel Acuan Prioritas RTRW
+## Tabel Acuan Pola RTRW
 
 ### Deskripsi
 
-Tabel ini berisi prioritas masing-masing kelas RTRW yang digunakan pada proses rekonsiliasi tata ruang.
+Tabel ini berisi acuan pola masing-masing kelas RTRW yang digunakan pada proses rekonsiliasi tata ruang.
 
 #### Definisi Kolom
 
@@ -34,7 +34,7 @@ Tabel ini berisi prioritas masing-masing kelas RTRW yang digunakan pada proses r
 |--------|-----------|------------|
 | ID | Numeric | Nomor unik setiap kelas RTRW. Nilai harus berupa bilangan bulat. |
 | RTRW | Character | Nama kelas RTRW yang harus sesuai dengan atribut pada data vektor RTRW. |
-| Prioritas | Numeric | Nilai prioritas kawasan. Hanya diperbolehkan bernilai **0** atau **1**. |
+| Acuan Pola | Numeric | Nilai acuan pola memiliki nilai 0 atau 1 yang menyatakan kelas yang diprioritaskan berdasarkan arah pengaturan ruang. |
 
 ---
 
@@ -56,7 +56,7 @@ preview_table(
 
 | Dataset | Instansi | Tahun |
 |----------|----------|-------|
-| Prioritas RTRW | Pemerintah Daerah | - |
+| Acuan Pola RTRW | Pemerintah Daerah | - |
 
 ---
 
@@ -84,11 +84,11 @@ get_table_metadata(
 
 ---
 
-## Tabel Acuan Prioritas RZWP3K
+## Tabel Acuan Pola RZWP3K
 
 ### Deskripsi
 
-Tabel ini berisi prioritas masing-masing zona RZWP3K yang digunakan pada proses rekonsiliasi tata ruang darat dan laut.
+Tabel ini berisi acuan pola masing-masing zona RZWP3K yang digunakan pada proses rekonsiliasi tata ruang darat dan laut.
 
 #### Definisi Kolom
 
@@ -96,7 +96,7 @@ Tabel ini berisi prioritas masing-masing zona RZWP3K yang digunakan pada proses 
 |--------|-----------|------------|
 | ID | Numeric | Nomor unik setiap kelas RZWP3K. Nilai harus berupa bilangan bulat. |
 | RZWP3K | Character | Nama zona RZWP3K yang harus sesuai dengan atribut pada data vektor RZWP3K. |
-| Prioritas | Numeric | Nilai prioritas kawasan. Hanya diperbolehkan bernilai **0** atau **1**. |
+| Acuan Pola | Numeric | Nilai acuan pola memiliki nilai 0 atau 1 yang menyatakan kelas yang diprioritaskan berdasarkan arah pengaturan ruang. |
 
 ---
 
@@ -118,7 +118,7 @@ preview_table(
 
 | Dataset | Instansi | Tahun |
 |----------|----------|-------|
-| Prioritas RZWP3K | Pemerintah Daerah | - |
+| Acuan Pola RZWP3K | Pemerintah Daerah | - |
 
 ---
 
@@ -148,7 +148,7 @@ get_table_metadata(
 
 # Input Intermediate
 
-Bagian ini berisi tabel yang dihasilkan atau digunakan selama proses analisis berlangsung. Beberapa tabel dapat dihasilkan otomatis oleh sistem, sedangkan beberapa lainnya dapat diperbarui oleh pengguna pada tahapan tertentu.
+Bagian ini berisi tabel antara yang dihasilkan atau digunakan selama proses analisis berlangsung. Beberapa tabel dapat dihasilkan otomatis oleh sistem, sedangkan beberapa lainnya dapat diperbarui oleh pengguna pada tahapan tertentu.
 
 ---
 
@@ -156,7 +156,7 @@ Bagian ini berisi tabel yang dihasilkan atau digunakan selama proses analisis be
 
 ### Deskripsi
 
-Matriks SERASI merupakan tabel acuan yang digunakan untuk menentukan tingkat kesesuaian (compatibility) antara setiap kelas **RTRW** dan **RZWP3K** pada area yang saling tumpang tindih.
+Matriks SERASI merupakan tabel acuan yang digunakan untuk menentukan tingkat kesesuaian (compatibility) antara setiap kelas **RTRW** dan **RZWP3K** pada area yang saling tumpang tindih maupun bertetangga.
 
 Setiap sel pada matriks merepresentasikan nilai indeks kesesuaian antara satu kelas RTRW dengan satu zona RZWP3K. Nilai tersebut digunakan pada proses perhitungan **Indeks SERASI**.
 
@@ -236,7 +236,7 @@ get_table_metadata(
 
 ### Deskripsi
 
-Matriks PADU-KE merupakan matriks kedekatan (adjacency matrix) antar kelas penutupan lahan yang digunakan dalam perhitungan **PADU-KE (Kedekatan Ekologi)**.
+Matriks PADU-KE merupakan matriks kedekatan (adjacency matrix) antar kelas penutupan lahan yang digunakan dalam perhitungan **PADU-KE (Keterpaduan Penggunaan Lahan dan Perairan)**.
 
 Nilai pada matriks menunjukkan tingkat hubungan spasial antar kelas penutupan lahan.
 
