@@ -1753,3 +1753,45 @@ generate_report <- function(output, dir, module_name = NULL,
     quiet         = TRUE
   )
 }
+
+# Numeric display helper — fixed 2 decimals, padded with trailing zeros
+fmt2 <- function(x) {
+  if (inherits(x, "units")) x <- as.numeric(x)
+  if (!is.numeric(x)) return(x)
+  ifelse(
+    is.na(x),
+    NA_character_,
+    formatC(x, format = "f", digits = 2)
+  )
+}
+
+# open folder helper
+open_folder_crossplatform <- function(path) {
+  if (is.null(path) || length(path) != 1 || !nzchar(path) || !dir.exists(path)) {
+    showNotification("Direktori belum tersedia.", type = "warning", duration = 5)
+    return(invisible(FALSE))
+  }
+  path_norm <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  
+  tryCatch({
+    os <- .Platform$OS.type
+    if (os == "windows") {
+      shell.exec(path_norm)
+    } else if (os == "unix") {
+      sysname <- Sys.info()[["sysname"]]
+      if (sysname == "Darwin") {
+        system2("open", shQuote(path_norm), wait = FALSE)
+      } else {
+        system2("xdg-open", shQuote(path_norm), wait = FALSE)
+      }
+    } else {
+      showNotification("Sistem operasi tidak dikenali.", type = "warning")
+      return(invisible(FALSE))
+    }
+    invisible(TRUE)
+  }, error = function(e) {
+    showNotification(paste("Gagal membuka folder:", conditionMessage(e)),
+                     type = "error", duration = 5)
+    invisible(FALSE)
+  })
+}

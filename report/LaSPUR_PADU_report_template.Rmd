@@ -336,7 +336,7 @@ if (available_count == 0) {
 
 ```{r padu-toggle-function, include=FALSE}
 render_padu_toggle <- function(data, id, title, description, index_col,
-                                legend_title, decimals = 3) {
+                                legend_title) {
   if (is.null(data)) return(invisible(NULL))
 
   if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
@@ -350,12 +350,13 @@ render_padu_toggle <- function(data, id, title, description, index_col,
       "Indeks Minimum", "Indeks Maksimum", "Total Luas (ha)"
     ),
     Nilai = c(
-      nrow(idx_tbl),
-      round(mean(idx_tbl[[index_col]], na.rm = TRUE), decimals),
-      round(min(idx_tbl[[index_col]], na.rm = TRUE), decimals),
-      round(max(idx_tbl[[index_col]], na.rm = TRUE), decimals),
-      round(sum(idx_tbl$area_ha, na.rm = TRUE), 2)
-    )
+      as.character(nrow(idx_tbl)),                         
+      fmt2(mean(idx_tbl[[index_col]], na.rm = TRUE)),    
+      fmt2(min(idx_tbl[[index_col]],  na.rm = TRUE)),
+      fmt2(max(idx_tbl[[index_col]],  na.rm = TRUE)),
+      fmt2(sum(idx_tbl$area_ha,       na.rm = TRUE))
+    ),
+    stringsAsFactors = FALSE
   )
 
   stats_table <- DT::datatable(
@@ -376,14 +377,14 @@ render_padu_toggle <- function(data, id, title, description, index_col,
   )
 
   map_widget <- leaflet::leaflet(map_data, elementId = paste0("padu-", id, "-map")) %>%
-    leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
     leaflet::addPolygons(
       fillColor = pal(values_vec),
       fillOpacity = 0.7,
       color = "#444",
       weight = 0.8,
       label = lapply(
-        paste0("PU ", map_data$id_pu, " - Indeks: ", round(values_vec, decimals)),
+        paste0("PU ", map_data$id_pu, " - Indeks: ", fmt2(values_vec)),
         htmltools::HTML
       )
     ) %>%

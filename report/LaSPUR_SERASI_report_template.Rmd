@@ -129,13 +129,21 @@ summary <- list(
 
 summary_overall_t <- summary$overall %>%
   pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
-  mutate(Komponen = case_when(
-    Komponen == "total_unit"                 ~ "Jumlah Kasus",
-    Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
-    Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
-    Komponen == "total_ha"                   ~ "Luas Total Area Kasus (ha)",
-    TRUE                                   ~ Komponen  
-  ))
+  mutate(
+    Komponen = case_when(
+      Komponen == "total_unit"                 ~ "Jumlah Kasus",
+      Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
+      Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
+      Komponen == "total_ha"                   ~ "Luas Total Area Kasus (ha)",
+      TRUE                                     ~ Komponen  
+    ),
+    Nilai = as.character(Nilai),
+    Nilai = ifelse(
+      Komponen == "Luas Total Area Kasus (ha)",
+      fmt2(as.numeric(Nilai)),
+      Nilai
+    )
+  )
 
 DT::datatable(summary_overall_t, rownames = FALSE)
 ```
@@ -155,7 +163,11 @@ summary_combinations_t <- summary$combinations %>%
     "Total Luas Area (ha)" = total_area_ha
   )
 
-DT::datatable(summary_combinations_t, rownames = FALSE)
+DT::datatable(summary_combinations_t, rownames = FALSE) |>
+  DT::formatRound(
+    columns = "Total Luas Area (ha)",
+    digits  = 2
+  )
 ```
 
 ## Tentang Modul
@@ -279,10 +291,14 @@ tbl_cols <- c(
 
 tbl_data <- map_data |>
   st_drop_geometry() |>
-  select(all_of(tbl_cols))
+  select(all_of(tbl_cols)) |>
+  mutate(
+    area_ha    = as.numeric(area_ha),
+    idx_serasi = as.numeric(idx_serasi)
+  )
 
 leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
-  addProviderTiles(providers$CartoDB.Positron, group = "Basemap") |>
+  addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas, group = "Basemap") |>
   addPolygons(
     layerId     = ~.row_id,       
     fillColor   = ~pal(idx_serasi),
@@ -300,15 +316,15 @@ leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
       "<b>PU ", id_pu, "</b><br>",
       "RTRW: ", RTRW, "<br>",
       "RZWP3K: ", RZWP3K, "<br>",
-      "Indeks SERASI: ", round(idx_serasi, 3)
+      "Indeks SERASI: ", fmt2(idx_serasi)
     ) |> lapply(HTML),
     popup = ~paste0(
       "<b>Planning Unit ", id_pu, "</b><hr>",
       "<b>RTRW:</b> ", RTRW, "<br>",
       "<b>RZWP3K:</b> ", RZWP3K, "<br>",
-      "<b>Area (ha):</b> ", round(area_ha, 2), "<br>",
+      "<b>Area (ha):</b> ", fmt2(area_ha), "<br>",
       "<hr>",
-      "<b>idx_serasi:</b> ", round(idx_serasi, 3), "<br>"
+      "<b>idx_serasi:</b> ", fmt2(idx_serasi), "<br>"
     ) |> lapply(HTML),
     group = "SERASI"
   ) |>
@@ -348,7 +364,11 @@ dt_table <- datatable(
       }
     ")
   )
-)
+) |>
+  DT::formatRound(
+    columns = c("area_ha", "idx_serasi"),
+    digits  = 2
+  )
 
 sync_js <- HTML("
 <script>

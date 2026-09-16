@@ -103,11 +103,11 @@ if (!padan_available) {
       "Total Luas (ha)"
     ),
     Nilai = c(
-      as.character(nrow(padan_tbl)),
-      as.character(round(mean(padan_tbl$idx_padan, na.rm = TRUE), 3)),
-      as.character(round(min(padan_tbl$idx_padan, na.rm = TRUE), 3)),
-      as.character(round(max(padan_tbl$idx_padan, na.rm = TRUE), 3)),
-      if (is.na(total_area)) "tidak tersedia" else as.character(total_area)
+      as.character(nrow(padan_tbl)),                          
+      fmt2(mean(padan_tbl$idx_padan, na.rm = TRUE)),         
+      fmt2(min(padan_tbl$idx_padan,  na.rm = TRUE)),
+      fmt2(max(padan_tbl$idx_padan,  na.rm = TRUE)),
+      if (is.na(total_area)) "tidak tersedia" else fmt2(total_area)
     ),
     stringsAsFactors = FALSE
   )
@@ -207,7 +207,7 @@ if (!padan_available) {
   )
 
   map_widget <- leaflet::leaflet(map_data, width = "100%", height = "500px", elementId = "padan-map") %>%
-    leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
     leaflet::addPolygons(
       fillColor   = pal(values_vec),
       fillOpacity = 0.7,
@@ -216,7 +216,7 @@ if (!padan_available) {
       label = lapply(
         paste0(
           "PU ", map_data$id_pu,
-          " – Indeks PADAN: ", round(values_vec, 3)
+          " – Indeks PADAN: ", fmt2(values_vec)
         ),
         htmltools::HTML
       ),
@@ -270,9 +270,9 @@ if (padan_available) {
     }
   }
 
-  for (col in c("Indeks SERASI", "Indeks PADU", "Indeks PADAN")) {
+  for (col in c("Luas (ha)", "Indeks SERASI", "Indeks PADU", "Indeks PADAN")) {
     if (col %in% names(padan_tbl_view)) {
-      padan_tbl_view[[col]] <- round(padan_tbl_view[[col]], 3)
+      padan_tbl_view[[col]] <- as.numeric(padan_tbl_view[[col]])
     }
   }
 
@@ -286,6 +286,10 @@ if (padan_available) {
       scrollY    = "350px",
       scroller   = TRUE
     )
-  )
+  ) |>
+    DT::formatRound(
+      columns = c("Luas (ha)", "Indeks SERASI", "Indeks PADU", "Indeks PADAN"),
+      digits  = 2
+    )
 }
 ```

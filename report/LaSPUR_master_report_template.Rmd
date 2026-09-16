@@ -27,25 +27,43 @@ if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
 pacman::p_load(knitr, rmarkdown, here)
 source(here::here("R/helpers.R"))
 
+# Callback bridge to the parent Shiny session
+report_progress <- function(module_name) {
+  cb <- getOption("laspur_progress_callback")
+  if (is.function(cb)) {
+    tryCatch(cb(module_name), error = function(e) NULL)
+  }
+  invisible(NULL)
+}
+
+# Custom css style
+custom_assets <- htmltools::htmlDependency(
+  name = "laspur-custom-assets",
+  version = "1.0.0",
+  src = here::here("www"), 
+  stylesheet = "custom_style.css",
+  all_files = TRUE 
+)
+knitr::knit_meta_add(list(custom_assets))
+
 module_available <- function(x) {
   tryCatch(is.list(x), error = function(e) FALSE)
 }
 
 # Safe wrapper for knitting a child module
 safe_child_knit <- function(template_path, module_params, module_name = "unknown") {
-  tryCatch({
+  res <- tryCatch({
     if (is.null(module_params$start_time)) module_params$start_time <- Sys.time()
     if (is.null(module_params$end_time))   module_params$end_time   <- Sys.time()
     if (is.null(module_params$module_name)) module_params$module_name <- module_name
-
     knit_child_module(template_path, module_params, envir = environment())
   }, error = function(e) {
-    paste0(
-      "\n\n**Error knitting module '", module_name, "':** ", 
-      conditionMessage(e), "\n\n",
-      "Please check that the module data is complete and the template is valid.\n\n"
-    )
+    paste0("\n\n**Error knitting module '", module_name, "':** ",
+           conditionMessage(e), "\n\n")
   })
+
+  report_progress(module_name)  
+  res
 }
 ```
 

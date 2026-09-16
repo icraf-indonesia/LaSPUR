@@ -31,7 +31,7 @@ safe_source <- function(file, ui_fn_name, srv_fn_name) {
       )
     }, envir = .GlobalEnv)
     
-    assign(srv_fn_name, function(id, output_dir) {
+    assign(srv_fn_name, function(id, output_dir, module_id = NULL) {
       moduleServer(id, function(input, output, session) {})
     }, envir = .GlobalEnv)
   }
@@ -57,7 +57,7 @@ nav_item <- function(input_id, number, label) {
   div(
     id = paste0("wrapper_", input_id),
     class = "nav-item-wrapper",
-    title = label, 
+    title = label,
     style = "display: flex; align-items: center; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; margin-bottom: 4px; border: 1px solid transparent; width: 100%; box-sizing: border-box;",
     onmouseover = "this.style.background='#eef6fc'; this.style.borderColor='#E2E8F0'; this.style.color='#1b75ba'",
     onmouseout  = "this.style.background='transparent'; this.style.borderColor='transparent'; this.style.color='inherit'",
@@ -90,7 +90,6 @@ acc_title <- function(fa_icon, label_text) {
   )
 }
 
-# ── Tab config ───────────────────────────────────────────────
 tab_config <- list(
   overlap         = list(label = "1.1 Area Tumpang Tindih",      ui_fn = overlap_ui,         srv_fn = overlap_server),
   adjacent        = list(label = "1.2 Area Bertetangga",         ui_fn = adjacent_ui,        srv_fn = adjacent_server),
@@ -106,10 +105,27 @@ tab_config <- list(
   padan           = list(label = "3. PADAN",                ui_fn = padan_ui,           srv_fn = padan_server),
   recommendation_overlaps  = list(label = "4.1 Penyusunan Alternatif Tumpang Tindih",          ui_fn = recommendation_overlaps_ui,  srv_fn = recommendation_overlaps_server),
   recommendation_adjacent  = list(label = "4.2 Penyusunan Alternatif Bertetangga",          ui_fn = recommendation_adjacent_ui,  srv_fn = recommendation_adjacent_server),
-  reconcile    = list(label = "5. Rekonsiliasi",             ui_fn = reconcile_ui,    srv_fn = reconcile_server) 
+  reconcile    = list(label = "5. Rekonsiliasi",             ui_fn = reconcile_ui,    srv_fn = reconcile_server)
 )
 
-# ── Report module config ─────────────────────────────────────
+module_dir_map <- list(
+  overlap                 = "Analisis SERASI",
+  adjacent                = "Analisis SERASI",
+  interconnection         = "Analisis SERASI",
+  padu_ke                 = "Analisis PADU-KE",
+  padu_hs                 = "Analisis PADU-HS",
+  padu_kl                 = "Analisis PADU-KL",
+  padu_kh                 = "Analisis PADU-KH",
+  padu_rtp                = "Analisis PADU-RTp",
+  padu_se                 = "Analisis PADU-SE",
+  padu_ki                 = "Analisis PADU-KI",
+  padu_combine            = "Analisis PADU-Kombinasi",
+  padan                   = "Analisis PADAN",
+  recommendation_overlaps = "Analisis Penyusunan Alternatif",
+  recommendation_adjacent = "Analisis Penyusunan Alternatif",
+  reconcile               = "Analisis Rekonsiliasi"
+)
+
 report_module_config <- list(
   serasi = list(
     label    = "Analisis SERASI",
@@ -169,7 +185,6 @@ report_module_config <- list(
   )
 )
 
-# ── Landing Page UI ──────────────────────────────────────────
 landing_page <- tabPanel(
   title = "Beranda",
   value = "home",
@@ -236,9 +251,8 @@ landing_page <- tabPanel(
   )
 )
 
-# ── UI ───────────────────────────────────────────────────────
 ui <- page_sidebar(
-  useShinyjs(), 
+  useShinyjs(),
   
   tags$head(
     tags$link(rel = "icon", type = "image/x-icon", href = "icon_web.ico"),
@@ -268,14 +282,14 @@ ui <- page_sidebar(
     fg = "#1E293B",
     primary = "#1b75ba",
     success = "#106665",
-    base_font = font_google("Plus Jakarta Sans") 
+    base_font = font_google("Plus Jakarta Sans")
   ),
   
   tags$style(HTML("
     /* Base Overrides */
     body { font-family: 'Plus Jakarta Sans', sans-serif !important; overflow-x: hidden; }
     .navbar { border-bottom: 1px solid #E2E8F0 !important; background-color: #FFFFFF !important; box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;}
-    
+
     /* ========================================================
        CUSTOM SCROLLBAR AUTO-HIDE
        ======================================================== */
@@ -330,11 +344,10 @@ ui <- page_sidebar(
     .btn-outline-secondary { color: #475569 !important; border: 1px solid #CBD5E1 !important; background: transparent; }
     .btn-outline-secondary:hover { background-color: #F8FAFC !important; border-color: #94A3B8 !important; color: #1E293B !important;}
     .landing-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; }
-    
+
     /* ========================================================
        ALIGNMENT (ACCORDION BUTTON & BODY)
        ======================================================== */
-    /* Normal Mode */
     aside .menu-text { display: block; font-weight: 700; white-space: nowrap; }
     aside .menu-icon { display: none !important; }
     aside .accordion-item { border: none !important; background: transparent !important; }
@@ -363,8 +376,6 @@ ui <- page_sidebar(
       margin-right: 0 !important;
     }
 
-       `body.sidebar-mini aside #btn_home .menu-text` = (1,2,2)
-       mengalahkan `aside #btn_home .menu-text` = (1,1,2) ── */
     body.sidebar-mini aside #btn_home,
     body.sidebar-mini aside #btn_generate_report {
       flex-direction: row !important;
@@ -383,64 +394,64 @@ ui <- page_sidebar(
     }
 
     aside .accordion-button {
-      background-color: transparent !important; color: #475569 !important; font-size: 0.95rem; 
+      background-color: transparent !important; color: #475569 !important; font-size: 0.95rem;
       padding: 16px 14px !important; width: 100% !important; box-sizing: border-box !important;
       box-shadow: none !important; border-bottom: 1px solid #F1F5F9; white-space: nowrap; transition: all 0.2s ease;
     }
-    aside .accordion-body { 
-      padding: 8px 14px 16px 14px !important; 
-      width: 100% !important; 
-      box-sizing: border-box !important; 
+    aside .accordion-body {
+      padding: 8px 14px 16px 14px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
     }
-    
+
     aside .accordion-button:not(.collapsed) { color: #1b75ba !important; background-color: transparent !important; }
     aside .accordion-button:focus { box-shadow: none !important; }
 
     /* ========================================================
        SIDEBAR HIDE (MINI MODE)
        ======================================================== */
-    body.sidebar-mini aside .menu-text, 
+    body.sidebar-mini aside .menu-text,
     body.sidebar-mini aside .nav-label,
     body.sidebar-mini aside .sidebar-title-text { display: none !important; }
-    
+
     body.sidebar-mini aside .menu-icon { display: flex !important; justify-content: center; align-items: center; margin: 0 auto !important; font-size: 1.35rem !important; width: 32px !important; height: 32px !important; color: #1b75ba; }
-    
+
     body.sidebar-mini aside .accordion-button { padding: 16px 0 !important; justify-content: center !important; display: flex !important; width: 100% !important; box-sizing: border-box !important; }
     body.sidebar-mini aside .accordion-button::after { display: none !important; }
-    
-    body.sidebar-mini aside .accordion-body { 
-      padding: 8px 0 16px 0 !important; 
-      display: flex !important; 
-      flex-direction: column !important; 
+
+    body.sidebar-mini aside .accordion-body {
+      padding: 8px 0 16px 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
       align-items: center !important;
-      width: 100% !important; 
+      width: 100% !important;
       box-sizing: border-box !important;
     }
-    
+
     body.sidebar-mini aside .sidebar-header { justify-content: center !important; padding-bottom: 16px !important; }
     body.sidebar-mini aside #sidebar-toggle-btn { margin: 0 auto; }
     body.sidebar-mini aside #btn_home { padding: 14px 0 !important; justify-content: center !important; background-color: transparent !important; }
     body.sidebar-mini aside #btn_home:hover { background-color: #eef6fc !important; }
-    
+
     body.sidebar-mini aside .dir-chooser-wrapper { opacity: 0; height: 0; padding: 0 !important; margin: 0 !important; overflow: hidden; border: none !important; }
-    
-    body.sidebar-mini aside .nav-item-wrapper { 
-      padding: 8px 0 !important; justify-content: center !important; background: transparent !important; border: none !important; 
+
+    body.sidebar-mini aside .nav-item-wrapper {
+      padding: 8px 0 !important; justify-content: center !important; background: transparent !important; border: none !important;
       width: 48px !important; margin: 0 0 4px 0 !important; box-sizing: border-box !important;
     }
     body.sidebar-mini aside .nav-item-content { justify-content: center !important; width: 100% !important; gap: 0 !important; }
-    body.sidebar-mini aside .nav-number { 
-      margin: 0 !important; font-size: 0.75rem !important; padding: 0 !important; 
-      width: 32px !important; min-width: 32px !important; height: 32px !important; 
+    body.sidebar-mini aside .nav-number {
+      margin: 0 !important; font-size: 0.75rem !important; padding: 0 !important;
+      width: 32px !important; min-width: 32px !important; height: 32px !important;
       display: flex !important; align-items: center !important; justify-content: center !important; border-radius: 8px !important;
     }
-    
+
     body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
     body:not(.sidebar-mini) aside #btn_home .menu-icon {
       display: inline-block !important;
       margin-right: 8px !important;
     }
-    
+
     body.sidebar-mini aside .report-sidebar-footer {
       border-top: none !important;
       padding-top: 8px !important;
@@ -457,31 +468,31 @@ ui <- page_sidebar(
       background-color: transparent !important;
     }
     body.sidebar-mini aside #btn_generate_report:hover { background-color: #eef6fc !important; }
-    
+
     /* ========================================================
-       WEB-LIKE BROWSER TAB 
+       WEB-LIKE BROWSER TAB
        ======================================================== */
     .card-header { padding: 0 !important; border-bottom: 1px solid #E2E8F0 !important; background-color: #F8FAFC !important; border-radius: 16px 16px 0 0 !important; }
-    
+
     #tabs.nav-pills { padding-top: 8px; padding-left: 8px; margin: 0 !important; border-bottom: none !important;}
     #tabs.nav-pills .nav-link {
       border: 1px solid transparent !important; color: #64748B !important; font-weight: 600;
       padding: 10px 16px; margin-right: 4px; border-radius: 10px 10px 0 0 !important; display: flex; align-items: center; transition: all 0.2s ease;
     }
     #tabs.nav-pills .nav-link:hover { background-color: #F1F5F9; border-color: #E2E8F0 #E2E8F0 transparent; }
-    
-    #tabs.nav-pills .nav-link.active { 
-      background-color: #FFFFFF !important; color: #1b75ba !important; 
+
+    #tabs.nav-pills .nav-link.active {
+      background-color: #FFFFFF !important; color: #1b75ba !important;
       border-color: #E2E8F0 #E2E8F0 #FFFFFF !important; margin-bottom: -1px; padding-bottom: 11px;
     }
     #tabs.nav-pills li:first-child a { display: none !important; }
-    
+
     .close-tab-btn {
       margin-left: 12px; padding: 2px; width: 20px; height: 20px; display: inline-flex; align-items: center;
       justify-content: center; border-radius: 50%; color: #94A3B8; font-size: 0.85rem; transition: all 0.2s ease; cursor: pointer;
-      opacity: 0; 
+      opacity: 0;
     }
-    
+
     #tabs.nav-pills .nav-link:hover .close-tab-btn,
     #tabs.nav-pills .nav-link.active .close-tab-btn { opacity: 1; }
     .close-tab-btn:hover { background-color: #FEE2E2 !important; color: #EF4444 !important; }
@@ -563,7 +574,7 @@ ui <- page_sidebar(
       color: #1b75ba;
       border-color: #1b75ba;
     }
-    
+
     /* ========================================================
        COLLAPSIBLE TOGGLE BUTTON ON RIGHT PANEL
        ======================================================== */
@@ -581,7 +592,7 @@ ui <- page_sidebar(
       flex: 1;
       height: 100%;
     }
-    
+
     .card-header {
       min-height: 56px;
       display: flex;
@@ -591,7 +602,7 @@ ui <- page_sidebar(
       border-radius: 16px 16px 0 0 !important;
       overflow: visible !important;
     }
-    
+
     .card-header .card-title,
     .card-header h5,
     .card-header h4,
@@ -602,12 +613,12 @@ ui <- page_sidebar(
       flex-shrink: 1;
       margin: 0;
     }
-    
+
     .panel-toggle-btn {
       margin: 0 !important;
       align-self: center;
     }
-    
+
     .card {
       margin-bottom: 0.75rem !important;
     }
@@ -671,7 +682,7 @@ ui <- page_sidebar(
       tags$button(
         id = "sidebar-toggle-btn",
         class = "btn btn-sm btn-light",
-        title = "Tampilkan/Sembunyikan Menu", 
+        title = "Tampilkan/Sembunyikan Menu",
         style = "background: transparent; border: none; color: #64748B; padding: 4px 8px; box-shadow: none;",
         icon("bars", class = "fa-fw", style = "font-size: 1.25rem;")
       )
@@ -695,7 +706,7 @@ ui <- page_sidebar(
           uiOutput("output_dir_status"))
     ),
     
-    actionButton("btn_home", 
+    actionButton("btn_home",
                  tagList(
                    icon("home", class = "menu-icon fa-fw"),
                    tags$span(class = "menu-text", "Beranda Utama")
@@ -763,11 +774,11 @@ ui <- page_sidebar(
         class = "report-sidebar-subtitle",
         style = "display: block; margin-top: 6px; color: #94A3B8; font-size: 0.75rem;",
         "Hasil dari modul yang sudah dijalankan"
-      )
+      ),
+      uiOutput("btn_open_report_ui")
     )
   ),
   
-  # ── Modal Konfirmasi Tutup Tab ──────────────────────────────
   tags$div(
     id = "close_confirm_modal", class = "modal fade",
     tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
@@ -810,7 +821,7 @@ ui <- page_sidebar(
                       tags$div(class = "modal-body", style = "padding: 24px; color: #1e293b; font-size: 1rem; line-height: 1.6;",
                                tags$div(id = "info_modal_body_text", style = "margin-bottom: 12px;"),
                                tags$p(style = "margin-top: 8px;",
-                                      tags$a(id = "info_modal_link", href = "#", target = "_blank", 
+                                      tags$a(id = "info_modal_link", href = "#", target = "_blank",
                                              style = "font-weight: 600; color: #1b75ba; text-decoration: underline;",
                                              "Pelajari lebih lanjut")
                                )
@@ -841,7 +852,6 @@ ui <- page_sidebar(
   navset_card_pill(id = "tabs", landing_page)
 )
 
-# ── Server ───────────────────────────────────────────────────
 server <- function(input, output, session) {
   
   session$userData$module_results <- reactiveValues()
@@ -849,7 +859,8 @@ server <- function(input, output, session) {
   open_tabs     <- reactiveVal(character(0))
   pending_close <- reactiveVal(NULL)
   pending_action <- reactiveVal(NULL)
-  active_path   <- reactiveVal("") 
+  active_path   <- reactiveVal("")
+  report_path    <- reactiveVal(NULL)
   
   output$active_path_indicator <- renderUI({
     path <- active_path()
@@ -865,12 +876,10 @@ server <- function(input, output, session) {
     }
   })
   
-  # ── Logo click handler ──────────────────────────────────────
   shinyjs::onclick("logo_home", {
     updateTabsetPanel(session, "tabs", selected = "home")
   })
   
-  # ── Beranda Utama button handler ────────────────────────────
   observeEvent(input$btn_home, {
     updateTabsetPanel(session, "tabs", selected = "home")
   })
@@ -976,7 +985,8 @@ server <- function(input, output, session) {
   
   observeEvent(output_dir(), {
     path <- output_dir()
-    if (!nzchar(path)) return() 
+    report_path(NULL)
+    if (!nzchar(path)) return()
     if (!dir.exists(path)) {
       tryCatch({
         dir.create(path, recursive = TRUE)
@@ -985,7 +995,7 @@ server <- function(input, output, session) {
         showNotification(paste("Gagal membuat direktori:", e$message), type = "error", duration = 5)
       })
     }
-  }, ignoreInit = FALSE)
+  }, ignoreInit = TRUE)
   
   output$output_dir_status <- renderUI({
     path <- output_dir()
@@ -1031,7 +1041,11 @@ server <- function(input, output, session) {
         div(
           style = "padding: 16px 20px; background-color: #FFFFFF; border-radius: 0 0 12px 12px; border: 1px solid #E2E8F0; border-top: none;",
           nav_buttons,
-          div(class = "module-panel-wrapper", cfg$ui_fn(instance_id))
+          div(
+            class = "module-panel-wrapper",
+            `data-module-dir` = module_dir_map[[tab_id]] %||% "",
+            cfg$ui_fn(instance_id)
+          )
         )
       ),
       select = TRUE
@@ -1047,7 +1061,7 @@ server <- function(input, output, session) {
       } else {
         seq <- if (active_path() == "adjacent") seq_adjacent else seq_overlap
         idx <- match(tab_id, seq)
-        if (!is.na(idx) && idx > 1) add_tab(seq[idx - 1]) 
+        if (!is.na(idx) && idx > 1) add_tab(seq[idx - 1])
       }
     }, ignoreInit = TRUE)
     
@@ -1056,7 +1070,7 @@ server <- function(input, output, session) {
       obs_next <- observeEvent(input[[paste0("btn_next_", tab_id)]], {
         seq <- if (active_path() == "adjacent") seq_adjacent else seq_overlap
         idx <- match(tab_id, seq)
-        if (!is.na(idx) && idx < length(seq)) add_tab(seq[idx + 1]) 
+        if (!is.na(idx) && idx < length(seq)) add_tab(seq[idx + 1])
       }, ignoreInit = TRUE)
     }
     tab_state$observers[[tab_id]] <- list(obs_back, obs_next)
@@ -1134,7 +1148,32 @@ server <- function(input, output, session) {
     )
   }
   
-  # ---- Report Generation ----
+  output$btn_open_report_ui <- renderUI({
+    p <- report_path()
+    if (is.null(p) || !file.exists(p)) return(NULL)
+    div(
+      style = "margin-top: 8px;",
+      actionButton(
+        "btn_open_report",
+        tagList(icon("folder-open", class = "me-2"), "Buka Laporan"),
+        class = "btn w-100",
+        style = paste(
+          "text-align: center; color: #FFFFFF; background-color: #106665;",
+          "border: none; padding: 12px 16px; font-weight: 600; border-radius: 8px;"
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$btn_open_report, {
+    p <- report_path()
+    if (!is.null(p) && file.exists(p)) {
+      utils::browseURL(p)
+    } else {
+      showNotification("File laporan tidak ditemukan.", type = "warning", duration = 5)
+    }
+  })
+  
   observeEvent(input$btn_generate_report, {
     if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
       showNotification(
@@ -1197,7 +1236,6 @@ server <- function(input, output, session) {
         choices_ui <- c(choices_ui, child_choices)
         
       } else {
-        # Single module
         ready_info <- module_ready_and_data(m_id, output_dir(), session)
         is_ready <- ready_info$ready
         choices_ui[[length(choices_ui) + 1]] <- make_cb_item(
@@ -1268,6 +1306,13 @@ server <- function(input, output, session) {
     )
   })
   
+  observeEvent(input$open_module_dir_click, {
+    req(input$open_module_dir_click)
+    dir_name <- input$open_module_dir_click
+    if (!nzchar(dir_name)) return()
+    open_folder_crossplatform(file.path(output_dir(), dir_name))
+  })
+  
   observeEvent(input$btn_report_generate, {
     selected <- input$report_modules_selected
     if (length(selected) == 0) {
@@ -1277,144 +1322,168 @@ server <- function(input, output, session) {
     removeModal()
     
     master_params <- list()
-    any_ready <- FALSE
+    any_ready     <- FALSE
+    padu_combined <- list(inputs = list(), result = list())
+    padu_selected <- FALSE
+    rec_overlaps  <- NULL
+    rec_adjacent  <- NULL
     
-    withProgress(message = "Mengumpulkan data modul...", value = 0, {
-      
-      # Helper to add module data to master_params
-      add_module_data <- function(key, module_id) {
-        info <- module_ready_and_data(module_id, output_dir(), session)
+    for (sel in selected) {
+      if (sel == "serasi") {
+        info <- module_ready_and_data("serasi", output_dir(), session)
         if (info$ready) {
-          master_params[[key]] <<- info$data
-          any_ready <<- TRUE
+          master_params$serasi <- info$data
+          any_ready <- TRUE
         } else {
-          showNotification(paste("Modul", module_id, "tidak siap. Dilewati."), type = "warning", duration = 6)
+          showNotification("Modul SERASI tidak siap. Dilewati.", type = "warning")
+        }
+      } else if (grepl("^padu\\$", sel)) {
+        padu_selected <- TRUE
+        sub_key <- gsub("^padu\\$", "", sel)
+        info <- module_ready_and_data(sel, output_dir(), session)
+        if (info$ready) {
+          if (length(padu_combined$inputs) == 0) {
+            padu_combined$inputs <- info$data$inputs
+          }
+          for (res_name in names(info$data$result)) {
+            if (grepl("_map$", res_name)) {
+              padu_combined$result[[res_name]] <- info$data$result[[res_name]]
+            }
+          }
+          any_ready <- TRUE
+        } else {
+          showNotification(paste("Modul PADU", sub_key, "tidak siap. Dilewati."),
+                           type = "warning")
+        }
+      } else if (sel == "padan") {
+        info <- module_ready_and_data("padan", output_dir(), session)
+        if (info$ready) {
+          master_params$padan <- info$data
+          any_ready <- TRUE
+        } else {
+          showNotification("Modul PADAN tidak siap. Dilewati.", type = "warning")
+        }
+      } else if (sel == "recommendation_overlaps") {
+        info <- module_ready_and_data("recommendation_overlaps", output_dir(), session)
+        if (info$ready) {
+          rec_overlaps <- info$data
+          any_ready <- TRUE
+        } else {
+          showNotification("Modul Alternatif Tumpang Tindih tidak siap. Dilewati.",
+                           type = "warning")
+        }
+      } else if (sel == "recommendation_adjacent") {
+        info <- module_ready_and_data("recommendation_adjacent", output_dir(), session)
+        if (info$ready) {
+          rec_adjacent <- info$data
+          any_ready <- TRUE
+        } else {
+          showNotification("Modul Alternatif Bertetangga tidak siap. Dilewati.",
+                           type = "warning")
+        }
+      } else if (sel == "reconcile") {
+        info <- module_ready_and_data("reconcile", output_dir(), session)
+        if (info$ready) {
+          master_params$reconcile <- info$data
+          any_ready <- TRUE
+        } else {
+          showNotification("Modul Rekonsiliasi tidak siap. Dilewati.", type = "warning")
         }
       }
-      
-      # Group selected items by top-level module type
-      # Map from selection ID to master_params key
-      # For SERASI: selection "serasi" -> key "serasi"
-      # For PADU submodules: selection "padu$ke", "padu$hs", ... -> key "padu" (combine all)
-      # For PADAN: "padan" -> key "padan"
-      # For recommendation: "recommendation_overlaps" -> key "recommendation$overlaps", "recommendation_adjacent" -> key "recommendation$adjacent"
-      # For reconcile: "reconcile" -> key "reconcile"
-      
-      # Initialize combined PADU result
-      padu_combined <- list(inputs = list(), result = list())
-      padu_selected <- FALSE
-      
-      # Initialize recommendation sub-keys
-      rec_overlaps <- NULL
-      rec_adjacent <- NULL
-      
-      for (sel in selected) {
-        if (sel == "serasi") {
-          info <- module_ready_and_data("serasi", output_dir(), session)
-          if (info$ready) {
-            master_params$serasi <- info$data
-            any_ready <- TRUE
-          } else {
-            showNotification("Modul SERASI tidak siap. Dilewati.", type = "warning")
-          }
-        } else if (grepl("^padu\\$", sel)) {
-          padu_selected <- TRUE
-          sub_key <- gsub("^padu\\$", "", sel)
-          info <- module_ready_and_data(sel, output_dir(), session)
-          if (info$ready) {
-            if (length(padu_combined$inputs) == 0) {
-              padu_combined$inputs <- info$data$inputs
-            }
-            for (res_name in names(info$data$result)) {
-              if (grepl("_map$", res_name)) {
-                padu_combined$result[[res_name]] <- info$data$result[[res_name]]
-              }
-            }
-            any_ready <- TRUE
-          } else {
-            showNotification(paste("Modul PADU", sub_key, "tidak siap. Dilewati."), type = "warning")
-          }
-        } else if (sel == "padan") {
-          info <- module_ready_and_data("padan", output_dir(), session)
-          if (info$ready) {
-            master_params$padan <- info$data
-            any_ready <- TRUE
-          } else {
-            showNotification("Modul PADAN tidak siap. Dilewati.", type = "warning")
-          }
-        } else if (sel == "recommendation_overlaps") {
-          info <- module_ready_and_data("recommendation_overlaps", output_dir(), session)
-          if (info$ready) {
-            rec_overlaps <- info$data
-            any_ready <- TRUE
-          } else {
-            showNotification("Modul Alternatif Tumpang Tindih tidak siap. Dilewati.", type = "warning")
-          }
-        } else if (sel == "recommendation_adjacent") {
-          info <- module_ready_and_data("recommendation_adjacent", output_dir(), session)
-          if (info$ready) {
-            rec_adjacent <- info$data
-            any_ready <- TRUE
-          } else {
-            showNotification("Modul Alternatif Bertetangga tidak siap. Dilewati.", type = "warning")
-          }
-        } else if (sel == "reconcile") {
-          info <- module_ready_and_data("reconcile", output_dir(), session)
-          if (info$ready) {
-            master_params$reconcile <- info$data
-            any_ready <- TRUE
-          } else {
-            showNotification("Modul Rekonsiliasi tidak siap. Dilewati.", type = "warning")
-          }
-        }
-      }
-      
-      if (padu_selected && length(padu_combined$result) > 0) {
-        master_params$padu <- padu_combined
-      }
-      
-      if (!is.null(rec_overlaps) || !is.null(rec_adjacent)) {
-        master_params$recommendation <- list()
-        if (!is.null(rec_overlaps)) master_params$recommendation$overlaps <- rec_overlaps
-        if (!is.null(rec_adjacent)) master_params$recommendation$adjacent <- rec_adjacent
-      }
-      
-      incProgress(1)
-    })
+    }
+    
+    if (padu_selected && length(padu_combined$result) > 0) {
+      master_params$padu <- padu_combined
+    }
+    if (!is.null(rec_overlaps) || !is.null(rec_adjacent)) {
+      master_params$recommendation <- list()
+      if (!is.null(rec_overlaps)) master_params$recommendation$overlaps <- rec_overlaps
+      if (!is.null(rec_adjacent)) master_params$recommendation$adjacent <- rec_adjacent
+    }
     
     if (!any_ready) {
-      showNotification("Tidak ada modul yang siap untuk dibuat laporannya.", type = "error", duration = 7)
+      showNotification("Tidak ada modul yang siap untuk dibuat laporannya.",
+                       type = "error", duration = 7)
       return()
     }
     
-    # Generate the master report
-    withProgress(message = "Membuat laporan terpadu...", value = 0, {
-      tryCatch({
-        generate_report(
-          output        = NULL,         
-          dir           = output_dir(),
-          module_name   = "Master",    
-          template_path = NULL,      
-          master_params = master_params
-        )
-        showNotification(
-          paste("Laporan terpadu berhasil dibuat di folder:", output_dir()),
-          type = "message", duration = 7
-        )
-      }, error = function(e) {
-        showNotification(
-          paste("Gagal membuat laporan terpadu:", conditionMessage(e)),
-          type = "error", duration = 10
-        )
-      })
-      incProgress(1)
-    })
+    count_render_steps <- function(mp) {
+      n <- 0L
+      if (!is.null(mp$serasi))  n <- n + 1L
+      if (!is.null(mp$padu) && length(mp$padu$result) > 0) n <- n + 1L
+      if (!is.null(mp$padan))   n <- n + 1L
+      if (!is.null(mp$recommendation)) {
+        if (!is.null(mp$recommendation$overlaps)) n <- n + 1L
+        if (!is.null(mp$recommendation$adjacent)) n <- n + 1L
+      }
+      if (!is.null(mp$reconcile)) n <- n + 1L
+      max(n, 1L)
+    }
+    
+    n_modules  <- count_render_steps(master_params)
+    n_steps    <- n_modules + 1L
+    step_value <- 1 / n_steps
+    step_done  <- 0L
+    
+    withProgress(
+      message = "Merender laporan terpadu...",
+      detail  = sprintf("Memulai (0 dari %d modul)", n_modules),
+      value   = 0,
+      {
+        options(laspur_progress_callback = function(module_name) {
+          step_done <<- step_done + 1L
+          tryCatch({
+            incProgress(
+              step_value,
+              detail = sprintf("[%d/%d] Selesai merender: %s",
+                               step_done, n_modules, module_name)
+            )
+          }, error = function(e) NULL)
+        })
+        on.exit(options(laspur_progress_callback = NULL), add = TRUE)
+        
+        tryCatch({
+          ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
+          report_filename <- paste0("Laporan Analisis LaSPUR - ", ts, ".html")
+          
+          generate_report(
+            output        = report_filename,
+            dir           = output_dir(),
+            module_name   = "Master",
+            template_path = NULL,
+            master_params = master_params
+          )
+          
+          incProgress(step_value, detail = "Menyimpan berkas laporan...")
+          
+          report_full <- file.path(output_dir(), report_filename)
+          if (!file.exists(report_full)) {
+            htmls <- list.files(output_dir(), pattern = "\\.html$", full.names = TRUE)
+            if (length(htmls) > 0) {
+              htmls <- htmls[order(file.info(htmls)$mtime, decreasing = TRUE)]
+              report_full <- htmls[1]
+            }
+          }
+          if (file.exists(report_full)) report_path(report_full)
+          
+          showNotification(
+            paste("Laporan terpadu berhasil dibuat di folder:", output_dir()),
+            type = "message", duration = 7
+          )
+        }, error = function(e) {
+          showNotification(
+            paste("Gagal membuat laporan terpadu:", conditionMessage(e)),
+            type = "error", duration = 10
+          )
+        })
+      }
+    )
   })
 }
 
 jsCode <- "
 $(document).ready(function() {
-  $('body').addClass('sidebar-mini'); 
+  $('body').addClass('sidebar-mini');
 
   function addUserGuideButton() {
     if ($('#navbar-user-guide').length) return;
@@ -1502,7 +1571,7 @@ $(document).ready(function() {
         var $btn = $('<span class=\"close-tab-btn\" title=\"Tutup Tab\"><i class=\"fa fa-times\"></i></span>');
         $btn.on('click', function(e) {
           e.preventDefault();
-          e.stopPropagation(); 
+          e.stopPropagation();
           Shiny.setInputValue('request_close_tab', tabId, {priority: 'event'});
         });
         $link.append($btn);
@@ -1510,20 +1579,79 @@ $(document).ready(function() {
     });
   }
 
+  function injectModuleDirButtons() {
+    $('[id$=\"-status_box\"]').each(function() {
+      var $statusBox = $(this);
+      var $moduleWrapper = $statusBox.closest('.module-panel-wrapper');
+      if (!$moduleWrapper.length) return;
+
+      var moduleDir = $moduleWrapper.attr('data-module-dir');
+      if (!moduleDir) return;
+
+      var $success = $statusBox.find('.alert-success').first();
+      var $existingRow = $statusBox.find('.laspur-status-row').first();
+
+      if ($success.length > 0 && $existingRow.length === 0) {
+        var $alert = $success;
+        var $row = $('<div class=\"laspur-status-row\"></div>').css({
+          'display': 'flex',
+          'justify-content': 'space-between',
+          'align-items': 'center',
+          'gap': '12px',
+          'flex-wrap': 'wrap',
+          'width': '100%'
+        });
+        var $left = $('<div></div>').css({
+          'flex': '1 1 220px',
+          'min-width': '0'
+        });
+        var $right = $('<div></div>').css({'flex-shrink': '0'});
+
+        var $btn = $('<button type=\"button\" class=\"btn btn-sm laspur-open-dir-btn\"></button>')
+          .css({
+            'background-color': '#106665',
+            'color': '#FFFFFF',
+            'border': 'none',
+            'font-weight': '600',
+            'padding': '8px 16px',
+            'border-radius': '8px',
+            'white-space': 'nowrap'
+          })
+          .html('<i class=\"bi bi-folder2-open\" style=\"margin-right:6px;\"></i>Buka Direktori Modul')
+          .on('click', function(e) {
+            e.stopPropagation();
+            Shiny.setInputValue('open_module_dir_click', moduleDir, {priority: 'event'});
+          });
+
+        $left.append($alert.detach());
+        $right.append($btn);
+        $row.append($left).append($right);
+
+        $statusBox.empty().append($row);
+
+      } else if ($success.length === 0 && $existingRow.length > 0) {
+        var $alertRestore = $existingRow.find('.alert').first().detach();
+        $statusBox.empty().append($alertRestore);
+      }
+    });
+  }
+
   attachCloseButtons();
   injectToggleButtons();
+  injectModuleDirButtons();
 
   var observer = new MutationObserver(function(mutations) {
     attachCloseButtons();
     setTimeout(injectToggleButtons, 100);
+    setTimeout(injectModuleDirButtons, 100);
   });
 
-  var targetNode = document.getElementById('tabs');
-  if(targetNode) {
-    observer.observe(targetNode, { childList: true, subtree: true });
-  } else {
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  setInterval(function() {
+    injectToggleButtons();
+    injectModuleDirButtons();
+  }, 800);
 
   Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
     document.getElementById('info_modal_title').innerText = msg.title;
