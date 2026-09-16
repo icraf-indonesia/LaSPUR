@@ -1633,7 +1633,7 @@ $(document).ready(function() {
       var moduleDir = $moduleWrapper.attr('data-module-dir');
       if (!moduleDir) return;
 
-      var $success = $statusBox.find('.alert-success').first();
+      var $success = $statusBox.find('.alert-success, .alert-info').first();
       var $existingRow = $statusBox.find('.laspur-status-row').first();
 
       if ($success.length > 0 && $existingRow.length === 0) {
