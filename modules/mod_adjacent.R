@@ -29,6 +29,7 @@ source("R/helpers.R")
 }
 
 # ── UI ──────────────────────────────────────────────────────────
+.parse_id_spec <- function(spec) {
   if (is.null(spec) || !nzchar(trimws(spec))) return(numeric(0))
   spec <- gsub("\\s", "", spec)
   parts <- strsplit(spec, ",", fixed = TRUE)[[1]]
