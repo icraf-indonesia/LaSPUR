@@ -723,7 +723,7 @@ render_result_server <- function(input, output, session, rv, config) {
       map_sf,
       options = leafletOptions(preferCanvas = TRUE)
     ) %>%
-      leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>% 
+      leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>% 
       leaflet::addPolygons(
         layerId     = ~id_pu,
         group       = "result_layer",
