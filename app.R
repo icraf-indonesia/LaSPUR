@@ -770,11 +770,6 @@ ui <- page_sidebar(
         class = "btn w-100 d-flex align-items-center",
         style = "text-align: left; color: #1b75ba; background-color: #eef6fc; border: none; padding: 14px 16px; font-weight: 600; border-radius: 8px;"
       ),
-      tags$small(
-        class = "report-sidebar-subtitle",
-        style = "display: block; margin-top: 6px; color: #94A3B8; font-size: 0.75rem;",
-        "Hasil dari modul yang sudah dijalankan"
-      ),
       uiOutput("btn_open_report_ui")
     )
   ),
@@ -1022,7 +1017,8 @@ server <- function(input, output, session) {
     instance_id <- paste0(tab_id, "__g", gen)
     
     nav_buttons <- div(
-      style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #E2E8F0; gap: 12px;",
+      class = "laspur-nav-buttons",
+      style = "display: flex; justify-content: flex-end; align-items: center; gap: 12px;",
       if (tab_id %in% c("overlap", "adjacent")) {
         actionButton(paste0("btn_back_", tab_id), "Beranda", icon = icon("house"), class = "btn-outline-secondary btn-sm", style = "font-weight: 600; padding: 8px 16px; border-radius: 8px;")
       } else {
@@ -1562,6 +1558,55 @@ $(document).ready(function() {
       }
     });
   }
+  
+  function relocateNavButtons() {
+    $('.laspur-nav-buttons').each(function() {
+      var $nav = $(this);
+
+      if ($nav.closest('.col-sm-4').length > 0 &&
+          $nav.attr('data-relocated') === '1') return;
+
+      var $tabPane = $nav.closest('.tab-pane');
+      if (!$tabPane.length) return;
+
+      var $wrapper = $tabPane.find('.module-panel-wrapper').first();
+      if (!$wrapper.length) return;
+
+      var $leftCol = $wrapper.find('> .row > .col-sm-4').first();
+      if (!$leftCol.length) return;
+
+      if ($nav.parent()[0] !== $leftCol[0]) {
+        $leftCol.append($nav);
+      }
+      $nav.attr('data-relocated', '1');
+
+      $nav.css({
+        'display': 'flex',
+        'flex-direction': 'row',
+        'gap': '8px',
+        'margin-top': '12px',
+        'margin-bottom': '0',
+        'padding-bottom': '0',
+        'border-bottom': 'none',
+        'justify-content': 'stretch',
+        'align-items': 'stretch',
+        'align-self': 'flex-start',
+        'flex': '0 0 auto',
+        'height': 'auto',
+        'width': '100%',
+        'box-sizing': 'border-box'
+      });
+
+      $nav.find('.btn').css({
+        'flex': '1 1 0',
+        'min-width': '0',
+        'padding': '8px 12px',
+        'font-size': '0.85rem',
+        'height': 'auto',
+        'align-self': 'center'
+      });
+    });
+  }
 
   function attachCloseButtons() {
     $('#tabs.nav-pills .nav-link').each(function() {
@@ -1639,11 +1684,13 @@ $(document).ready(function() {
   attachCloseButtons();
   injectToggleButtons();
   injectModuleDirButtons();
+  relocateNavButtons();
 
   var observer = new MutationObserver(function(mutations) {
     attachCloseButtons();
     setTimeout(injectToggleButtons, 100);
     setTimeout(injectModuleDirButtons, 100);
+    setTimeout(relocateNavButtons, 100);
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
@@ -1651,6 +1698,7 @@ $(document).ready(function() {
   setInterval(function() {
     injectToggleButtons();
     injectModuleDirButtons();
+    relocateNavButtons();
   }, 800);
 
   Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
