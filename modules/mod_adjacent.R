@@ -50,18 +50,21 @@ source("R/helpers.R")
   unique(out)
 }
 
+# Format a meter length for display
 .fmt_m <- function(m) {
   if (is.na(m) || !is.finite(m)) return("—")
   if (m >= 1000) sprintf("%.2f km", m / 1000)
   else           sprintf("%.1f m", m)
 }
 
+# Format a hectare area for display
 .fmt_ha <- function(x) {
   if (!is.finite(x)) return("—")
   if (x >= 1000) sprintf("%.0f ha", x)
   else           sprintf("%.2f ha", x)
 }
 
+# ── UI ──────────────────────────────────────────────────────────
 adjacent_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -77,6 +80,7 @@ adjacent_ui <- function(id) {
     fluidRow(
       class = "g-3",
       
+      # ── Left column: Wizard (1/3) ─────────────────────────────
       column(
         width = 4,
         card(
@@ -100,6 +104,7 @@ adjacent_ui <- function(id) {
               uiOutput(ns("step2_ui"))
             ),
             
+            # ── Step 3 filter panel ──────────────────────────────
             accordion_panel(
               title = "Langkah 3 — Filter Hasil (Opsional)",
               value = "step3",
@@ -110,6 +115,7 @@ adjacent_ui <- function(id) {
         )
       ),
       
+      # ── Right column: Output & Hasil (2/3) ────────────────────
       column(
         width = 8,
         card(
@@ -154,6 +160,7 @@ adjacent_server <- function(id, output_dir) {
       xlsx_path_original = NULL,
       log_messages = "",
       
+      # pre-dissolved map + per-pair attrs
       idx_serasi_map_raw = NULL,
       pair_attrs = NULL
     )
@@ -177,6 +184,7 @@ adjacent_server <- function(id, output_dir) {
       paste0(stem, ".shp")
     }
     
+    # ── Step 1 UI ──────────────────────────────────────────────
     output$step1_ui <- renderUI({
       tagList(
         tags$p(tags$i(class = "bi bi-map me-1"), "Peta RTRW (.shp)",
@@ -234,6 +242,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # Admin shapefile and field selection
     observeEvent(input$admin_file, {
       req(input$admin_file)
       tryCatch({
@@ -267,6 +276,7 @@ adjacent_server <- function(id, output_dir) {
       rv$admin_col <- input$admin_field
     })
     
+    # Load other shapefiles and tables
     observeEvent(input$rtrw_file, {
       req(input$rtrw_file)
       tryCatch({
@@ -351,6 +361,7 @@ adjacent_server <- function(id, output_dir) {
       }
     )
     
+    # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
       if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
           is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
@@ -362,6 +373,7 @@ adjacent_server <- function(id, output_dir) {
       go_to_panel("step2")
     })
     
+    # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
       if (rv$unlocked < 2) return(.locked_panel())
       
@@ -373,7 +385,6 @@ adjacent_server <- function(id, output_dir) {
         
         hr(),
         
-        # ── Pengaturan Lanjutan (accordion) ──────────────────────
         accordion_panel(
           title = "Pengaturan Lanjutan",
           icon = icon("gear"),
@@ -432,6 +443,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Load matrix in step2 ──────────────────────────────────
     observeEvent(input$matriks_serasi_file, {
       req(input$matriks_serasi_file)
       tryCatch({
@@ -456,7 +468,7 @@ adjacent_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis  ──────────────────────────
+    # ── Run analysis ───────────────────────────────────────────
     observeEvent(input$btn_run, {
       req(rv$rtrw_vect, rv$rzwp3k_vect,
           rv$rtrw_prioritas, rv$rzwp3k_prioritas,
@@ -603,7 +615,6 @@ adjacent_server <- function(id, output_dir) {
             )
             rv$analysis_result_original <- rv$analysis_result
             
-            # ─── Store result for report generation ───
             out <- list(
               inputs = list(
                 start_time = Sys.time(),
@@ -709,6 +720,8 @@ adjacent_server <- function(id, output_dir) {
       })
     })
     
+    # ── Step 3 UI ──────────────────────────────────────────────
+    
     output$step3_ui <- renderUI({
       if (rv$unlocked < 3 || is.null(rv$analysis_result_original)) {
         return(.locked_panel("Jalankan analisis terlebih dahulu untuk mengaktifkan filter."))
@@ -734,17 +747,14 @@ adjacent_server <- function(id, output_dir) {
             tags$em("luas kawasan RTRW"), ", ",
             tags$em("luas kawasan RZWP3K"), ", ",
             tags$em("rasio panjang segmen batas"), ", dan/atau ",
-            tags$em("ID tertentu (id_pu / id_group)"),
-            ". Setiap komponen dapat diaktifkan secara terpisah. Ketika beberapa komponen aktif, ",
-            "pasangan harus lolos semua komponen tersebut (logika DAN)."
+            tags$em("ID tertentu (id_pu / id_group)")
           ),
           tags$p(
             style = "margin: 0 0 8px 0;",
             "Hasil yang lolos filter akan ditampilkan di ",
             tags$em("Visualisasi Hasil"),
             " dan diekspor sebagai file GPKG/XLSX tambahan di folder ",
-            tags$code("Analisis SERASI"),
-            ". File hasil analisis awal tetap tersimpan tanpa perubahan."
+            tags$code("Analisis SERASI")
           ),
           tags$div(
             style = paste(
@@ -761,7 +771,7 @@ adjacent_server <- function(id, output_dir) {
               "Sistem sudah mengeluarkan secara otomatis dari hasil analisis: ",
               tags$strong("(1)"), " pasangan dengan ",
               tags$strong("Indeks SERASI = 1"),
-              " — artinya kedua zona sudah sepenuhnya sesuai (tidak ada konflik); dan ",
+              " — artinya kedua pola/zona sudah sepenuhnya sesuai (tidak ada konflik); dan ",
               tags$strong("(2)"), " pasangan dengan ",
               tags$strong("luas salah satu sisi < 1 ha"),
               ". Jika ID yang Anda masukkan tidak muncul pada pratinjau, kemungkinan pasangan ",
@@ -780,6 +790,7 @@ adjacent_server <- function(id, output_dir) {
       
       pa <- rv$pair_attrs
       
+      # ── Detected ranges ──
       min_serasi <- suppressWarnings(min(pa$idx_serasi,  na.rm = TRUE))
       max_serasi <- suppressWarnings(max(pa$idx_serasi,  na.rm = TRUE))
       min_lrtrw  <- suppressWarnings(min(pa$luas_rtrw,   na.rm = TRUE))
@@ -798,14 +809,15 @@ adjacent_server <- function(id, output_dir) {
       if (!is.finite(min_rasio))  min_rasio  <- 0
       if (!is.finite(max_rasio))  max_rasio  <- 100
       
-      default_max_lrtrw  <- ceiling(max_lrtrw)
-      default_max_lrzwp  <- ceiling(max_lrzwp)
-      default_max_rasio  <- ceiling(max_rasio * 10) / 10
+      default_max_lrtrw <- ceiling(max_lrtrw)
+      default_max_lrzwp <- ceiling(max_lrzwp)
+      default_max_rasio <- ceiling(max_rasio * 10) / 10
       default_max_serasi <- ceiling(max_serasi * 100) / 100
       
       tagList(
         hr(),
         
+        # ── 1. Indeks SERASI ─────────────────────────────────
         checkboxInput(ns("use_idx_serasi"),
                       tagList(tags$strong("1. Indeks SERASI")),
                       value = FALSE),
@@ -825,6 +837,7 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
+        # ── 2. Luas RTRW ─────────────────────────────────────
         checkboxInput(ns("use_lrtrw"),
                       tagList(tags$strong("2. Luas RTRW (ha)")),
                       value = FALSE),
@@ -844,6 +857,7 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
+        # ── 3. Luas RZWP3K ───────────────────────────────────
         checkboxInput(ns("use_lrzwp"),
                       tagList(tags$strong("3. Luas RZWP3K (ha)")),
                       value = FALSE),
@@ -867,6 +881,7 @@ adjacent_server <- function(id, output_dir) {
           style = "color: #6c757d; display:block; margin-bottom: 10px; font-size: 0.8em;"
         ),
         
+        # ── 4. Rasio segmen (persen) ─────────────────────────
         checkboxInput(ns("use_rasio"),
                       tagList(tags$strong("4. Rasio Panjang Segmen (%)")),
                       value = FALSE),
@@ -897,6 +912,7 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
+        # ── 5. ID filter ─────────────────────────────────────
         checkboxInput(ns("use_id"),
                       tagList(tags$strong("5. Filter ID")),
                       value = FALSE),
@@ -922,6 +938,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Live meter-length hint under rasio Min (%) ──
     output$rasio_min_hint <- renderUI({
       req(rv$pair_attrs)
       total_len <- sum(rv$pair_attrs$length, na.rm = TRUE)
@@ -934,6 +951,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Live meter-length hint under rasio Max (%) ──
     output$rasio_max_hint <- renderUI({
       req(rv$pair_attrs)
       total_len <- sum(rv$pair_attrs$length, na.rm = TRUE)
@@ -1053,6 +1071,7 @@ adjacent_server <- function(id, output_dir) {
       
       keep <- rep(TRUE, nrow(pa))
       
+      # ── 1. Indeks SERASI ──
       if (isTRUE(input$use_idx_serasi)) {
         kis <- rep(TRUE, nrow(pa))
         mn <- input$f_serasi_min
@@ -1063,6 +1082,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kis
       }
       
+      # ── 2. Luas RTRW ──
       if (isTRUE(input$use_lrtrw)) {
         kr <- rep(TRUE, nrow(pa))
         mn <- input$f_lrtrw_min
@@ -1073,6 +1093,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kr
       }
       
+      # ── 3. Luas RZWP3K ──
       if (isTRUE(input$use_lrzwp)) {
         kz <- rep(TRUE, nrow(pa))
         mn <- input$f_lrzwp_min
@@ -1083,6 +1104,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kz
       }
       
+      # ── 4. Rasio segmen (input %, internal 0–1) ──
       if (isTRUE(input$use_rasio)) {
         krs <- rep(TRUE, nrow(pa))
         mn <- input$f_rasio_min
@@ -1093,6 +1115,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & krs
       }
       
+      # ── 5. ID filter ──
       if (isTRUE(input$use_id)) {
         id_type <- input$f_id_type
         if (is.null(id_type) || !nzchar(id_type)) id_type <- "id_pu"
@@ -1105,6 +1128,7 @@ adjacent_server <- function(id, output_dir) {
       pa$id_pu[keep]
     })
     
+    # ── Realtime preview ──
     output$filter_preview_ui <- renderUI({
       if (!isTRUE(input$enable_filter)) return(NULL)
       req(rv$pair_attrs)
@@ -1140,6 +1164,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Apply filter ──
     observeEvent(input$btn_apply_filter, {
       req(rv$idx_serasi_map_raw, rv$pair_attrs, output_dir())
       
@@ -1170,6 +1195,7 @@ adjacent_server <- function(id, output_dir) {
         return()
       }
       
+      # ── Build suffix — only include enabled components ───
       parts <- character(0)
       build_range <- function(mn, mx, nm, digits = 0) {
         has_mn <- !is.null(mn) && !is.na(mn)
@@ -1258,6 +1284,7 @@ adjacent_server <- function(id, output_dir) {
       )
     })
     
+    # ── Reset to original ──
     observeEvent(input$btn_reset_filter, {
       req(rv$analysis_result_original)
       rv$analysis_result <- rv$analysis_result_original
