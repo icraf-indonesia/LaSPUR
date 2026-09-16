@@ -29,13 +29,49 @@ pacman::p_load(
   leaflet.extras,
   htmltools,
   readxl,
+  shiny,
   shinyjs,
   shinyFiles,
   promises,
   bslib,
+  base64enc,
+  tidyterra,
   slickR,
-  base64enc
 )
+
+# Ensure Pandoc is configured for rmarkdown
+.ensure_pandoc_available <- function() {
+  tryCatch({
+    if (nzchar(Sys.which("pandoc"))) {
+      return(invisible(TRUE))  
+    }
+  }, error = function(e) NULL)
+  
+  app_root <- tryCatch({
+    here::here()
+  }, error = function(e) {
+    getwd()
+  })
+  
+  pandoc_dir <- file.path(dirname(app_root), "R-Portable/App/pandoc")
+  pandoc_exe <- file.path(pandoc_dir, "pandoc.exe")
+  
+  if (file.exists(pandoc_exe)) {
+    tryCatch({
+      current_path <- Sys.getenv("PATH")
+      Sys.setenv(PATH = paste(pandoc_dir, current_path, sep = .Platform$path.sep))
+      Sys.setenv(RSTUDIO_PANDOC = pandoc_dir)
+      return(invisible(TRUE))
+    }, error = function(e) {
+      warning("Failed to configure Pandoc: ", conditionMessage(e))
+      return(invisible(FALSE))
+    })
+  }
+  
+  return(invisible(FALSE))
+}
+
+.ensure_pandoc_available()
 
 #' Load and Validate a Shapefile
 #'
@@ -687,7 +723,7 @@ render_result_server <- function(input, output, session, rv, config) {
       map_sf,
       options = leafletOptions(preferCanvas = TRUE)
     ) %>%
-      leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+      leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>% 
       leaflet::addPolygons(
         layerId     = ~id_pu,
         group       = "result_layer",
@@ -816,10 +852,7 @@ render_result_server <- function(input, output, session, rv, config) {
         fillColor = "#00FFFF",
         fillOpacity = 0.7,
         group = "polygon_highlight",
-        popup = lapply(
-          popup_text,
-          htmltools::HTML
-        )
+        popup = htmltools::HTML(popup_text)
       )
   })
   
@@ -889,11 +922,10 @@ render_result_server <- function(input, output, session, rv, config) {
 #'   as a PNG to that path as a side effect.
 #'
 #' @importFrom ggplot2 ggplot aes geom_sf scale_fill_gradient scale_color_gradient
-#'   scale_x_continuous theme_bw labs coord_sf guides guide_colorbar theme
+#'   theme_bw labs coord_sf guides guide_colorbar theme
 #'   element_blank element_text margin ggsave
 #' @importFrom tidyterra geom_spatraster
 #' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
-#' @importFrom scales breaks_pretty
 #' @importFrom grid unit
 #'
 #' @export
@@ -956,7 +988,6 @@ plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, h
   plot_lc <- plot_lc +
     ggplot2::theme_bw() +
     ggplot2::labs(fill = NULL, title = title) +
-    ggplot2::scale_x_continuous(breaks = scales::breaks_pretty(n = 3)) +
     ggplot2::coord_sf(expand = FALSE) +
     ggplot2::guides(
       fill = ggplot2::guide_colorbar(
@@ -1045,11 +1076,11 @@ plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, h
 #'   as a PNG to that path as a side effect.
 #'
 #' @importFrom ggplot2 ggplot aes geom_sf scale_fill_manual scale_color_manual
-#'   scale_x_continuous theme_bw labs coord_sf guides guide_legend theme
+#'   theme_bw labs coord_sf guides guide_legend theme
 #'   element_blank element_text margin ggsave
 #' @importFrom tidyterra geom_spatraster
 #' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
-#' @importFrom scales hue_pal label_wrap breaks_pretty
+#' @importFrom scales hue_pal label_wrap
 #' @importFrom grid unit
 #' @importFrom terra levels
 #' @importFrom stats setNames
@@ -1177,7 +1208,6 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
   plot_lc <- plot_lc +
     ggplot2::theme_bw() +
     ggplot2::labs(title = title) +
-    ggplot2::scale_x_continuous(breaks = scales::breaks_pretty(n = 3)) +
     ggplot2::coord_sf(expand = FALSE) +
     ggplot2::theme(
       axis.title.x = ggplot2::element_blank(),
@@ -1618,6 +1648,23 @@ knit_child_module <- function(template_path, module_params, envir = parent.frame
 generate_report <- function(output, dir, module_name = NULL,
                             template_path = "report/LaSPUR_SERASI_report_template.Rmd",
                             master_params = NULL) {
+  
+  # Ensure Pandoc is available in this execution context
+  .ensure_pandoc_available()
+  
+  # Check if output directory is writable and has space
+  if (!dir.exists(dir)) {
+    stop("Output directory does not exist: ", dir)
+  }
+  
+  # Simple write test to check disk space
+  test_file <- file.path(dir, ".write_test_tmp")
+  tryCatch({
+    writeLines("test", test_file)
+    unlink(test_file)
+  }, error = function(e) {
+    stop("Cannot write to output directory. Check disk space and permissions: ", dir)
+  })
   
   # If master_params is provided, use the master template
   if (!is.null(master_params)) {

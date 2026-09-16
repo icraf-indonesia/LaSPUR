@@ -1176,7 +1176,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           fillOpacity = 0.5,
           stroke      = TRUE,
           group       = "row_highlight",
-          popup       = lapply(popup_text, htmltools::HTML)
+          popup       = htmltools::HTML(popup_text)
         )
     })
     
