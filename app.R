@@ -3,13 +3,6 @@
 # LaSPUR – Land and Seascape Planning Unit Reconciliation
 # ============================================================
 
-library(shiny)
-library(bslib)
-library(future)
-library(promises)
-library(shinyFiles)
-library(shinyjs)
-
 source("R/helpers.R")
 
 plan(multisession)
@@ -294,7 +287,7 @@ ui <- page_sidebar(
     * { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 184, 0.4) transparent; }
 
     /* ========================================================
-       ANIMASI PULSE INDICATOR DI NAVBAR
+       PULSE ANIMATION INDICATOR IN NAVBAR
        ======================================================== */
     .pulse-badge {
       display: inline-flex; align-items: center; gap: 8px;
@@ -330,7 +323,7 @@ ui <- page_sidebar(
       padding-top: 15px !important; overflow-x: hidden !important;
     }
 
-    /* Cards Umum */
+    /* Common Cards */
     .card { border: 1px solid #E2E8F0 !important; border-radius: 16px !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; background-color: #FFFFFF !important;}
     .btn-primary { background-color: #1b75ba !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(27, 117, 186, 0.2) !important; }
     .btn-primary:hover { background-color: #155d96 !important; transform: translateY(-1px); box-shadow: 0 6px 8px -1px rgba(27, 117, 186, 0.3) !important;}
@@ -339,13 +332,56 @@ ui <- page_sidebar(
     .landing-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; }
     
     /* ========================================================
-       PERBAIKAN ALIGNMENT (ACCORDION BUTTON & BODY)
+       ALIGNMENT (ACCORDION BUTTON & BODY)
        ======================================================== */
     /* Normal Mode */
     aside .menu-text { display: block; font-weight: 700; white-space: nowrap; }
     aside .menu-icon { display: none !important; }
     aside .accordion-item { border: none !important; background: transparent !important; }
-    
+
+    aside #btn_home,
+    aside #btn_generate_report {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 10px !important;
+      line-height: 1 !important;
+    }
+    aside #btn_home .menu-icon,
+    aside #btn_generate_report .menu-icon,
+    aside #btn_home .menu-text,
+    aside #btn_generate_report .menu-text {
+      display: inline-flex !important;
+      align-items: center !important;
+      margin: 0 !important;
+      white-space: nowrap !important;
+    }
+    body:not(.sidebar-mini) aside #btn_home .menu-icon,
+    body:not(.sidebar-mini) aside #btn_generate_report .menu-icon {
+      margin-right: 0 !important;
+    }
+
+       `body.sidebar-mini aside #btn_home .menu-text` = (1,2,2)
+       mengalahkan `aside #btn_home .menu-text` = (1,1,2) ── */
+    body.sidebar-mini aside #btn_home,
+    body.sidebar-mini aside #btn_generate_report {
+      flex-direction: row !important;
+      justify-content: center !important;
+      gap: 0 !important;
+      padding: 14px 0 !important;
+    }
+    body.sidebar-mini aside #btn_home .menu-text,
+    body.sidebar-mini aside #btn_generate_report .menu-text {
+      display: none !important;
+    }
+    body.sidebar-mini aside #btn_home .menu-icon,
+    body.sidebar-mini aside #btn_generate_report .menu-icon {
+      display: flex !important;
+      margin: 0 !important;
+    }
+
     aside .accordion-button {
       background-color: transparent !important; color: #475569 !important; font-size: 0.95rem; 
       padding: 16px 14px !important; width: 100% !important; box-sizing: border-box !important;
@@ -372,7 +408,6 @@ ui <- page_sidebar(
     body.sidebar-mini aside .accordion-button { padding: 16px 0 !important; justify-content: center !important; display: flex !important; width: 100% !important; box-sizing: border-box !important; }
     body.sidebar-mini aside .accordion-button::after { display: none !important; }
     
-    /* Gunakan Flex Column untuk memastikan sub-item presisi di tengah */
     body.sidebar-mini aside .accordion-body { 
       padding: 8px 0 16px 0 !important; 
       display: flex !important; 
@@ -400,7 +435,6 @@ ui <- page_sidebar(
       display: flex !important; align-items: center !important; justify-content: center !important; border-radius: 8px !important;
     }
     
-    /* ── Report footer button in mini mode ── */
     body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
     body:not(.sidebar-mini) aside #btn_home .menu-icon {
       display: inline-block !important;
@@ -425,7 +459,7 @@ ui <- page_sidebar(
     body.sidebar-mini aside #btn_generate_report:hover { background-color: #eef6fc !important; }
     
     /* ========================================================
-       TABS BROWSER ALA CHROME & TOMBOL CLOSE PADA HOVER
+       WEB-LIKE BROWSER TAB 
        ======================================================== */
     .card-header { padding: 0 !important; border-bottom: 1px solid #E2E8F0 !important; background-color: #F8FAFC !important; border-radius: 16px 16px 0 0 !important; }
     
@@ -456,13 +490,11 @@ ui <- page_sidebar(
        COLLAPSIBLE LEFT PANEL (INPUT & PARAMETER)
        ======================================================== */
 
-    /* The row must not wrap so collapse works cleanly */
     .module-panel-wrapper > .row {
       flex-wrap: nowrap;
       overflow: hidden;
     }
 
-    /* Left col: transition flex-basis + opacity + padding */
     .module-panel-wrapper > .row > .col-sm-4 {
       flex: 0 0 33.3333%;
       max-width: 33.3333%;
@@ -473,7 +505,6 @@ ui <- page_sidebar(
                   padding   0.35s ease;
     }
 
-    /* Right col */
     .module-panel-wrapper > .row > .col-sm-8 {
       flex: 0 0 66.6667%;
       max-width: 66.6667%;
@@ -481,7 +512,6 @@ ui <- page_sidebar(
                   max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Collapsed — left col shrinks to zero */
     .module-panel-wrapper.panel-collapsed > .row > .col-sm-4 {
       flex: 0 0 0% !important;
       max-width: 0 !important;
@@ -490,7 +520,6 @@ ui <- page_sidebar(
       padding-right: 0 !important;
       pointer-events: none;
     }
-    /* Right col fills full width */
     .module-panel-wrapper.panel-collapsed > .row > .col-sm-8 {
       flex: 0 0 100% !important;
       max-width: 100% !important;
@@ -538,7 +567,6 @@ ui <- page_sidebar(
     /* ========================================================
        COLLAPSIBLE TOGGLE BUTTON ON RIGHT PANEL
        ======================================================== */
-    /* ── Equal height for left & right panels ── */
     .module-panel-wrapper > .row {
       display: flex;
       flex-wrap: wrap;
@@ -554,7 +582,6 @@ ui <- page_sidebar(
       height: 100%;
     }
     
-    /* ── Equal height & alignment for card headers ── */
     .card-header {
       min-height: 56px;
       display: flex;
@@ -580,9 +607,7 @@ ui <- page_sidebar(
       margin: 0 !important;
       align-self: center;
     }
-
-    /* ── COMPACTNESS IMPROVEMENTS ──────────────────────────── */
-    /* Reduce card spacing */
+    
     .card {
       margin-bottom: 0.75rem !important;
     }
@@ -593,7 +618,6 @@ ui <- page_sidebar(
       padding: 0.5rem 1rem !important;
     }
 
-    /* Tighter column gutters inside module panels */
     .module-panel-wrapper > .row {
       margin-left: -8px;
       margin-right: -8px;
@@ -603,12 +627,10 @@ ui <- page_sidebar(
       padding-right: 8px;
     }
 
-    /* Reduce landing card padding */
     .landing-card {
       padding: 24px 20px !important;
     }
 
-    /* ── Tighter spacing for file inputs & form elements ── */
     .module-panel-wrapper .form-group,
     .module-panel-wrapper .shiny-input-container {
       margin-bottom: 0.5rem !important;
@@ -628,11 +650,9 @@ ui <- page_sidebar(
       margin-top: 0.1rem !important;
       font-size: 0.85rem;
     }
-    /* Reduce spacing inside card bodies in the left column */
     .module-panel-wrapper > .row > .col-sm-4 .card-body {
       padding: 0.5rem 0.75rem !important;
     }
-    /* Tighter margins for paragraphs and lists inside panels */
     .module-panel-wrapper p,
     .module-panel-wrapper ul,
     .module-panel-wrapper ol {
