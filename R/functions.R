@@ -3909,116 +3909,56 @@ generate_reconciliation_excel <- function(recon_map,
 #' @export
 dissolve_id_pu <- function(sf_obj) {
   
-  # Required columns
-  required_cols <- c(
-    "id",
-    "id_pu",
-    "id_group",
-    "n_pairs",
-    "RTRW",
-    "RZWP3K",
-    "area_ha",
-    "length",
-    "area_buffer_ha",
-    "idx_serasi",
-    "admin"
-  )
+  base_required <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "admin")
+  stopifnot(all(base_required %in% colnames(sf_obj)))
+
+  geom_col <- attr(sf_obj, "sf_column")
   
-  stopifnot(all(required_cols %in% colnames(sf_obj)))
+  rtrw   <- sf_obj %>% filter(!is.na(RTRW))
+  rzwp3k <- sf_obj %>% filter(!is.na(RZWP3K))
   
-  # Split into RTRW and RZWP3K rows
-  rtrw <- sf_obj %>% 
-    filter(!is.na(RTRW))
+  if (nrow(rtrw) != nrow(rzwp3k)) stop("Unequal number of RTRW and RZWP3K rows.")
+  if (!all(rtrw$id_pu == rzwp3k$id_pu)) stop("Mismatched id_pu between RTRW and RZWP3K rows.")
   
-  rzwp3k <- sf_obj %>% 
-    filter(!is.na(RZWP3K))
+  special_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "admin", geom_col)
+  generic_cols <- setdiff(colnames(sf_obj), special_cols)
   
-  # Basic validation
-  if (nrow(rtrw) != nrow(rzwp3k)) {
-    stop("Unequal number of RTRW and RZWP3K rows.")
-  }
+  rtrw_df <- rtrw %>% st_drop_geometry() %>%
+    select(id_pu, id_rtrw = id, RTRW, area_ha_rtrw = area_ha, admin_rtrw = admin,
+           dplyr::all_of(generic_cols))
   
-  if (!all(rtrw$id_pu == rzwp3k$id_pu)) {
-    stop("Mismatched id_pu between RTRW and RZWP3K rows.")
-  }
+  rzwp3k_df <- rzwp3k %>% st_drop_geometry() %>%
+    select(id_pu, id_rzwp3k = id, RZWP3K, area_ha_rzwp3k = area_ha, admin_rzwp3k = admin,
+           dplyr::all_of(generic_cols)) %>%
+    rename_with(~ paste0(.x, "_alt"), dplyr::all_of(generic_cols))
   
-  # Join attributes
-  combined <- rtrw %>%
-    st_drop_geometry() %>%
-    select(
-      id_pu,
-      id_rtrw = id,
-      RTRW,
-      area_ha_rtrw = area_ha,
-      admin_rtrw = admin,
-      length,
-      area_buffer_ha,
-      idx_serasi,
-      id_group,
-      n_pairs
-    ) %>%
-    inner_join(
-      rzwp3k %>%
-        st_drop_geometry() %>%
-        select(
-          id_pu,
-          id_rzwp3k = id,
-          RZWP3K,
-          area_ha_rzwp3k = area_ha,
-          admin_rzwp3k = admin
-        ),
-      by = "id_pu"
-    ) %>%
+  combined <- rtrw_df %>%
+    inner_join(rzwp3k_df, by = "id_pu") %>%
     mutate(
-      new_id = paste0(id_rtrw, "_", id_rzwp3k),
+      new_id  = paste0(id_rtrw, "_", id_rzwp3k),
       area_ha = area_ha_rtrw + area_ha_rzwp3k,
-      admin = paste0(admin_rtrw, "_", admin_rzwp3k)
-    ) %>%
-    select(
-      id_pu,
-      new_id,
-      RTRW,
-      RZWP3K,
-      area_ha,
-      admin,
-      length,
-      area_buffer_ha,
-      idx_serasi,
-      id_group,
-      n_pairs
+      admin   = paste0(admin_rtrw, "_", admin_rzwp3k)
     )
   
-  # Union geometries per id_pu
+  for (col in generic_cols) {
+    combined[[col]] <- dplyr::coalesce(combined[[col]], combined[[paste0(col, "_alt")]])
+  }
+  
+  combined <- combined %>%
+    select(id_pu, new_id, RTRW, RZWP3K, area_ha, admin, dplyr::all_of(generic_cols))
+  
   geom_union <- sf_obj %>%
     group_by(id_pu) %>%
-    summarise(
-      geometry = st_union(geometry),
-      .groups = "drop"
-    )
+    summarise(geometry = st_union(.data[[geom_col]]), .groups = "drop")
   
-  # Merge attributes with unioned geometries
   result <- geom_union %>%
     inner_join(combined, by = "id_pu") %>%
     rename(id = new_id) %>%
-    select(
-      id,
-      id_pu,
-      id_group,
-      RTRW,
-      RZWP3K,
-      area_ha,
-      admin,
-      length,
-      area_buffer_ha,
-      n_pairs,
-      idx_serasi,
-      geometry
-    ) %>%
+    select(id, id_pu, RTRW, RZWP3K, area_ha, admin, dplyr::all_of(generic_cols), geometry) %>%
     st_as_sf()
   
   st_crs(result) <- st_crs(sf_obj)
-  
-  return(result)
+  result
 }
 
 # Look up compatibility

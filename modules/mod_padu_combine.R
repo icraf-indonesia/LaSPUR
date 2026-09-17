@@ -399,6 +399,13 @@ padu_combine_server <- function(id, output_dir) {
           )
           append_log("Perhitungan indeks kombinasi selesai.")
           
+          # Conditional dissolve idx_serasi_map
+          if ("length" %in% colnames(idx_padu_map)) {
+            idx_padu_map_viz <- dissolve_id_pu(idx_padu_map)
+          } else {
+            idx_padu_map_viz <- idx_padu_map  
+          }
+          
           # Step 5: Save
           incProgress(0.15, detail = "Menyimpan hasil...")
           
@@ -419,7 +426,7 @@ padu_combine_server <- function(id, output_dir) {
           
           rv$gpkg_path       <- gpkg_path
           rv$xlsx_path       <- xlsx_path
-          rv$analysis_result <- list(map = idx_padu_map, table = res_table)
+          rv$analysis_result <- list(map = idx_padu_map_viz, table = sf::st_drop_geometry(idx_padu_map_viz))
           
           out <- list(
             inputs = list(
