@@ -200,7 +200,7 @@
     "href": "padu/padu-ki.html",
     "title": "PADU-KI",
     "section": "",
-    "text": "1 Deskripsi\nDataset PADU-KI merupakan data vektor yang merepresentasikan kawasan rawan bencana yang dipengaruhi oleh perubahan iklim. Dataset ini digunakan sebagai salah satu parameter dalam analisis PADU-KI untuk menilai tingkat kesesuaian dan potensi konflik pemanfaatan ruang.\n\n\n\n2 Data yang Digunakan\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\n\n\n\n\nST_KRB_climate\nShapefile\nKawasan rawan bencana akibat perubahan iklim.\n\n\n\n\n\n\n3 Visualisasi\n\n\n\n\n\n\n\n\n\n4 Sumber Data\n\n\n\nDataset\nInstansi\nTahun\nURL\n\n\n\n\nKawasan Rawan Bencana\nPemerintah Daerah\n-\n-\n\n\n\n\n\n\n5 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n4\n\n\nExtent\nxmin : 119846.95040ymin : 9887756.09920xmax : 166999.24880ymax : 10002887.41910\n\n\nFields\nKRB_03KerawananShape_LengShape_Area\n\n\n\n\n\n\n\n6 Digunakan pada Tahapan\n\n\n\nTahapan\nDigunakan\n\n\n\n\nPersiapan Data\n✔\n\n\nPADU-KI\n✔\n\n\nRekonsiliasi\n✔\n\n\nOutput\n✔\n\n\n\n\n\n\n7 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+    "text": "Analisis PADU-KI (Keterpaduan Kebencanaan dan Iklim) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan pemanfaatan ruang terhadap potensi kerentanan wilayah berbasis kawasan rawan bencana dan perubahan iklim terhadap alokasi ruang pada Peta Indeks SERASI.\nPada tahap ini, pengguna menyiapkan Peta Indeks SERASI dan Peta Risiko Bencana."
   },
   {
     "objectID": "padu/padu-ke.html",
@@ -957,5 +957,47 @@
     "title": "PADU-SE",
     "section": "3.2 Peta Kepadatan Populasi Penduduk",
     "text": "3.2 Peta Kepadatan Populasi Penduduk\n\n3.2.1 Deskripsi\nPeta Kepadatan Populasi Penduduk merupakan data raster yang merepresentasikan sebaran dan jumlah estimasi penduduk per unit area (resolusi 100m). Data ini digunakan sebagai acuan tekanan populasi terhadap pemanfaatan ruang darat dan pesisir.\n\n\n3.2.2 Data yang Digunakan\n\n\n\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\nSumber\nTahun Data\nURL\n\n\n\n\nPopulation Density\nGeoTIFF\nData raster estimasi kepadatan penduduk dari WorldPop (resolusi 100m).\nWorldPop\n2025\n—\n\n\n\n\n\n3.2.3 Preview\n\n\n\n\n\n\n\n\n3.2.4 Spesifikasi Teknis\n\n\n\n\nFormat\nTIF\n\n\nCoordinate System\nWGS 84 (EPSG:4326)\n\n\nLayer\n1\n\n\nResolution\n0.000833333329999993 × 0.000833333329999993\n\n\nExtent\nxmin : 119.58000ymin : -1.01583xmax : 120.01167ymax : 0.03000\n\n\n\n\n\n\n3.2.5 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCoordinate Reference System tersedia.\n\n\n\nExtent\n\n✔ Passed\n\nBounding Box: 119.58, 120.0117, -1.0158, 0.03\n\n\n\nResolution\n\n✔ Passed\n\nResolution: 0.000833333329999993 × 0.000833333329999993\n\n\n\nMissing Value\n\n✔ Passed\n\nPemeriksaan nilai NoData belum dilakukan."
+  },
+  {
+    "objectID": "padu/padu-ki.html#peta-indeks-serasi",
+    "href": "padu/padu-ki.html#peta-indeks-serasi",
+    "title": "PADU-KI",
+    "section": "1.1 Peta Indeks SERASI",
+    "text": "1.1 Peta Indeks SERASI\n\n1.1.1 Deskripsi\nPeta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis PADU-KI. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.\nOutput yang digunakan pada tahap ini berupa data spasial dalam format GeoPackage (.gpkg) atau Shapefile (.shp).\n\n\n1.1.2 Preview\n\n\n\n\n\n\n\n\n1.1.3 Spesifikasi Teknis\n\n\n\n\nFormat\nGPKG\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n460\n\n\nExtent\nxmin : 119339.84761ymin : 9901908.78390xmax : 167252.63691ymax : 10002318.69717\n\n\nFields\nid_pustat_puid_rtrwid_rzwp3kRTRWRZWP3Karea_haarea_flagidx_serasiadmin\n\n\n\n\n\n\n1.1.4 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n136 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "padu/padu-ki.html#peta-risiko-bencana",
+    "href": "padu/padu-ki.html#peta-risiko-bencana",
+    "title": "PADU-KI",
+    "section": "1.2 Peta Risiko Bencana",
+    "text": "1.2 Peta Risiko Bencana\n\n1.2.1 Deskripsi\nPeta Risiko Bencana merupakan data spasial vektor yang merepresentasikan sebaran kawasan rawan bencana yang dipengaruhi oleh potensi ancaman bencana alam dan perubahan iklim. Data ini digunakan untuk mengidentifikasi tingkat kerentanan ruang yang bersinggungan dengan alokasi tata ruang darat dan laut.\n\n\n1.2.2 Data yang Digunakan\n\n\n\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\nSumber\nTahun Data\nURL\n\n\n\n\nST_KRB_climate\nShapefile\nData kawasan rawan bencana akibat perubahan iklim.\nPemda / BNPB\n—\n—\n\n\n\n\n\n1.2.3 Preview\n\n\n\n\n\n\n\n\n1.2.4 Spesifikasi Teknis\n\n\n\n\nFormat\nSHP\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n4\n\n\nExtent\nxmin : 119846.95040ymin : 9887756.09920xmax : 166999.24880ymax : 10002887.41910\n\n\nFields\nKRB_03KerawananShape_LengShape_Area\n\n\n\n\n\n\n1.2.5 Preview\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✖ Failed\n\n1 geometri tidak valid.\n\n\n\nMissing Value\n\n✔ Passed\n\nTidak terdapat nilai kosong (NA).\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "padu/padu-kombinasi.html",
+    "href": "padu/padu-kombinasi.html",
+    "title": "PADU-Kombinasi",
+    "section": "",
+    "text": "Analisis PADU-Kombinasi bertujuan untuk mengombinasikan hasil analisis dari berbagai modul PADU (PADU-KE, HS, KL, KH, RTp, SE, dan KI) untuk menghasilkan satu nilai Indeks PADU Tunggal yang komprehensif dalam mendukung proses rekonsiliasi tata ruang darat dan laut.\nPada tahap ini, pengguna menyiapkan Peta Indeks SERASI, memilih Direktori File Analisis PADU, serta mengunggah Tabel Bobot PADU (opsional)."
+  },
+  {
+    "objectID": "padu/padu-kombinasi.html#peta-indeks-serasi",
+    "href": "padu/padu-kombinasi.html#peta-indeks-serasi",
+    "title": "PADU-Kombinasi",
+    "section": "1.1 Peta Indeks SERASI",
+    "text": "1.1 Peta Indeks SERASI\n\n1.1.1 Deskripsi\nPeta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis PADU-Kombinasi. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.\nOutput yang digunakan pada tahap ini berupa data spasial dalam format GeoPackage (.gpkg) atau Shapefile (.shp).\n\n\n1.1.2 Preview\n\n\n\n\n\n\n\n\n1.1.3 Spesifikasi Teknis\n\n\n\n\nFormat\nGPKG\n\n\nGeometry\nMULTIPOLYGON\n\n\nCoordinate System\nWGS 84 / UTM zone 51S\n\n\nFeature Count\n460\n\n\nExtent\nxmin : 119339.84761ymin : 9901908.78390xmax : 167252.63691ymax : 10002318.69717\n\n\nFields\nid_pustat_puid_rtrwid_rzwp3kRTRWRZWP3Karea_haarea_flagidx_serasiadmin\n\n\n\n\n\n\n1.1.4 Pemeriksaan Data\n\n\n\n\nCRS\n\n✔ Passed\n\nCRS tersedia: WGS 84 / UTM zone 51S\n\n\n\nGeometry\n\n✔ Passed\n\nSeluruh geometri valid.\n\n\n\nMissing Value\n\n✖ Failed\n\n136 nilai kosong (NA) ditemukan.\n\n\n\nDuplicate Feature\n\n✔ Passed\n\nTidak terdapat fitur duplikat."
+  },
+  {
+    "objectID": "padu/padu-kombinasi.html#direktori-file-analisis-padu",
+    "href": "padu/padu-kombinasi.html#direktori-file-analisis-padu",
+    "title": "PADU-Kombinasi",
+    "section": "1.2 Direktori File Analisis PADU",
+    "text": "1.2 Direktori File Analisis PADU\n\n1.2.1 Deskripsi\nPengguna menentukan direktori/folder kerja yang berisi seluruh file hasil keluaran analisis dari modul-modul PADU sebelumnya (seperti idx_padu_ke.gpkg, idx_padu_kh.gpkg, idx_padu_se.gpkg, dan modul PADU lainnya).\nSistem akan memindai dan membaca secara otomatis seluruh file GeoPackage berawalan idx_padu_*.gpkg yang tersimpan di dalam folder tersebut untuk diintegrasikan.\n\n\n1.2.2 Tampilan Pemilihan Direktori"
+  },
+  {
+    "objectID": "padu/padu-kombinasi.html#tabel-bobot-padu-opsional",
+    "href": "padu/padu-kombinasi.html#tabel-bobot-padu-opsional",
+    "title": "PADU-Kombinasi",
+    "section": "1.3 Tabel Bobot PADU (Opsional)",
+    "text": "1.3 Tabel Bobot PADU (Opsional)\n\n1.3.1 Deskripsi\nTabel Bobot PADU merupakan data tabular yang digunakan untuk memberikan pembobotan spesifik pada masing-masing indikator/modul PADU sesuai dengan tingkat prioritas analisis wilayah.\n\nCatatan: Apabila tabel ini tidak diunggah, sistem akan menerapkan bobot seragam (\\(1/n\\)) secara otomatis untuk seluruh modul PADU yang tersedia.\n\n\n\n1.3.2 Data yang Digunakan\n\n\n\n\n\n\n\n\n\n\n\nNama Data\nFormat\nKeterangan\nSumber\nTahun Data\nURL\n\n\n\n\nTabel Bobot PADU\nExcel / CSV\nTabel acuan nilai bobot untuk setiap modul PADU.\nPengguna\n—\n—\n\n\n\n\n\n1.3.3 Definisi Kolom\n\n\n\n\n\n\n\n\nKolom\nTipe Data\nKeterangan\n\n\n\n\nModul_PADU\nCharacter\nKode nama modul PADU (contoh: PADU_KE, PADU_KH, PADU_SE).\n\n\nBobot\nNumeric\nNilai bobot proporsional untuk modul terkait (total penjumlahan seluruh bobot bernilai 1).\n\n\n\n\n\n1.3.4 Preview"
   }
 ]

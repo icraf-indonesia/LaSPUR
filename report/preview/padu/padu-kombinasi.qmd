@@ -1,5 +1,101 @@
 ---
-title: "padu-kombinasi"
-format: html
+title: "PADU-Kombinasi"
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
 
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis **PADU-Kombinasi** bertujuan untuk mengombinasikan hasil analisis dari berbagai modul PADU (PADU-KE, HS, KL, KH, RTp, SE, dan KI) untuk menghasilkan satu nilai **Indeks PADU Tunggal** yang komprehensif dalam mendukung proses rekonsiliasi tata ruang darat dan laut.
+
+Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, memilih **Direktori File Analisis PADU**, serta mengunggah **Tabel Bobot PADU** (opsional).
+
+# Input Mandatory
+
+Bagian ini berisi data dan masukan yang wajib tersedia atau disiapkan sebelum proses analisis PADU-Kombinasi dijalankan.
+
+|  |  |  |  |
+|------------------|------------------|------------------|------------------|
+| **No.** | **Data** | **Format** | **Peran** |
+| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
+| 2 | Direktori File Analisis PADU | Folder (.gpkg) | Direktori penyimpanan seluruh hasil output modul PADU |
+| 3 | Tabel Bobot PADU (Opsional) | Tabular | Acuan pembobotan khusus antar modul PADU |
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-Kombinasi**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Direktori File Analisis PADU
+
+### Deskripsi
+
+Pengguna menentukan direktori/folder kerja yang berisi seluruh file hasil keluaran analisis dari modul-modul PADU sebelumnya (seperti `idx_padu_ke.gpkg`, `idx_padu_kh.gpkg`, `idx_padu_se.gpkg`, dan modul PADU lainnya).
+
+Sistem akan memindai dan membaca secara otomatis seluruh file GeoPackage berawalan `idx_padu_*.gpkg` yang tersimpan di dalam folder tersebut untuk diintegrasikan.
+
+### Tampilan Pemilihan Direktori
+
+![](images/screenshot_direktori_padu.png){fig-align="center" width="80%"}
+
+------------------------------------------------------------------------
+
+## Tabel Bobot PADU (Opsional)
+
+### Deskripsi
+
+Tabel Bobot PADU merupakan data tabular yang digunakan untuk memberikan pembobotan spesifik pada masing-masing indikator/modul PADU sesuai dengan tingkat prioritas analisis wilayah.
+
+> **Catatan:** Apabila tabel ini tidak diunggah, sistem akan menerapkan **bobot seragam (**$1/n$) secara otomatis untuk seluruh modul PADU yang tersedia.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|------------|------------|------------|------------|------------|------------|
+| Tabel Bobot PADU | Excel / CSV | Tabel acuan nilai bobot untuk setiap modul PADU. | Pengguna | — | — |
+
+### Definisi Kolom
+
+| Kolom | Tipe Data | Keterangan |
+|------------------|--------------------------|----------------------------|
+| Modul_PADU | Character | Kode nama modul PADU (contoh: `PADU_KE`, `PADU_KH`, `PADU_SE`). |
+| Bobot | Numeric | Nilai bobot proporsional untuk modul terkait (total penjumlahan seluruh bobot bernilai 1). |
+
+### Preview
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_bobot_PADU.xlsx"
+  )
+)
+```

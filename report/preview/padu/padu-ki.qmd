@@ -10,75 +10,80 @@ execute:
 source("R/utils.R")
 ```
 
-# Deskripsi
+Analisis **PADU-KI** (Keterpaduan Kebencanaan dan Iklim) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan pemanfaatan ruang terhadap potensi kerentanan wilayah berbasis kawasan rawan bencana dan perubahan iklim terhadap alokasi ruang pada Peta Indeks SERASI.
 
-Dataset PADU-KI merupakan data vektor yang merepresentasikan kawasan rawan bencana yang dipengaruhi oleh perubahan iklim. Dataset ini digunakan sebagai salah satu parameter dalam analisis PADU-KI untuk menilai tingkat kesesuaian dan potensi konflik pemanfaatan ruang.
+Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI** dan **Peta Risiko Bencana**.
 
----
+# Input Mandatory
 
-# Data yang Digunakan
+Bagian ini berisi data yang wajib tersedia sebelum proses analisis dapat dijalankan.
 
-| Nama Data | Format | Keterangan |
-|-----------|--------|------------|
-| ST_KRB_climate | Shapefile | Kawasan rawan bencana akibat perubahan iklim. |
+|  |  |  |  |
+|----|----|----|----|
+| **No.** | **Data** | **Format** | **Peran** |
+| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
+| 2 | Peta Risiko Bencana | Vektor | Acuan sebaran kawasan rawan bencana dan kerentanan iklim |
 
----
+## Peta Indeks SERASI
 
-# Visualisasi
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-KI**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Peta Risiko Bencana
+
+### Deskripsi
+
+Peta Risiko Bencana merupakan data spasial vektor yang merepresentasikan sebaran kawasan rawan bencana yang dipengaruhi oleh potensi ancaman bencana alam dan perubahan iklim. Data ini digunakan untuk mengidentifikasi tingkat kerentanan ruang yang bersinggungan dengan alokasi tata ruang darat dan laut.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| ST_KRB_climate | Shapefile | Data kawasan rawan bencana akibat perubahan iklim. | Pemda / BNPB | — | — |
+
+### Preview
 
 ```{r}
 create_vector_map(
-  data_path(
-    "vector",
-    "padu_ki",
-    "ST_KRB_climate_training.shp"
-  )
+  data_path("vector", "padu_ki", "ST_KRB_climate_training.shp")
 )
 ```
 
----
-
-# Sumber Data
-
-| Dataset | Instansi | Tahun | URL |
-|----------|----------|-------|-----|
-| Kawasan Rawan Bencana | Pemerintah Daerah | - | - |
-
----
-
-# Spesifikasi Teknis
+### Spesifikasi Teknis
 
 ```{r}
 get_vector_metadata(
-  data_path(
-    "vector",
-    "padu_ki",
-    "ST_KRB_climate_training.shp"
-  )
+  data_path("vector", "padu_ki", "ST_KRB_climate_training.shp")
 )
 ```
 
----
-
-# Digunakan pada Tahapan
-
-| Tahapan | Digunakan |
-|----------|:---------:|
-| Persiapan Data | ✔ |
-| PADU-KI | ✔ |
-| Rekonsiliasi | ✔ |
-| Output | ✔ |
-
----
-
-# Pemeriksaan Data
+### Preview
 
 ```{r}
 check_vector(
-  data_path(
-    "vector",
-    "padu_ki",
-    "ST_KRB_climate_training.shp"
-  )
+  data_path("vector", "padu_ki", "ST_KRB_climate_training.shp")
 )
 ```
