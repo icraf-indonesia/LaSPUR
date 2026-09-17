@@ -36,7 +36,7 @@ pacman::p_load(
   bslib,
   base64enc,
   tidyterra,
-  slickR,
+  slickR
 )
 
 # Ensure Pandoc is configured for rmarkdown
@@ -526,9 +526,9 @@ ensure_geometry_name <- function(sf_obj) {
 #' a Leaflet map, a DT table, a validation log, and download buttons.
 #'
 #' @param ns Namespace function of the module calling this helper.
+#' @param extra_tab Optional `nav_panel` to insert between the main results and the log.
 #'
-#' @return A Shiny UI object containing the map, table, log, and download
-#'   buttons.
+#' @return A Shiny UI object containing the map, table, log, and download buttons.
 #'
 #' @importFrom shiny tagList fluidRow column div hr downloadButton
 #' @importFrom bslib navset_tab nav_panel
@@ -536,7 +536,7 @@ ensure_geometry_name <- function(sf_obj) {
 #' @importFrom DT DTOutput
 #'
 #' @export
-create_result_ui <- function(ns) {
+create_result_ui <- function(ns, extra_tab = NULL) {
   tagList(
     navset_tab(
       nav_panel(
@@ -559,6 +559,7 @@ create_result_ui <- function(ns) {
           )
         )
       ),
+      if (!is.null(extra_tab)) extra_tab,
       nav_panel(
         "Log",
         div(
