@@ -6,13 +6,51 @@
 source("R/functions.R")
 source("R/helpers.R")
 
+# PADU module directory map
+PADU_MODULE_DIRS <- c(
+  ke  = "Analisis PADU-KE",
+  hs  = "Analisis PADU-HS",
+  kl  = "Analisis PADU-KL",
+  kh  = "Analisis PADU-KH",
+  rtp = "Analisis PADU-RTp",
+  se  = "Analisis PADU-SE",
+  ki  = "Analisis PADU-KI"
+)
+
+# Helper to auto-discover PADU files from output dir
+discover_padu_files <- function(base_dir) {
+  if (is.null(base_dir) || !nzchar(base_dir) || !dir.exists(base_dir)) {
+    return(list(found = character(0),
+                found_keys = character(0),
+                missing = names(PADU_MODULE_DIRS)))
+  }
+  found       <- character(0)
+  found_keys  <- character(0)
+  missing     <- character(0)
+  
+  for (key in names(PADU_MODULE_DIRS)) {
+    subdir <- file.path(base_dir, PADU_MODULE_DIRS[[key]])
+    if (!dir.exists(subdir)) {
+      missing <- c(missing, key); next
+    }
+    files <- list.files(subdir, pattern = "^idx_padu_.*\\.gpkg$", full.names = TRUE)
+    if (length(files) == 0) {
+      missing <- c(missing, key)
+    } else {
+      found      <- c(found, files[1])
+      found_keys <- c(found_keys, key)
+    }
+  }
+  list(found = found, found_keys = found_keys, missing = missing)
+}
+
 # ── UI ──────────────────────────────────────────────────────────
 padu_combine_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(
       style = "margin-bottom: 20px;",
-      h4("2.8 Kombinasi Analisis PADU", style = "margin: 0; font-weight: 700;"),
+      h4("2.8 Kombinasi analisis PADU", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Mengombinasikan hasil analisis PADU KE, HS, KL, KH, RTp, SE & KI untuk menghasilkan nilai indeks PADU tunggal.",
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
@@ -22,14 +60,14 @@ padu_combine_ui <- function(id) {
     fluidRow(
       class = "g-3",
       
-      # ── Left column: Input & Parameter (1/3) ────────────────
+      # ── Left column: input & parameter (1/3) ────────────────
       column(
         width = 4,
         card(
-          card_header("Input & Parameter"),
+          card_header("Input & parameter"),
           
           tags$p(tags$i(class = "bi bi-info-circle me-1"),
-                 "Peta Indeks SERASI (.gpkg)",
+                 "Peta indeks SERASI (.gpkg)",
                  style = "font-weight: 600; margin-bottom: 4px;"),
           tags$small(
             style = "color: #6c757d; display: block; margin-bottom: 8px;",
@@ -42,20 +80,24 @@ padu_combine_ui <- function(id) {
           hr(),
           
           tags$p(tags$i(class = "bi bi-folder2-open me-1"),
-                 "Direktori File Analisis PADU",
+                 "Sumber file analisis PADU",
                  style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Pilih folder yang berisi file idx_padu_*.gpkg dari semua modul PADU."
-          ),
-          shinyDirButton(ns("btn_browse_padu"), "Pilih Folder", "Pilih folder yang berisi file idx_padu_*.gpkg",
-                         icon = icon("folder-open"), style = "width: 100%; margin-bottom: 8px;"),
+          shinyDirButton(ns("btn_browse_padu"),
+                         "Pilih folder manual (opsional)",
+                         "Pilih folder yang berisi file idx_padu_*.gpkg",
+                         icon  = icon("folder-open"),
+                         style = "width: 100%; margin-bottom: 6px;"),
+          actionButton(ns("btn_reset_padu_dir"),
+                       tagList(tags$i(class = "bi bi-arrow-counterclockwise me-1"),
+                               "Gunakan deteksi otomatis"),
+                       class = "btn-sm btn-outline-secondary w-100 mb-2"),
           uiOutput(ns("padu_dir_status")),
+          uiOutput(ns("padu_discovery_feedback")),
           
           hr(),
           
           tags$p(tags$i(class = "bi bi-table me-1"),
-                 "Tabel Bobot PADU (.xlsx) (Opsional)",
+                 "Tabel bobot PADU (.xlsx) (opsional)",
                  style = "font-weight: 600; margin-bottom: 4px;"),
           tags$small(
             style = "color: #6c757d; display: block; margin-bottom: 8px;",
@@ -67,29 +109,25 @@ padu_combine_ui <- function(id) {
           
           hr(),
           
-          # Output directory warning (rendered server-side, see output$output_dir_warning)
           uiOutput(ns("output_dir_warning")),
           
           div(
             style = "display: flex; gap: 8px; flex-wrap: wrap;",
             actionButton(ns("btn_run"),
                          tagList(tags$i(class = "bi bi-play-fill me-1"),
-                                 "Lakukan Penggabungan Analisis PADU"),
+                                 "Lakukan penggabungan analisis PADU"),
                          class = "btn-success btn-sm")
           )
         )
       ),
       
-      # ── Right column: Output & Hasil (2/3) ──────────────────
+      # ── Right column: output & hasil (2/3) ──────────────────
       column(
         width = 8,
         card(
-          card_header("Output & Hasil"),
-          
+          card_header("Output & hasil"),
           uiOutput(ns("status_box")),
-          
           hr(),
-          
           create_result_ui(ns)
         )
       )
@@ -102,44 +140,63 @@ padu_combine_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # ── Reactive values ──────────────────────────────────────────
     rv <- reactiveValues(
       analysis_result = NULL,
-      gpkg_path = NULL,
-      xlsx_path = NULL,
-      log_messages = ""
+      gpkg_path       = NULL,
+      xlsx_path       = NULL,
+      log_messages    = ""
     )
     
-    # ── Folder Selection Logic ────────────────────────────────
+    # ── Manual override folder picker ────────────────────────
     roots <- c(
       Home    = path.expand("~"),
       Project = normalizePath(".."),
-      shinyFiles::getVolumes()()  
+      shinyFiles::getVolumes()()
     )
     
-    shinyDirChoose(input, "btn_browse_padu",
-                   roots   = roots,
-                   session = session)
+    manual_padu_dir <- reactiveVal(NULL)
     
-    padu_folder_path <- reactive({
-      req(input$btn_browse_padu)
+    shinyDirChoose(input, "btn_browse_padu", roots = roots, session = session)
+    
+    observeEvent(input$btn_browse_padu, {
       path <- parseDirPath(roots, input$btn_browse_padu)
-      if (length(path) == 0 || path == "") return(NULL)
-      as.character(path)
+      if (length(path) > 0 && nzchar(path)) manual_padu_dir(as.character(path))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$btn_reset_padu_dir, {
+      manual_padu_dir(NULL)
+      showNotification("Kembali ke deteksi otomatis.", type = "message", duration = 3)
     })
     
-    output$padu_dir_status <- renderUI({
-      path <- padu_folder_path()
-      if (!is.null(path)) {
-        tags$small(style = "color: #18bc9c;", icon("check-circle"), basename(path))
-      } else {
-        tags$small(style = "color: #e74c3c;", icon("exclamation-circle"), "Belum memilih folder")
+    # Discovery reactive 
+    padu_discovery <- reactive({
+      if (!is.null(manual_padu_dir())) {
+        folder <- manual_padu_dir()
+        files  <- if (dir.exists(folder)) {
+          list.files(folder, pattern = "^idx_padu_.*\\.gpkg$", full.names = TRUE)
+        } else character(0)
+        return(list(
+          files        = files,
+          source       = "manual",
+          source_label = folder,
+          missing      = character(0),
+          found_keys   = character(0)
+        ))
       }
+      disc <- discover_padu_files(output_dir())
+      list(
+        files        = disc$found,
+        source       = "auto",
+        source_label = "",
+        missing      = disc$missing,
+        found_keys   = disc$found_keys
+      )
     })
     
-    # ── Log helper ──────────────────────────────────────────────
+    # ── Log helper ────────────────────────────────────────────
     append_log <- function(msg) {
-      rv$log_messages <- paste0(rv$log_messages, format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
+      rv$log_messages <- paste0(rv$log_messages,
+                                format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
     }
     
     # ── Output directory warning ────────────────────────────────
@@ -151,55 +208,161 @@ padu_combine_server <- function(id, output_dir) {
       }
     })
     
-    # ── Run analysis ──────────────────────────────────────────
+    # ── Dir status line ──────────────────────────────────────
+    output$padu_dir_status <- renderUI({
+      disc <- padu_discovery()
+      
+      box_style <- paste(
+        "display: flex; align-items: center; gap: 8px;",
+        "padding: 8px 10px; border-radius: 8px;",
+        "font-size: 0.8rem; font-weight: 600; margin-top: 4px;",
+        "border: 1px solid;"
+      )
+      
+      if (disc$source == "manual") {
+        tags$div(
+          style = paste(box_style,
+                        "background-color: #eef6fc; color: #1b75ba;",
+                        "border-color: #cfe3f5;"),
+          icon("hand-pointer"),
+          tags$span(paste0("Folder manual (", length(disc$files), " file)"))
+        )
+      } else if (length(disc$files) == 0) {
+        tags$div(
+          style = paste(box_style,
+                        "background-color: #FEF2F2; color: #b91c1c;",
+                        "border-color: #FECACA;"),
+          icon("exclamation-circle"),
+          tags$span("Tidak ada file PADU terdeteksi otomatis")
+        )
+      } else {
+        tags$div(
+          style = paste(box_style,
+                        "background-color: #ecfdf5; color: #106665;",
+                        "border-color: #bbf7d0;"),
+          icon("check-circle"),
+          tags$span(paste0("Terdeteksi otomatis: ",
+                           length(disc$files), "/",
+                           length(PADU_MODULE_DIRS), " modul PADU"))
+        )
+      }
+    })
+    
+    output$padu_discovery_feedback <- renderUI({
+      disc <- padu_discovery()
+      if (length(disc$files) == 0 && length(disc$missing) == 0) return(NULL)
+      
+      found_items <- if (length(disc$files) > 0) {
+        tags$ul(
+          style = "margin: 4px 0 4px 0; padding-left: 18px; font-size: 0.78rem;",
+          lapply(disc$files, function(f) {
+            tags$li(style = "color: #106665;",
+                    icon("circle-check", style = "margin-right:4px;"),
+                    paste0(basename(dirname(f)), " → ", basename(f)))
+          })
+        )
+      } else NULL
+      
+      missing_items <- if (length(disc$missing) > 0) {
+        tags$ul(
+          style = "margin: 4px 0 0 0; padding-left: 18px; font-size: 0.78rem;",
+          lapply(disc$missing, function(k) {
+            tags$li(style = "color: #b45309;",
+                    icon("triangle-exclamation", style = "margin-right:4px;"),
+                    paste0("PADU-", toupper(k), " belum tersedia"))
+          })
+        )
+      } else NULL
+      
+      header_label <- if (nzchar(disc$source_label)) {
+        paste0("Modul PADU terdeteksi (", disc$source_label, ")")
+      } else {
+        "Modul PADU terdeteksi"
+      }
+      
+      tags$div(
+        style = paste("background-color: #F8FAFC; border: 1px solid #E2E8F0;",
+                      "border-radius: 8px; padding: 8px 10px; margin-top: 6px;"),
+        tags$div(style = paste("font-size: 0.72rem; font-weight: 700; color: #475569;",
+                               "letter-spacing: 0.3px; margin-bottom: 4px;"),
+                 header_label),
+        found_items,
+        missing_items
+      )
+    })
+    
+    # ── Run analysis ─────────────────────────────────────────
     observeEvent(input$btn_run, {
       
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification(
           "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
+          type = "error", duration = 5
         )
         return()
       }
       
-      req(input$idx_serasi_file, padu_folder_path())
+      disc <- tryCatch(
+        padu_discovery(),
+        error = function(e) {
+          list(files = character(0), source = "auto", source_label = "",
+               missing = character(0), found_keys = character(0))
+        }
+      )
       
-      # Reset previous results
+      missing_inputs <- character(0)
+      if (is.null(input$idx_serasi_file)) missing_inputs <- c(missing_inputs, "peta SERASI")
+      if (length(disc$files) == 0)        missing_inputs <- c(missing_inputs, "file PADU")
+      
+      if (length(missing_inputs) > 0) {
+        showNotification(
+          paste0("Harap unggah ", paste(missing_inputs, collapse = " dan "),
+                 " sebelum melanjutkan."),
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      
+      if (length(disc$missing) > 0) {
+        showNotification(
+          paste0("Modul PADU belum tersedia: ",
+                 paste(toupper(disc$missing), collapse = ", "),
+                 ". Analisis akan dilanjutkan tanpa modul tersebut."),
+          type = "warning", duration = 8
+        )
+      }
+      
       rv$analysis_result <- NULL
-      rv$gpkg_path <- NULL
-      rv$xlsx_path <- NULL
-      rv$log_messages <- ""
+      rv$gpkg_path       <- NULL
+      rv$xlsx_path       <- NULL
+      rv$log_messages    <- ""
       
-      append_log("Memulai analisis Kombinasi PADU...")
+      append_log("Memulai analisis kombinasi PADU...")
+      append_log(paste0("Sumber file PADU: ", disc$source_label))
+      if (length(disc$missing) > 0)
+        append_log(paste0("Modul tidak tersedia: ", paste(disc$missing, collapse = ", ")))
       
-      withProgress(message = "Menjalankan Analisis Kombinasi PADU", value = 0, {
+      withProgress(message = "Menjalankan analisis kombinasi PADU", value = 0, {
         
         tryCatch({
-          # Step 1: Load base map (progress 10%)
+          # Step 1: Load base SERASI map
           incProgress(0.1, detail = "Memuat peta SERASI...")
           idx_serasi_map <- sf::st_read(input$idx_serasi_file$datapath, quiet = TRUE) %>%
             dplyr::select(-dplyr::any_of("area_flag"))
           append_log("Peta SERASI berhasil dimuat.")
           
-          # Step 2: Load PADU files (progress 30%)
-          incProgress(0.2, detail = "Mencari file PADU...")
-          padu_files <- list.files(padu_folder_path(), pattern = "^idx_padu_.*\\.gpkg$", full.names = TRUE)
-          
-          if (length(padu_files) == 0) {
-            stop("Tidak ditemukan file idx_padu_*.gpkg di folder yang dipilih.")
-          }
-          append_log(paste("Ditemukan", length(padu_files), "file PADU."))
+          # Step 2: Resolve PADU file list (from discovery)
+          incProgress(0.2, detail = "Menyiapkan file PADU...")
+          padu_files <- disc$files
+          append_log(paste("Menggunakan", length(padu_files), "file PADU."))
           
           incProgress(0.2, detail = "Membaca file PADU...")
           padu_list <- lapply(padu_files, function(f) {
-            df <- sf::st_read(f, quiet = TRUE) %>% sf::st_drop_geometry()
-            return(df)
+            sf::st_read(f, quiet = TRUE) %>% sf::st_drop_geometry()
           })
           append_log("Semua file PADU berhasil dibaca.")
           
-          # Step 3: Load/Prepare weights (progress 60%)
+          # Step 3: Load/Prepare weights
           incProgress(0.1, detail = "Mempersiapkan bobot...")
           padu_idx_weight <- NULL
           
@@ -213,22 +376,20 @@ padu_combine_server <- function(id, output_dir) {
             append_log("Tabel bobot berhasil dimuat.")
           } else {
             n <- length(padu_list)
-            append_log(paste("Tabel bobot tidak diunggah. Menggunakan bobot seragam (1/", n, ") untuk setiap indeks.", sep = ""))
+            append_log(paste0("Tabel bobot tidak diunggah. Menggunakan bobot seragam (1/", n,
+                              ") untuk setiap indeks."))
             sample_df <- padu_list[[1]]
-            idx_cols <- grep("^idx_padu_", names(sample_df), value = TRUE)
+            idx_cols  <- grep("^idx_padu_", names(sample_df), value = TRUE)
             if (length(idx_cols) != length(padu_list)) {
               file_names <- basename(padu_files)
-              labels <- gsub("^idx_padu_|\\.gpkg$", "", file_names)
+              labels     <- gsub("^idx_padu_|\\.gpkg$", "", file_names)
             } else {
               labels <- idx_cols
             }
-            padu_idx_weight <- data.frame(
-              index = labels,
-              weight = rep(1 / n, n)
-            )
+            padu_idx_weight <- data.frame(index = labels, weight = rep(1 / n, n))
           }
           
-          # Step 4: Calculate combined PADU index (progress 80%)
+          # Step 4: Compute combined PADU index
           incProgress(0.2, detail = "Menghitung indeks kombinasi...")
           append_log("Menghitung indeks PADU kombinasi...")
           idx_padu_map <- calculate_padu_index(
@@ -238,14 +399,13 @@ padu_combine_server <- function(id, output_dir) {
           )
           append_log("Perhitungan indeks kombinasi selesai.")
           
-          # Step 5: Save results (progress 95%)
+          # Step 5: Save
           incProgress(0.15, detail = "Menyimpan hasil...")
           
           padu_combine_dir <- file.path(output_dir(), "Analisis PADU-Kombinasi")
           if (!dir.exists(padu_combine_dir)) {
             dir.create(padu_combine_dir, recursive = TRUE, showWarnings = FALSE)
           }
-          
           if (!dir.exists(padu_combine_dir)) {
             stop("Tidak dapat membuat atau mengakses direktori: ", padu_combine_dir)
           }
@@ -257,31 +417,33 @@ padu_combine_server <- function(id, output_dir) {
           res_table <- sf::st_drop_geometry(idx_padu_map)
           openxlsx::write.xlsx(res_table, xlsx_path)
           
-          rv$gpkg_path <- gpkg_path
-          rv$xlsx_path <- xlsx_path
+          rv$gpkg_path       <- gpkg_path
+          rv$xlsx_path       <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_map, table = res_table)
           
-          # Prepare input metadata
           out <- list(
             inputs = list(
-              start_time = Sys.time(),
-              idx_serasi_path = input$idx_serasi_file$datapath,
-              padu_folder_path = padu_folder_path(),
-              weight_table_path = if (!is.null(input$weight_table_file)) input$weight_table_file$datapath else NULL,
-              output_dir = output_dir(),
-              n_files = length(padu_files),
-              padu_files = basename(padu_files)
+              start_time        = Sys.time(),
+              idx_serasi_path   = input$idx_serasi_file$datapath,
+              padu_source       = disc$source,
+              padu_source_label = disc$source_label,
+              padu_folder_path  = if (disc$source == "manual") disc$source_label else output_dir(),
+              missing_modules   = disc$missing,
+              weight_table_path = if (!is.null(input$weight_table_file))
+                input$weight_table_file$datapath else NULL,
+              output_dir        = output_dir(),
+              n_files           = length(padu_files),
+              padu_files        = basename(padu_files)
             ),
             result = list(
               idx_serasi_map = idx_serasi_map,
-              idx_padu_map = idx_padu_map,
+              idx_padu_map   = idx_padu_map,
               idx_padu_table = res_table,
-              weight_table = padu_idx_weight,
-              padu_files = padu_files
+              weight_table   = padu_idx_weight,
+              padu_files     = padu_files
             )
           )
           
-          # Export log
           log_dir <- file.path(padu_combine_dir, "log")
           if (!dir.exists(log_dir)) {
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
@@ -291,21 +453,15 @@ padu_combine_server <- function(id, output_dir) {
             tryCatch({
               inputs <- out$inputs
               save(inputs, file = log_path)
-            }, error = function(e) {
-              warning("Gagal menulis file log: ", e$message)
-            })
-          } else {
-            warning("Direktori log tidak tersedia, lewati penulisan log.")
+            }, error = function(e) warning("Gagal menulis file log: ", e$message))
           }
           
-          # Store in shared environment for report generation
           session$userData$module_results$padu_combine <- out
           
-          # Export static map 
           idx_padu_combine_viz <- plot_continuous_map(
             map      = idx_padu_map,
-            column   = "idx_padu_final",  
-            title    = "Peta Indeks PADU Gabungan",
+            column   = "idx_padu_final",
+            title    = "Peta indeks PADU gabungan",
             legend   = "Indeks PADU",
             low      = "red",
             high     = "lightgreen",
@@ -330,51 +486,52 @@ padu_combine_server <- function(id, output_dir) {
       })
     })
     
-    # ── Status box ─────────────────────────────────────────────
+    # ── Status box ────────────────────────────────────────────
     output$status_box <- renderUI({
+      disc <- padu_discovery()
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
             "Analisis selesai.")
-      } else if (!is.null(input$idx_serasi_file) && !is.null(padu_folder_path())) {
+      } else if (!is.null(input$idx_serasi_file) && length(disc$files) > 0) {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
             "Siap menjalankan analisis.")
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
-            "Unggah peta SERASI dan pilih folder PADU.")
+            "Unggah peta SERASI dan pastikan file PADU tersedia.")
       }
     })
     
-    # ── Config & shared result rendering ──────────────────────
+    # ── Config & shared result rendering ─────────────────────
     padu_combine_config <- list(
-      map_color_col    = "idx_padu_final",
-      map_title        = "Indeks PADU",
-      map_palette      = "RdYlGn",
-      map_label_cols   = c(
+      map_color_col  = "idx_padu_final",
+      map_title      = "Indeks PADU",
+      map_palette    = "RdYlGn",
+      map_label_cols = c(
         "ID PU"       = "id_pu",
         "RTRW"        = "RTRW",
         "RZWP3K"      = "RZWP3K",
         "Indeks PADU" = "idx_padu_final"
       ),
       table_cols = c(
-        "id_pu"         = "ID PU",
-        "RTRW"          = "RTRW",
-        "RZWP3K"        = "RZWP3K",
-        "admin"         = "Administrasi",
-        "idx_padu_ke"   = "Indeks PADU-KE",
-        "idx_padu_hs"   = "Indeks PADU-HS",
-        "idx_padu_kl"   = "Indeks PADU-KL",
-        "idx_padu_kh"   = "Indeks PADU-KH",
-        "idx_padu_rtp"  = "Indeks PADU-RTp",
-        "idx_padu_se"   = "Indeks PADU-SE",
-        "idx_padu_ki"   = "Indeks PADU-KI",
-        "idx_padu_final" = "Indeks PADU Kombinasi"
+        "id_pu"          = "ID PU",
+        "RTRW"           = "RTRW",
+        "RZWP3K"         = "RZWP3K",
+        "admin"          = "Administrasi",
+        "idx_padu_ke"    = "Indeks PADU-KE",
+        "idx_padu_hs"    = "Indeks PADU-HS",
+        "idx_padu_kl"    = "Indeks PADU-KL",
+        "idx_padu_kh"    = "Indeks PADU-KH",
+        "idx_padu_rtp"   = "Indeks PADU-RTp",
+        "idx_padu_se"    = "Indeks PADU-SE",
+        "idx_padu_ki"    = "Indeks PADU-KI",
+        "idx_padu_final" = "Indeks PADU kombinasi"
       ),
       table_round_cols = c(
         "Indeks PADU-KE", "Indeks PADU-HS", "Indeks PADU-KL", "Indeks PADU-KH",
-        "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI", "Indeks PADU Kombinasi"
+        "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI", "Indeks PADU kombinasi"
       )
     )
     
