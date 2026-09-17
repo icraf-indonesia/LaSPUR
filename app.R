@@ -535,6 +535,66 @@ ui <- page_sidebar(
       flex: 0 0 100% !important;
       max-width: 100% !important;
     }
+    
+    /* ========================================================
+    COMPACT STATUS BOX — ALL MODULES, ALL VARIANTS
+    ======================================================== */
+    [id$='-status_box'] .alert,
+    .laspur-status-row .alert {
+      padding: 8px 16px !important;
+      margin-bottom: 0 !important;
+      font-size: 0.85rem;
+      line-height: 1.3;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      border-radius: 8px;
+    }
+    [id$='-status_box'] .alert i,
+    [id$='-status_box'] .alert .bi,
+    .laspur-status-row .alert i,
+    .laspur-status-row .alert .bi {
+      margin-right: 8px;
+      font-size: 1rem;
+    }
+
+    [id$='-status_box'] .alert-success,
+    .laspur-status-row .alert-success {
+      background-color: #e6f2f2 !important;
+      border-color: #c9e4e4 !important;
+      color: #106665 !important;
+    }
+    [id$='-status_box'] .alert-secondary,
+    .laspur-status-row .alert-secondary {
+      background-color: #F8FAFC !important;
+      border-color: #E2E8F0 !important;
+      color: #64748B !important;
+    }
+    [id$='-status_box'] .alert-info,
+    .laspur-status-row .alert-info {
+      background-color: #eef6fc !important;
+      border-color: #cfe3f5 !important;
+      color: #1b75ba !important;
+    }
+    [id$='-status_box'] .alert-warning,
+    .laspur-status-row .alert-warning {
+      background-color: #FEF3C7 !important;
+      border-color: #FDE68A !important;
+      color: #92400E !important;
+    }
+    [id$='-status_box'] .alert-danger,
+    .laspur-status-row .alert-danger {
+      background-color: #FEF2F2 !important;
+      border-color: #FECACA !important;
+      color: #b91c1c !important;
+    }
+
+    .laspur-status-row .laspur-open-dir-btn {
+      min-height: 38px;
+      padding: 8px 16px;
+      display: inline-flex;
+      align-items: center;
+    }
 
     /* ========================================================
        TOGGLE BUTTON STICKY ON RIGHT PANEL
