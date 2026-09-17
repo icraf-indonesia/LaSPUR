@@ -415,7 +415,7 @@ adjacent_server <- function(id, output_dir) {
           mendekati RTRW sebelum menghitung panjang segmen bersama. 
           Nilai 0.5 meter cukup untuk mengatasi kesalahan digitasi umum. 
           Naikkan (misal 1–2 meter) jika sering muncul hasil panjang = 0 meskipun secara visual 
-          kedua poligon bersentuhan. Jangan terlalu besar agar tidak menjepret batas yang sebenarnya tidak bersentuhan.",
+          kedua poligon bersentuhan.",
             style = "color: #6c757d; display: block; margin-top: -5px; margin-bottom: 0; font-size: 0.85em;"
           ),
           

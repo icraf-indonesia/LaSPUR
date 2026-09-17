@@ -506,9 +506,9 @@ ui <- page_sidebar(
       overflow: hidden;
     }
 
-    .module-panel-wrapper > .row > .col-sm-4 {
-      flex: 0 0 33.3333%;
-      max-width: 33.3333%;
+    .module-panel-wrapper > .row > *:first-child {
+      flex: 0 0 33.3333% !important;
+      max-width: 33.3333% !important;
       overflow: hidden;
       transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
                   max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -516,14 +516,15 @@ ui <- page_sidebar(
                   padding   0.35s ease;
     }
 
-    .module-panel-wrapper > .row > .col-sm-8 {
-      flex: 0 0 66.6667%;
-      max-width: 66.6667%;
+    .module-panel-wrapper > .row > *:last-child {
+      flex: 1 1 auto !important;
+      max-width: 66.6667% !important;
+      min-width: 0;
       transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
                   max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .module-panel-wrapper.panel-collapsed > .row > .col-sm-4 {
+    .module-panel-wrapper.panel-collapsed > .row > *:first-child {
       flex: 0 0 0% !important;
       max-width: 0 !important;
       opacity: 0;
@@ -531,8 +532,8 @@ ui <- page_sidebar(
       padding-right: 0 !important;
       pointer-events: none;
     }
-    .module-panel-wrapper.panel-collapsed > .row > .col-sm-8 {
-      flex: 0 0 100% !important;
+    .module-panel-wrapper.panel-collapsed > .row > *:last-child {
+      flex: 1 1 100% !important;
       max-width: 100% !important;
     }
     
@@ -1028,7 +1029,11 @@ server <- function(input, output, session) {
     showNotification("Fitur ini sedang dalam pengembangan.", type = "warning", duration = 5)
   })
   
-  roots <- c(Home = path.expand("~"), Project = normalizePath(".."), shinyFiles::getVolumes()())
+  roots <- c(
+    Home    = path.expand("~"),
+    Project = normalizePath(".."),
+    tryCatch(shinyFiles::getVolumes()(), warning = function(w) character(0))
+  )
   shinyDirChoose(input, "btn_browse_output", roots = roots, session = session)
   
   output_dir <- reactive({
@@ -1564,61 +1569,97 @@ $(document).ready(function() {
   function injectToggleButtons() {
     $('.module-panel-wrapper').each(function() {
       var $wrapper = $(this);
-      var $rightCol = $wrapper.find('> .row > .col-sm-8');
-      if (!$rightCol.length) return;
 
-      $rightCol.find('.panel-toggle-container, .panel-toggle-btn').remove();
+      if ($wrapper.find('.panel-toggle-btn').length) return;
 
-      var $header = $rightCol.find('.card-header');
-      var $btn;
+      var $row = $wrapper.children('.row').first();
+      if (!$row.length) return;
 
-      function createToggleButton(appendTo) {
-        $btn = $('<button class=\"panel-toggle-btn\" type=\"button\" title=\"Sembunyikan / Tampilkan Panel Input\">' +
-          '<i class=\"bi bi-layout-sidebar-inset-reverse\"></i>' +
-          '<span>Perluas</span>' +
-          '</button>');
-        if (appendTo.is('.card-header')) {
-          $btn.css({
-            'float': 'right',
-            'margin-top': '5px',
-            'margin-right': '5px'
-          });
-        } else {
-          var $container = $('<div class=\"panel-toggle-container\" style=\"display: flex; justify-content: flex-end; padding: 8px 16px;\">');
-          $container.append($btn);
-          appendTo = $container;
-          $rightCol.prepend($container);
-        }
-        appendTo.append($btn);
+      var $cols = $row.children();
+      if ($cols.length < 2) return;
 
-        $btn.on('click', function(e) {
-          e.stopPropagation();
-          var $icon  = $(this).find('i');
-          var $label = $(this).find('span');
-          var isCollapsed = $wrapper.hasClass('panel-collapsed');
+      var $rightCol = $cols.last();
+      var $header   = $rightCol.find('.card-header').first();
 
-          $wrapper.toggleClass('panel-collapsed');
-
-          if (isCollapsed) {
-            $icon.removeClass('bi-layout-sidebar-inset').addClass('bi-layout-sidebar-inset-reverse');
-            $label.text('Perluas');
-          } else {
-            $icon.removeClass('bi-layout-sidebar-inset-reverse').addClass('bi-layout-sidebar-inset');
-            $label.text('Ringkas');
-          }
-
-          setTimeout(function() { $(window).trigger('resize'); }, 380);
-        });
-      }
+      var $btn = $('<button class=\"panel-toggle-btn\" type=\"button\" ' +
+                   'title=\"Sembunyikan / Tampilkan Panel Input\">' +
+                   '<i class=\"bi bi-layout-sidebar-inset-reverse\"></i>' +
+                   '<span>Perluas</span></button>');
 
       if ($header.length) {
-        createToggleButton($header);
+        $header.css('position', 'relative');
+        $btn.css({ float: 'right', 'margin-top': '5px', 'margin-right': '5px' });
+        $header.append($btn);
       } else {
-        createToggleButton($rightCol);
+        var $container = $('<div class=\"panel-toggle-container\" ' +
+                           'style=\"display:flex;justify-content:flex-end;padding:8px 16px;\"></div>');
+        $container.append($btn);
+        $rightCol.prepend($container);
       }
     });
   }
-  
+
+  $(document)
+    .off('click.laspurToggle', '.panel-toggle-btn')
+    .on('click.laspurToggle', '.panel-toggle-btn', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var $btn     = $(this);
+      var $wrapper = $btn.closest('.module-panel-wrapper');
+      if (!$wrapper.length) return;
+
+      var $row  = $wrapper.children('.row').first();
+      var $cols = $row.children();
+      if ($cols.length < 2) return;
+
+      var $leftCol  = $cols.first();
+      var $rightCol = $cols.last();
+
+      var collapse  = !$wrapper.hasClass('panel-collapsed');
+      var transition = 'flex 0.35s cubic-bezier(0.4,0,0.2,1),' +
+                       'max-width 0.35s cubic-bezier(0.4,0,0.2,1),' +
+                       'opacity 0.25s ease, padding 0.35s ease';
+
+      $wrapper.toggleClass('panel-collapsed', collapse);
+
+      if (collapse) {
+        $leftCol.css({
+          'flex': '0 0 0%', 'max-width': '0', 'opacity': '0',
+          'padding-left': '0', 'padding-right': '0',
+          'overflow': 'hidden', 'pointer-events': 'none',
+          'transition': transition
+        });
+        $rightCol.css({
+          'flex': '1 1 100%', 'max-width': '100%', 'transition': transition
+        });
+      } else {
+        $leftCol.css({
+          'flex': '', 'max-width': '', 'opacity': '',
+          'padding-left': '', 'padding-right': '',
+          'overflow': 'hidden', 'pointer-events': '',
+          'transition': transition
+        });
+        $rightCol.css({
+          'flex': '', 'max-width': '', 'transition': transition
+        });
+      }
+
+      var $icon  = $btn.find('i');
+      var $label = $btn.find('span');
+      if (collapse) {
+        $icon.removeClass('bi-layout-sidebar-inset')
+             .addClass('bi-layout-sidebar-inset-reverse');
+        $label.text('Perluas');
+      } else {
+        $icon.removeClass('bi-layout-sidebar-inset-reverse')
+             .addClass('bi-layout-sidebar-inset');
+        $label.text('Ringkas');
+      }
+
+      setTimeout(function () { $(window).trigger('resize'); }, 380);
+    });
+
   function relocateNavButtons() {
     $('.laspur-nav-buttons').each(function() {
       var $nav = $(this);
@@ -1754,12 +1795,6 @@ $(document).ready(function() {
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
-
-  setInterval(function() {
-    injectToggleButtons();
-    injectModuleDirButtons();
-    relocateNavButtons();
-  }, 800);
 
   Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
     document.getElementById('info_modal_title').innerText = msg.title;
