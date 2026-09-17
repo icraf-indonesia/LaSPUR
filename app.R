@@ -1029,11 +1029,7 @@ server <- function(input, output, session) {
     showNotification("Fitur ini sedang dalam pengembangan.", type = "warning", duration = 5)
   })
   
-  roots <- c(
-    Home    = path.expand("~"),
-    Project = normalizePath(".."),
-    tryCatch(shinyFiles::getVolumes()(), warning = function(w) character(0))
-  )
+  roots <- c(Home = path.expand("~"), Project = normalizePath(".."), shinyFiles::getVolumes()())
   shinyDirChoose(input, "btn_browse_output", roots = roots, session = session)
   
   output_dir <- reactive({
