@@ -1,0 +1,205 @@
+---
+title: "PADU-HS"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis **PADU-HS (Hidrologi dan Sedimentasi)** merupakan bagian dari analisis PADU yang menggunakan informasi karakteristik hidrologi dan sedimentasi untuk menilai keterpaduan ruang darat dan laut.
+
+Pada tahap ini digunakan **Peta Indeks SERASI**, **Peta Total Suspended Solid (TSS)**, dan **Peta Jarak Estuari** sebagai input analisis. Peta Jarak Estuari dapat disediakan dalam bentuk raster atau vektor sesuai format data yang digunakan oleh pengguna.
+
+# Input Mandatory
+
+Bagian ini berisi data yang wajib tersedia sebelum proses analisis PADU-HS dapat dijalankan.
+
+| No. | Data | Format | Peran |
+|----|----|----|----|
+| 1 | Peta Indeks SERASI | Vektor | Input hasil analisis SERASI yang menjadi dasar analisis PADU-HS. |
+| 2 | Peta Total Suspended Solid (TSS) | Raster | Input parameter Total Suspended Solid dalam analisis PADU-HS. |
+| 3 | Peta Jarak Estuari | Raster / Vektor | Input jarak terhadap kawasan estuari dalam analisis PADU-HS. |
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil analisis SERASI yang digunakan sebagai input pada analisis PADU-HS. Data ini memuat informasi spasial hasil penilaian keserasian antara alokasi ruang RTRW dan RZWP3K pada area yang dianalisis.
+
+Data dapat tersedia dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)** sesuai dengan hasil proses pada tahap SERASI.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+
+|  |  |  |  |  |  |
+|----|----|----|----|----|----|
+| Peta Indeks SERASI | GeoPackage / Shapefile | Hasil analisis SERASI yang digunakan sebagai input spasial untuk analisis PADU-HS. | LaSPUR | \- | \- |
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+## Peta Total Suspended Solid (TSS)
+
+### Deskripsi
+
+Peta **Total Suspended Solid (TSS)** merupakan data raster yang digunakan untuk merepresentasikan konsentrasi material tersuspensi di perairan. Informasi TSS digunakan sebagai salah satu parameter dalam analisis **PADU-HS** untuk menggambarkan karakteristik sedimentasi pada wilayah analisis.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|----|----|----|----|----|----|
+| Total Suspended Solid (TSS) | GeoTIFF | Data raster konsentrasi Total Suspended Solid yang digunakan sebagai parameter analisis PADU-HS. | — | — | — |
+
+### Preview
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_hs",
+    "TSS_training.tif"
+  )
+)
+```
+
+## Peta Jarak Estuari
+
+### Deskripsi
+
+Peta Jarak Estuari merupakan data spasial yang digunakan untuk merepresentasikan jarak setiap lokasi terhadap kawasan estuari sebagai salah satu parameter dalam analisis **PADU-HS**.
+
+Peta Jarak Estuari dapat disediakan dalam dua bentuk data, yaitu:
+
+1.  **Raster jarak Euclidean** dalam format GeoTIFF; atau
+
+2.  **Data vektor kawasan estuari** dalam format Shapefile yang digunakan sebagai sumber informasi kawasan estuari.
+
+Pengguna cukup menyediakan salah satu format yang sesuai dengan kebutuhan proses analisis.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|----|----|----|----|----|----|
+| Peta Jarak Estuari | GeoTIFF | Raster jarak Euclidean terhadap kawasan estuari. | — | — | — |
+| Peta Kawasan Estuari | Shapefile | Data vektor kawasan estuari yang dapat digunakan sebagai alternatif input untuk menghasilkan informasi jarak estuari. | — | — | — |
+
+### Preview (Format Raster)
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+### Spesifikasi Teknis (Format Raster)
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+### Pemeriksaan Data (Format Raster)
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_hs",
+    "EucD_Estuari_training.tif"
+  )
+)
+```
+
+### Preview (Format Vektor)
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```
+
+### Spesifikasi Teknis (Format Vektor)
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```
+
+### Pemeriksaan Data (Format Vektor)
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_hs",
+    "ST_Estuari_PT_training.shp"
+  )
+)
+```
+
+# Parameter
+
+Jarak Estuari Maksimum (meter) adalah **5000**.

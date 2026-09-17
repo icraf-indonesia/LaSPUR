@@ -1,0 +1,84 @@
+---
+title: "PADU-KI"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Deskripsi
+
+Dataset PADU-KI merupakan data vektor yang merepresentasikan kawasan rawan bencana yang dipengaruhi oleh perubahan iklim. Dataset ini digunakan sebagai salah satu parameter dalam analisis PADU-KI untuk menilai tingkat kesesuaian dan potensi konflik pemanfaatan ruang.
+
+---
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|-----------|--------|------------|
+| ST_KRB_climate | Shapefile | Kawasan rawan bencana akibat perubahan iklim. |
+
+---
+
+# Visualisasi
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_ki",
+    "ST_KRB_climate_training.shp"
+  )
+)
+```
+
+---
+
+# Sumber Data
+
+| Dataset | Instansi | Tahun | URL |
+|----------|----------|-------|-----|
+| Kawasan Rawan Bencana | Pemerintah Daerah | - | - |
+
+---
+
+# Spesifikasi Teknis
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_ki",
+    "ST_KRB_climate_training.shp"
+  )
+)
+```
+
+---
+
+# Digunakan pada Tahapan
+
+| Tahapan | Digunakan |
+|----------|:---------:|
+| Persiapan Data | ✔ |
+| PADU-KI | ✔ |
+| Rekonsiliasi | ✔ |
+| Output | ✔ |
+
+---
+
+# Pemeriksaan Data
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_ki",
+    "ST_KRB_climate_training.shp"
+  )
+)
+```

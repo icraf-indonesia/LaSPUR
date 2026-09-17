@@ -1,0 +1,194 @@
+---
+title: "PADU-RTP"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis **PADU-RTP** (Keterpaduan Rencana Tata Ruang dan Pelayaran/Industri) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan ruang berbasis jarak dan tingkat aksesibilitas terhadap kawasan industri serta alur pelayaran berdasarkan Peta Indeks SERASI.
+
+Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, data **Jarak ke Industri**, dan data **Jarak ke Alur Pelayaran** (baik berupa data Vektor yang dihitung jaraknya secara otomatis maupun data Raster jarak/Euclidean Distance yang sudah ada).
+
+# Input Mandatory
+
+Bagian ini berisi data yang wajib tersedia sebelum proses analisis dapat dijalankan.
+
+|  |  |  |  |
+|----|----|----|----|
+| **No.** | **Data** | **Format** | **Peran** |
+| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
+| 2 | Peta Jarak ke Industri | Vektor / Raster | Acuan jarak/aksesibilitas terhadap kawasan industri |
+| 3 | Peta Jarak ke Alur Pelayaran | Vektor / Raster | Acuan jarak/aksesibilitas terhadap alur pelayaran |
+
+------------------------------------------------------------------------
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-KE**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Peta Jarak ke Industri
+
+Data aksesibilitas/jarak ke industri dapat diperoleh melalui dua opsi skenario sumber data:
+
+### Opsi A: Unggah Vektor (Hitung Jarak Otomatis)
+
+Pengguna mengunggah data spasial vektor lokasi kawasan industri, dan sistem akan menghitung jarak (Euclidean Distance) secara otomatis.
+
+#### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| ST_Industri | Shapefile | Lokasi spasial kawasan industri. | Pemda | — | — |
+
+#### Preview
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_rtp", "ST_Industri_training.shp")
+)
+```
+ 
+#### Spesifikasi Teknis
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_rtp", "ST_Industri_training.shp")
+)
+```
+
+#### Pemeriksaan Data
+```{r}
+check_vector(
+  data_path("vector", "padu_rtp", "ST_Industri_training.shp")
+)
+```
+
+### Opsi B: Unggah Raster Jarak yang Sudah Ada
+
+Pengguna mengunggah data raster jarak (Euclidean Distance) kawasan industri yang sudah diproses sebelumnya.
+
+#### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| EuDist Industri | GeoTIFF | Raster Euclidean Distance terhadap kawasan industri. | CIFOR-ICRAF | — | — |
+
+#### Preview
+
+```{r}
+create_raster_map(
+  data_path("raster", "padu_rtp", "EucD_Industri_training.tif")
+)
+```
+
+#### Spesifikasi Teknis
+```{r}
+get_raster_metadata(
+  data_path("raster", "padu_rtp", "EucD_Industri_training.tif")
+)
+```
+
+#### Pemeriksaan Data
+```{r}
+check_raster(
+  data_path("raster", "padu_rtp", "EucD_Industri_training.tif")
+)
+```
+
+------------------------------------------------------------------------
+
+## Peta Jarak ke Alur Pelayaran
+
+Data aksesibilitas/jarak ke alur pelayaran dapat diperoleh melalui dua opsi skenario sumber data:
+
+### Opsi A: Unggah Vektor (Hitung Jarak Otomatis)
+
+Pengguna mengunggah data spasial vektor jalur/alur pelayaran, dan sistem akan menghitung jarak (Euclidean Distance) secara otomatis.
+
+#### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| ST_AlurPelayaran | Shapefile | Jalur/alur pelayaran perairan. | Pemda | — | — |
+
+#### Preview
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_rtp", "ST_AlurPelayaran_training.shp")
+)
+```
+
+#### Spesifikasi Teknis
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_rtp", "ST_AlurPelayaran_training.shp")
+)
+```
+
+#### Pemeriksaan Data
+```{r}
+check_vector(
+  data_path("vector", "padu_rtp", "ST_AlurPelayaran_training.shp")
+)
+```
+
+### Opsi B: Unggah Raster Jarak yang Sudah Ada
+
+Pengguna mengunggah data raster jarak (Euclidean Distance) alur pelayaran yang sudah diproses sebelumnya.
+
+#### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| EuDist Alur Pelayaran | GeoTIFF | Raster Euclidean Distance terhadap alur pelayaran. | CIFOR-ICRAF | — | — |
+
+#### Preview
+
+```{r}
+create_raster_map(
+  data_path("raster", "padu_rtp", "EucD_AlurPl_training.tif")
+)
+```
+
+#### Spesifikasi Teknis
+```{r}
+get_raster_metadata(
+  data_path("raster", "padu_rtp", "EucD_AlurPl_training.tif")
+)
+```
+
+#### Pemeriksaan Data
+```{r}
+check_raster(
+  data_path("raster", "padu_rtp", "EucD_AlurPl_training.tif")
+)
+```

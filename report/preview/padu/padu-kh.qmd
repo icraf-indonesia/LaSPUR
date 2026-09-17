@@ -1,0 +1,184 @@
+---
+title: "PADU-KH"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis PADU-KH (Keterpaduan Kawasan Habitat) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan ruang pada area habitat penting/kritis (seperti ekosistem mangrove, terumbu karang, dan padang lamun) terhadap alokasi ruang darat dan laut berbasis Peta Indeks SERASI.
+
+Pada tahap ini, pengguna menyiapkan Peta Indeks SERASI serta data habitat yang dapat bersumber dari Ekstrak Tutupan Lahan (LULC) atau File Habitat Terpisah.
+
+# Input Mandatory
+
+Bagian ini berisi tabel data spasial yang **wajib tersedia** sebelum analisis PADU-KH dijalankan.
+
+|  |  |  |  |
+|------------------|------------------|------------------|------------------|
+| **No.** | **Data** | **Format** | **Peran** |
+| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
+| 2 | Data Habitat (LULC / Terpisah) | Vektor | Acuan sebaran ekosistem/habitat kritis |
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-KH**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Sumber Peta Habitat
+
+Data habitat dapat diperoleh melalui dua skenario sumber data di bawah ini:
+
+### Opsi A: Ekstrak dari Tutupan Lahan (LULC)
+
+Peta habitat dapat diekstrak langsung dari peta Tutupan Lahan (LULC) berdasarkan ID Kelas tertentu yang menunjukkan jenis habitat.
+
+- **ID Kelas Default:** `5, 6` (Mangrove), `24` (Terumbu Karang), `25` (Padang Lamun).
+
+#### Data yang Digunakan
+
+|  |  |  |  |  |  |
+|------------|------------|------------|------------|------------|------------|
+| **Nama Data** | **Format** | **Keterangan** | **Sumber** | **Tahun** | **URL** |
+| Peta LULC Habitat | Shapefile | Peta tutupan lahan yang memuat informasi ekosistem terumbu karang, lamun, dan/atau mangrove. | — |  |  |
+
+#### Preview
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_kh", "PL2024_Coral_Seagrass_training.shp")
+)
+```
+
+#### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_kh", "PL2024_Coral_Seagrass_training.shp")
+)
+```
+
+#### Pemeriksaan Data
+
+```{r}
+check_vector(
+  data_path("vector", "padu_kh", "PL2024_Coral_Seagrass_training.shp")
+)
+```
+
+### Opsi B: File Habitat Terpisah
+
+Jika tidak menggunakan ekstrak LULC, pengguna dapat memasukkan data spasial terpisah untuk masing-masing jenis habitat.
+
+#### Data yang Digunakan
+
+| Nama Data   | Format    | Keterangan                | Sumber       | Tahun | URL |
+|:------------|:----------|:--------------------------|:-------------|:------|:----|
+| Mangrove    | Shapefile | Sebaran kawasan mangrove. | Pemda / KLHK | —     | —   |
+| AC_Coral    | Shapefile | Sebaran terumbu karang.   | Pemda / KLHK | —     | —   |
+| AC_Seagrass | Shapefile | Sebaran padang lamun.     | Pemda / KLHK | —     | —   |
+
+#### Mangrove
+
+##### Preview Mangrove
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_kh", "Mangrove_training.shp")
+)
+```
+
+##### Spesifikasi Teknis Mangrove
+
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_kh", "Mangrove_training.shp")
+)
+```
+
+##### Pemeriksaan Data Mangrove
+
+```{r}
+check_vector(
+  data_path("vector", "padu_kh", "Mangrove_training.shp")
+)
+```
+
+#### Terumbu Karang (Coral)
+
+##### Preview Terumbu Karang (Coral)
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_kh", "AC_Coral_training.shp")
+)
+```
+
+##### Spesifikasi Teknis Terumbu Karang (Coral)
+
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_kh", "AC_Coral_training.shp")
+)
+```
+
+##### Pemeriksaan Data Terumbu Karang (Coral)
+
+```{r}
+check_vector(
+  data_path("vector", "padu_kh", "AC_Coral_training.shp")
+)
+```
+
+#### Lamun (Seagrass)
+
+##### Preview Lamun (Seagrass)
+
+```{r}
+create_vector_map(
+  data_path("vector", "padu_kh", "AC_Seagrass_training.shp")
+)
+```
+
+##### Spesifikasi Teknis Lamun (Seagrass)
+
+```{r}
+get_vector_metadata(
+  data_path("vector", "padu_kh", "AC_Seagrass_training.shp")
+)
+```
+
+##### Pemeriksaan Data Lamun (Seagrass)
+
+```{r}
+check_vector(
+  data_path("vector", "padu_kh", "AC_Seagrass_training.shp")
+)
+```

@@ -1,0 +1,107 @@
+---
+title: "PADU-KL"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis PADU-KL (Kawasan Lindung Terintegrasi) merupakan bagian dari analisis PADU yang digunakan untuk menilai keterpaduan kawasan lindung dalam ruang darat dan laut.
+
+Pada tahap ini digunakan Peta Indeks SERASI dan Peta Kawasan Lindung sebagai input spasial. Informasi tersebut digunakan untuk mengidentifikasi keterkaitan kawasan lindung dengan hasil analisis keserasian ruang sebagai bagian dari proses rekonsiliasi tata ruang darat dan laut.
+
+# Input Mandatory
+
+Bagian ini berisi data yang wajib tersedia sebelum proses analisis PADU-KL dapat dijalankan.
+
+| No. | Data | Format | Peran |
+|------------------|------------------|------------------|------------------|
+| 1 | Peta Indeks SERASI | Vektor | Input hasil analisis SERASI sebagai dasar analisis PADU-KL. |
+| 2 | Peta Kawasan Lindung | Vektor | Input spasial kawasan lindung yang digunakan dalam analisis PADU-KL. |
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-KL.** Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Peta Kawasan Lindung
+
+### Deskripsi
+
+Peta Kawasan Lindung merupakan data vektor yang digunakan untuk merepresentasikan kawasan yang memiliki fungsi perlindungan dalam analisis **PADU-KL**.
+
+Data ini digunakan untuk mengidentifikasi keberadaan dan keterkaitan kawasan lindung dalam ruang analisis sebagai salah satu parameter penilaian keterpaduan kawasan lindung darat dan laut.
+
+------------------------------------------------------------------------
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+
+|  |  |  |  |  |  |
+|------------|------------|------------|------------|------------|------------|
+| Peta Kawasan Lindung | Shapefile | Data spasial kawasan lindung yang digunakan sebagai parameter dalam analisis PADU-KL. | Pemerintah Daerah | \- | \- |
+
+### Preview
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector(
+  data_path(
+    "vector",
+    "padu_kl",
+    "ST_Kawasan_Lindung_training.shp"
+  )
+)
+```

@@ -22,46 +22,44 @@ website:
       # =====================================================
       - section: "Data Input"
         contents:
-
-          - section: "Tabular"
+          - section: "1. Analisis SERASI"
             contents:
-              - text: "Step 1"
-                href: step1-tables.qmd
-              - text: "Step 2"
-                href: step2-tables.qmd
-              - text: "Step 3"
-
-          - section: "Raster"
+              - href: serasi/01-tumpang-tindih.qmd
+                text: "01 Tumpang Tindih"
+              - href: serasi/02-bertetangga.qmd
+                text: "02 Bertetangga"
+  
+          - section: "2. Analisis PADU"
             contents:
-              - text: "PADU-KE"
-                href: raster/padu-ke.qmd
-              - text: "PADU-HS"
-                href: raster/padu-hs.qmd
-              - text: "PADU-RTP"
-                href: raster/padu-rtp.qmd
-              - text: "PADU-SE"
-                href: raster/padu-se.qmd  
-
-          - section: "Vektor"
+              - href: padu/padu-ke.qmd
+                text: "PADU-KE"
+              - href: padu/padu-hs.qmd
+                text: "PADU-HS"
+              - href: padu/padu-kl.qmd
+                text: "PADU-KL"
+              - href: padu/padu-kh.qmd
+                text: "PADU-KH"
+              - href: padu/padu-rtp.qmd
+                text: "PADU-RTp"
+              - href: padu/padu-se.qmd
+                text: "PADU-SE"
+              - href: padu/padu-ki.qmd
+                text: "PADU-KI"
+              - href: padu/padu-kombinasi.qmd
+                text: "PADU-Kombinasi"
+  
+          - href: padan/padan.qmd
+            text: "3. Analisis PADAN"
+  
+          - section: "4. Penyusunan Alternatif"
             contents:
-              - text: "Administrasi"
-                href: vector/administrasi.qmd
-              - text: "SERASI"
-                href: vector/serasi.qmd
-              - text: "PADU-KE"
-                href: vector/padu-ke.qmd
-              - text: "PADU-HS"
-                href: vector/padu-hs.qmd
-              - text: "PADU-KL"
-                href: vector/padu-kl.qmd
-              - text: "PADU-KH"
-                href: vector/padu-kh.qmd
-              - text: "PADU-RTP"
-                href: vector/padu-rtp.qmd
-              - text: "PADU-KI"
-                href: vector/padu-ki.qmd
-              - text: "Area of Interest (AoI)"
-                href: vector/aoi.qmd
+              - href: alternatif/01-tumpang-tindih.qmd
+                text: "01 Tumpang Tindih"
+              - href: alternatif/02-bertetangga.qmd
+                text: "02 Bertetangga"
+  
+          - href: rekonsiliasi/rekonsiliasi.qmd
+            text: "5. Rekonsiliasi"
 
       # =====================================================
       # PANDUAN PENGGUNAAN

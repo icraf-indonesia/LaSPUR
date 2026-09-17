@@ -1,0 +1,135 @@
+---
+title: "PADU-KE"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+# Input Mandatory
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-KE**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+## Peta Tutupan/Penggunaan Lahan
+
+### Deskripsi
+
+Peta Tutupan/Penggunaan Lahan merupakan data spasial yang digunakan dalam analisis **PADU-KE (Keterpaduan Penggunaan Lahan dan Perairan)**. Dataset ini merepresentasikan ekosistem pesisir yang menjadi bagian dari penilaian keterpaduan antara penggunaan lahan dan kondisi ekologi wilayah pesisir.
+
+Data yang digunakan pada contoh analisis berupa data gabungan **terumbu karang dan padang lamun**. Informasi tersebut digunakan untuk mengidentifikasi area dengan karakteristik ekosistem pesisir yang relevan dalam penilaian keterpaduan ruang.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun | URL |
+|------------|------------|------------|------------|------------|------------|
+| PL2024_Coral Seagrass Union | Shapefile | Data gabungan terumbu karang dan padang lamun yang digunakan sebagai salah satu input spasial dalam analisis PADU-KE. |  |  |  |
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "padu_ke", "PL2024_Coral_Seagrass_training.shp" ), color_field = "LC" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "padu_ke", "PL2024_Coral_Seagrass_training.shp" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "padu_ke", "PL2024_Coral_Seagrass_training.shp" ) )
+```
+
+------------------------------------------------------------------------
+
+# Input Intermediate
+
+## Tabel Matriks PADU-KE
+
+### Deskripsi
+
+Matriks PADU-KE merupakan tabel acuan yang digunakan untuk menentukan tingkat hubungan spasial antar kelas tutupan atau penggunaan lahan dalam perhitungan **PADU-KE (Keterpaduan Penggunaan Lahan dan Perairan)**.
+
+Setiap nilai pada matriks menunjukkan tingkat kedekatan atau hubungan spasial antara suatu kelas dengan kelas lainnya. Matriks ini digunakan oleh proses analisis sebagai dasar dalam menentukan nilai keterpaduan antar kelas.
+
+> **Catatan:** Data yang ditampilkan pada halaman ini merupakan **contoh struktur tabel** yang digunakan untuk mendokumentasikan format dan jenis informasi yang diperlukan oleh modul.
+
+------------------------------------------------------------------------
+
+### Definisi Kolom
+
+| Kolom | Tipe Data | Keterangan |
+|-------------------|--------------------------|---------------------------|
+| class | Character | Nama kelas penutupan lahan yang menjadi baris matriks. |
+| Hutan Lahan Kering Primer | Numeric | Nilai adjacency terhadap kelas tersebut. |
+| Hutan Lahan Kering Sekunder | Numeric | Nilai adjacency terhadap kelas tersebut. |
+| Hutan Mangrove Primer | Numeric | Nilai adjacency terhadap kelas tersebut. |
+| Hutan Rawa Primer | Numeric | Nilai adjacency terhadap kelas tersebut. |
+| Kolom kelas lainnya | Numeric | Nilai adjacency terhadap kelas penutupan lahan lainnya. |
+
+Secara umum digunakan nilai:
+
+| Nilai | Arti                                |
+|------:|-------------------------------------|
+|     3 | Konektivitas alami tinggi           |
+|     2 | Bisa berdampingan dengan pengaturan |
+|     1 | Kurang sesuai/risiko                |
+|     0 | Tidak sesuai/terlarang              |
+
+------------------------------------------------------------------------
+
+### Preview
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "matriks_padu_ke_klhk.xlsx"
+  )
+)
+```
+
+### Spesifikasi
+
+```{r}
+get_table_metadata(
+  data_path(
+    "tabular",
+    "step1",
+    "matriks_padu_ke_klhk.xlsx"
+  )
+)
+```

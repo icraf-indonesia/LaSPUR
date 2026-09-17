@@ -1,0 +1,295 @@
+---
+title: "Step 1 Tumpang Tindih"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis **Tumpang Tindih** merupakan tahap awal dalam analisis SERASI untuk mengidentifikasi keterkaitan antara alokasi ruang darat dalam **RTRW** dan alokasi ruang laut dalam **RZWP3K** berdasarkan kondisi spasial yang saling bertampalan.
+
+Pada tahap ini, pengguna menyiapkan data spasial RTRW dan RZWP3K, peta administrasi sebagai referensi wilayah, serta tabel acuan pola RTRW dan RZWP3K. Data tersebut digunakan sebagai dasar dalam penyusunan **Matriks SERASI**.
+
+------------------------------------------------------------------------
+
+# Input Mandatory
+
+Bagian ini berisi tabel yang **wajib tersedia** sebelum proses analisis dapat dijalankan.
+
+| No. | Data                         | Format  | Peran                             |
+|-----|------------------------------|---------|-----------------------------------|
+| 1   | Peta RTRW                    | Vektor  | Input spasial tata ruang darat    |
+| 2   | Peta RZWP3K                  | Vektor  | Input spasial tata ruang laut     |
+| 3   | Peta Administrasi (Opsional) | Vektor  | Referensi wilayah analisis        |
+| 4   | Tabel Acuan Pola RTRW        | Tabular | Acuan nomenklatur/pola ruang RTRW |
+| 5   | Tabel Acuan Pola RZWP3K      | Tabular | Acuan nomenklatur/zonasi RZWP3K   |
+
+------------------------------------------------------------------------
+
+## Peta RTRW
+
+### Deskripsi
+
+Peta RTRW digunakan sebagai input spasial untuk merepresentasikan alokasi ruang darat yang akan dianalisis terhadap alokasi ruang laut.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun | URL |
+|----|----|----|----|----|----|
+| Peta RTRW | Shapefile | Data pola ruang RTRW yang digunakan sebagai input analisis tumpang tindih dengan RZWP3K. | — | — | — |
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "Step1_RTRW_training.shp" ) )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "Step1_RTRW_training.shp" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "Step1_RTRW_training.shp" ) )
+```
+
+------------------------------------------------------------------------
+
+## Peta RZWP3K
+
+### Deskripsi
+
+Peta RZWP3K merupakan data vektor yang digunakan untuk merepresentasikan zonasi ruang laut dalam analisis SERASI. Data ini dianalisis bersama Peta RTRW untuk mengidentifikasi hubungan spasial antara rencana tata ruang darat dan laut.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Instansi | Tahun | URL |
+|----|----|----|----|----|----|
+| Peta RZWP3K | Shapefile | Data zonasi RZWP3K yang digunakan sebagai input analisis tumpang tindih dengan RTRW. | — | — | — |
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "Step1_RZWP3K_training.shp" ) )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "Step1_RZWP3K_training.shp" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "Step1_RZWP3K_training.shp" ) )
+```
+
+## Peta Administratif (Opsional)
+
+### Deskripsi
+
+Dataset Administrasi merupakan data vektor yang digunakan sebagai referensi batas wilayah administrasi dalam analisis SERASI. Dataset ini digunakan untuk mendukung identifikasi lokasi dan penyajian hasil analisis spasial.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun | URL |
+|-----------|--------|------------|--------|-------|-----|
+
+|  |  |  |  |  |  |
+|----|----|----|----|----|----|
+| GADM 4.1 Indonesia | Shapefile | Batas wilayah administrasi yang digunakan sebagai referensi analisis dan visualisasi spasial pada LaSPUR. | Global Administrative Areas (GADM) | 2022 | <https://gadm.org> |
+
+### Preview
+
+```{r}
+create_vector_map(
+  data_path(
+    "vector",
+    "administrasi",
+    "gadm41_IDN_3_kecamatan.shp"
+  ),
+  color_field = "NAME_3"
+)
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "administrasi", "gadm41_IDN_3_kecamatan.shp" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "administrasi", "gadm41_IDN_3_kecamatan.shp" ) )
+```
+
+------------------------------------------------------------------------
+
+## Tabel Acuan Pola RTRW
+
+### Deskripsi
+
+Tabel Acuan Pola RTRW merupakan data tabular yang digunakan sebagai acuan dalam pengelompokan dan penyeragaman pola ruang RTRW sebelum dilakukan analisis SERASI.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun | URL |
+|----|----|----|----|----|----|
+| Tabel Acuan Pola RTRW | Excel | Tabel acuan pola ruang RTRW yang digunakan dalam proses analisis SERASI. | — | — | — |
+
+### Definisi Kolom
+
+| Kolom | Tipe Data | Keterangan |
+|----|----|----|
+| ID | Numeric | Nomor unik setiap kelas RTRW. Nilai harus berupa bilangan bulat. |
+| RTRW | Character | Nama kelas RTRW yang harus sesuai dengan atribut pada data vektor RTRW. |
+| Acuan Pola | Numeric | Nilai acuan pola memiliki nilai 0 atau 1 yang menyatakan kelas yang diprioritaskan berdasarkan arah pengaturan ruang. |
+
+### Preview
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_pola_RTRW.xlsx"
+  )
+)
+```
+
+### Spesifikasi
+
+```{r}
+get_table_metadata(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_pola_RTRW.xlsx"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+## Tabel Acuan Pola RZWP3K
+
+### Deskripsi
+
+Tabel Acuan Pola RZWP3K merupakan data tabular yang digunakan sebagai acuan dalam pengelompokan dan penyeragaman zonasi RZWP3K sebelum dilakukan analisis SERASI.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun | URL |
+|----|----|----|----|----|----|
+| Tabel Acuan Pola RZWP3K | Excel | Tabel acuan zonasi RZWP3K yang digunakan dalam proses analisis SERASI. | — | — | — |
+
+### Definisi Kolom
+
+| Kolom | Tipe Data | Keterangan |
+|----|----|----|
+| ID | Numeric | Nomor unik setiap kelas RZWP3K. Nilai harus berupa bilangan bulat. |
+| RZWP3K | Character | Nama zona RZWP3K yang harus sesuai dengan atribut pada data vektor RZWP3K. |
+| Acuan Pola | Numeric | Nilai acuan pola memiliki nilai 0 atau 1 yang menyatakan kelas yang diprioritaskan berdasarkan arah pengaturan ruang. |
+
+### Preview
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_pola_RZWP3K.xlsx"
+  )
+)
+```
+
+### Spesifikasi
+
+```{r}
+get_table_metadata(
+  data_path(
+    "tabular",
+    "step1",
+    "tabel_acuan_pola_RZWP3K.xlsx"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+# Input Intermediate
+
+Bagian ini berisi tabel antara yang dihasilkan atau digunakan selama proses analisis berlangsung. Beberapa tabel dapat dihasilkan otomatis oleh sistem, sedangkan beberapa lainnya dapat diperbarui oleh pengguna pada tahapan tertentu.
+
+------------------------------------------------------------------------
+
+## Matriks SERASI
+
+### Deskripsi
+
+Matriks SERASI merupakan tabel acuan yang digunakan untuk menentukan tingkat kesesuaian (compatibility) antara setiap kelas **RTRW** dan **RZWP3K** pada area yang saling tumpang tindih maupun bertetangga.
+
+Setiap sel pada matriks merepresentasikan nilai indeks kesesuaian antara satu kelas RTRW dengan satu zona RZWP3K. Nilai tersebut digunakan pada proses perhitungan **Indeks SERASI**.
+
+> **Catatan:** Tabel yang ditampilkan di bawah merupakan **contoh struktur data**. Jumlah kolom dan kelas dapat berbeda sesuai wilayah analisis, namun format matriks harus tetap dipertahankan.
+
+------------------------------------------------------------------------
+
+### Definisi Kolom
+
+| Kolom | Tipe Data | Keterangan |
+|----|----|----|
+| RTRW_RZWP3K | Character | Nama kelas RTRW yang digunakan sebagai baris pada matriks. |
+| Kawasan Konservasi Maritim | Numeric | Nilai indeks kesesuaian terhadap zona tersebut. |
+| Suaka | Numeric | Nilai indeks kesesuaian terhadap zona tersebut. |
+| Taman | Numeric | Nilai indeks kesesuaian terhadap zona tersebut. |
+| Kawasan Konservasi Lainnya | Numeric | Nilai indeks kesesuaian terhadap zona tersebut. |
+| Zona Wilayah Kelola Masyarakat Hukum Adat | Numeric | Nilai indeks kesesuaian terhadap zona tersebut. |
+| Kolom zona lainnya | Numeric | Seluruh kolom setelah kolom pertama merupakan kelas RZWP3K dengan nilai indeks kesesuaian. |
+
+Nilai yang digunakan pada matriks umumnya berada pada rentang:
+
+| Nilai | Arti                                            |
+|------:|-------------------------------------------------|
+|     1 | Sangat sesuai/tanpa gangguan                    |
+|   0.5 | Dapat berdampingan dengan pengaturan/mitigasi   |
+|     0 | Tidak sesuai (konflik mendasar/harus dihindari) |
+
+### Preview
+
+```{r}
+preview_table(
+  data_path(
+    "tabular",
+    "step1",
+    "matriks_serasi.xlsx"
+  )
+)
+```
+
+### Spesifikasi
+
+```{r}
+get_table_metadata(
+  data_path(
+    "tabular",
+    "step1",
+    "matriks_serasi.xlsx"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+# Parameter
+
+Nilai default Ambang Batas Luas Minimum (ha) adalah **156,25**.

@@ -1,0 +1,272 @@
+---
+title: "PADU-SE"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+source("R/utils.R")
+```
+
+Analisis **PADU-SE** (Keterpaduan Sosial-Ekonomi) bertujuan untuk mengidentifikasi dan mengevaluasi tingkat aktivitas sosial-ekonomi masyarakat serta intensitas perkembangan wilayah berbasis data cahaya malam (*Night Time Light*) dan kepadatan penduduk (*Population Density*) terhadap alokasi ruang pada Peta Indeks SERASI.
+
+Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, **Peta Cahaya Malam (Night Time Light)**, dan **Peta Kepadatan Populasi Penduduk**.
+
+# Input Mandatory
+
+Bagian ini berisi data yang wajib tersedia sebelum proses analisis dapat dijalankan.
+
+|  |  |  |  |
+|----|----|----|----|
+| **No.** | **Data** | **Format** | **Peran** |
+| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
+| 2 | Peta Cahaya Malam (Night Time Light) | Raster | Indikator intensitas aktivitas sosial-ekonomi |
+| 3 | Peta Kepadatan Populasi Penduduk | Raster | Indikator konsentrasi sebaran penduduk |
+
+## Peta Indeks SERASI
+
+### Deskripsi
+
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-SE**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
+
+Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+
+### Preview
+
+```{r}
+create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
+```
+
+------------------------------------------------------------------------
+
+# Deskripsi
+
+Dataset PADU-SE merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-SE di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran.
+
+------------------------------------------------------------------------
+
+# Data yang Digunakan
+
+| Nama Data | Format | Keterangan |
+|--------------------------|-------------------|----------------------------|
+| EuDist Industri | GeoTIFF | Raster Euclidean Distance terhadap kawasan industri. |
+| EuDist Alur Pelayaran | GeoTIFF | Raster Euclidean Distance terhadap alur pelayaran. |
+
+------------------------------------------------------------------------
+
+## Peta Cahaya Malam (Night Time Light)
+
+### Deskripsi
+
+Peta Cahaya Malam (*Night Time Light*) merupakan data raster yang digunakan untuk merepresentasikan tingkat intensitas cahaya malam hari sebagai proksi aktivitas ekonomi, elektrifikasi, dan perkembangan kawasan pemukiman/perkotaan.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| Night Time Light | GeoTIFF | Data raster intensitas cahaya malam VIIRS (resolusi 100m). | VIIRS / Earth Observation Group | 2023 | — |
+
+### Preview
+
+```{r}
+create_raster_map(
+  data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
+)
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_raster_metadata(
+  data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
+)
+```
+
+### Pemeriksaan Data
+
+```{r}
+check_raster(
+  data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
+)
+```
+
+------------------------------------------------------------------------
+
+## Peta Kepadatan Populasi Penduduk
+
+### Deskripsi
+
+Peta Kepadatan Populasi Penduduk merupakan data raster yang merepresentasikan sebaran dan jumlah estimasi penduduk per unit area (resolusi 100m). Data ini digunakan sebagai acuan tekanan populasi terhadap pemanfaatan ruang darat dan pesisir.
+
+### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| Population Density | GeoTIFF | Data raster estimasi kepadatan penduduk dari WorldPop (resolusi 100m). | WorldPop | 2025 | — |
+
+### Preview
+
+```{r}
+create_raster_map(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+```
+
+### Spesifikasi Teknis
+
+```{r}
+get_raster_metadata(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+```
+
+### Pemeriksaan Data
+```{r}
+check_raster(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Visualisasi
+
+## Night Time Light
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+create_raster_map(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+# Sumber Data
+
+| Dataset | Instansi    | Tahun | URL |
+|---------|-------------|-------|-----|
+| PADU-SE | CIFOR-ICRAF | \-    | \-  |
+
+------------------------------------------------------------------------
+
+# Spesifikasi Teknis
+
+## Night Time Light
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+get_raster_metadata(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```
+
+------------------------------------------------------------------------
+
+# Digunakan pada Tahapan
+
+| Tahapan        | Digunakan |
+|----------------|:---------:|
+| Persiapan Data |     ✔     |
+| SERASI         |     ✖     |
+| PADU-SE        |     ✔     |
+| Rekonsiliasi   |     ✔     |
+| Output         |     ✔     |
+
+------------------------------------------------------------------------
+
+# Pemeriksaan Data
+
+## Night Time Light
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_se",
+    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
+  )
+)
+```
+
+## Population Density
+
+```{r}
+check_raster(
+  data_path(
+    "raster",
+    "padu_se",
+    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
+  )
+)
+```
