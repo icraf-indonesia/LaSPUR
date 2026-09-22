@@ -898,6 +898,15 @@ render_result_server <- function(input, output, session, rv, config) {
 #' download button, the plot can optionally be exported directly to a PNG file
 #' by supplying `filepath`.
 #'
+#' @details
+#' When `filepath` is supplied, the exported PNG is drawn on top of an
+#' **Esri.WorldGrayCanvas** basemap (via the \pkg{basemaps} package). The
+#' data is temporarily reprojected to EPSG:3857 (Web Mercator) so it aligns
+#' with the tile service; the returned `ggplot` object is unaffected and keeps
+#' the original CRS. If the basemap cannot be fetched (e.g. no internet, or
+#' \pkg{basemaps} not installed), a warning is emitted and the PNG is saved
+#' without a basemap.
+#'
 #' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
 #' @param title A character string giving the overall map title, shown above
 #'   the plot. If `NULL` (default), no title is shown. Independent of `legend`,
@@ -920,113 +929,131 @@ render_result_server <- function(input, output, session, rv, config) {
 #'   PNG. Defaults to `300`.
 #'
 #' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
-#'   as a PNG to that path as a side effect.
+#'   as a PNG (with an Esri.WorldGrayCanvas basemap) to that path as a side
+#'   effect.
 #'
 #' @importFrom ggplot2 ggplot aes geom_sf scale_fill_gradient scale_color_gradient
 #'   theme_bw labs coord_sf guides guide_colorbar theme
 #'   element_blank element_text margin ggsave
 #' @importFrom tidyterra geom_spatraster
-#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type st_crs st_transform
+#' @importFrom terra crs project
 #' @importFrom grid unit
 #'
 #' @export
-plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, high, na_color = "white",
-                                filepath = NULL, width = 7, height = 5, dpi = 300) {
+plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, high,
+                                na_color = "white", filepath = NULL,
+                                width = 7, height = 5, dpi = 300) {
   
-  if (inherits(map, "SpatRaster")) {
+  build_plot <- function(map_data, basemap_layer = NULL) {
     
-    plot_lc <- ggplot2::ggplot() +
-      tidyterra::geom_spatraster(data = map) +
-      ggplot2::scale_fill_gradient(
-        low = low,
-        high = high,
-        na.value = na_color,
-        name = if (!is.null(legend)) legend else NULL
-      )
-    
-  } else if (inherits(map, "sf")) {
-    
-    if (is.null(column)) {
-      stop("`column` must be specified when `map` is an sf object.")
-    }
-    if (!column %in% names(map)) {
-      stop(sprintf("Column '%s' not found in `map`.", column))
-    }
-    
-    map <- sf::st_zm(map, drop = TRUE, what = "ZM")
-    map <- sf::st_make_valid(map)
-    map <- map[!sf::st_is_empty(map), ]
-    map[[column]] <- as.numeric(map[[column]])
-    map[[column]][!is.finite(map[[column]])] <- NA
-    
-    geom_types <- unique(as.character(sf::st_geometry_type(map)))
-    is_polygon <- any(grepl("POLYGON", geom_types))
-    
-    if (is_polygon) {
-      plot_lc <- ggplot2::ggplot() +
-        ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
+    if (inherits(map_data, "SpatRaster")) {
+      
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      p <- p +
+        tidyterra::geom_spatraster(data = map_data) +
         ggplot2::scale_fill_gradient(
           low = low,
           high = high,
           na.value = na_color,
           name = if (!is.null(legend)) legend else NULL
         )
+      
+    } else if (inherits(map_data, "sf")) {
+      
+      if (is.null(column)) {
+        stop("`column` must be specified when `map` is an sf object.")
+      }
+      if (!column %in% names(map_data)) {
+        stop(sprintf("Column '%s' not found in `map`.", column))
+      }
+      
+      map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+      map_data <- sf::st_make_valid(map_data)
+      map_data <- map_data[!sf::st_is_empty(map_data), ]
+      map_data[[column]] <- as.numeric(map_data[[column]])
+      map_data[[column]][!is.finite(map_data[[column]])] <- NA
+      
+      geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+      is_polygon <- any(grepl("POLYGON", geom_types))
+      
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      
+      if (is_polygon) {
+        p <- p +
+          ggplot2::geom_sf(data = map_data, ggplot2::aes(fill = .data[[column]]), color = NA) +
+          ggplot2::scale_fill_gradient(
+            low = low,
+            high = high,
+            na.value = na_color,
+            name = if (!is.null(legend)) legend else NULL
+          )
+      } else {
+        p <- p +
+          ggplot2::geom_sf(data = map_data, ggplot2::aes(color = .data[[column]])) +
+          ggplot2::scale_color_gradient(
+            low = low,
+            high = high,
+            na.value = na_color,
+            name = if (!is.null(legend)) legend else NULL
+          )
+      }
+      
     } else {
-      plot_lc <- ggplot2::ggplot() +
-        ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
-        ggplot2::scale_color_gradient(
-          low = low,
-          high = high,
-          na.value = na_color,
-          name = if (!is.null(legend)) legend else NULL
-        )
+      stop("`map` must be a SpatRaster or an sf object.")
     }
     
-  } else {
-    stop("`map` must be a SpatRaster or an sf object.")
+    p +
+      ggplot2::theme_bw() +
+      ggplot2::labs(fill = NULL, title = title) +
+      ggplot2::coord_sf(expand = FALSE) +
+      ggplot2::guides(
+        fill = ggplot2::guide_colorbar(
+          title.position = "top",
+          direction = "vertical",
+          barwidth = grid::unit(0.4, "cm"),
+          barheight = grid::unit(0.8 * height, "in")
+        ),
+        color = ggplot2::guide_colorbar(
+          title.position = "top",
+          direction = "vertical",
+          barwidth = grid::unit(0.4, "cm"),
+          barheight = grid::unit(0.8 * height, "in")
+        )
+      ) +
+      ggplot2::theme(
+        axis.title.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_blank(),
+        axis.text.x = ggplot2::element_text(size = 8),
+        axis.text.y = ggplot2::element_text(size = 8),
+        panel.grid.major = ggplot2::element_blank(),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+        legend.title = ggplot2::element_text(size = 12),
+        legend.text = ggplot2::element_text(size = 10),
+        legend.position = "right",
+        legend.justification = c(0, 0.5),
+        legend.box.spacing = grid::unit(0.5, "cm"),
+        legend.margin = ggplot2::margin(0, 0, 0, 0),
+        plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
+      )
   }
   
-  plot_lc <- plot_lc +
-    ggplot2::theme_bw() +
-    ggplot2::labs(fill = NULL, title = title) +
-    ggplot2::coord_sf(expand = FALSE) +
-    ggplot2::guides(
-      fill = ggplot2::guide_colorbar(
-        title.position = "top",
-        direction = "vertical",
-        barwidth = grid::unit(0.4, "cm"),
-        barheight = grid::unit(0.8 * height, "in")
-      ),
-      color = ggplot2::guide_colorbar(
-        title.position = "top",
-        direction = "vertical",
-        barwidth = grid::unit(0.4, "cm"),
-        barheight = grid::unit(0.8 * height, "in")
-      )
-    ) +
-    ggplot2::theme(
-      axis.title.x = ggplot2::element_blank(),
-      axis.title.y = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(size = 8),
-      axis.text.y = ggplot2::element_text(size = 8),
-      panel.grid.major = ggplot2::element_blank(),
-      panel.grid.minor = ggplot2::element_blank(),
-      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
-      legend.title = ggplot2::element_text(size = 12),
-      legend.text = ggplot2::element_text(size = 10),
-      legend.position = "right",
-      legend.justification = c(0, 0.5),
-      legend.box.spacing = grid::unit(0.5, "cm"),
-      legend.margin = ggplot2::margin(0, 0, 0, 0),
-      plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
-    )
+  plot_lc <- build_plot(map)
   
   if (!is.null(filepath)) {
-    ggplot2::ggsave(filename = filepath, plot = plot_lc, width = width, height = height, dpi = dpi)
+    map_3857 <- .reproject_to_3857(map)
+    bm <- .get_esri_gray_basemap(map_3857)
+    export_plot <- if (!is.null(bm)) build_plot(map_3857, bm) else plot_lc
+    ggplot2::ggsave(filename = filepath, plot = export_plot,
+                    width = width, height = height, dpi = dpi)
   }
   
   return(plot_lc)
 }
+
 
 #' Plot Categorical Raster or Vector (sf) Map with Optional PNG Export
 #'
@@ -1037,6 +1064,12 @@ plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, h
 #' styling as [plot_continuous_map()]. Long class names in the legend are
 #' automatically wrapped so they aren't cropped by the map's dimensions, and the
 #' legend can be split into multiple columns if there are many categories.
+#'
+#' @details
+#' When `filepath` is supplied, the exported PNG is drawn on top of an
+#' **Esri.WorldGrayCanvas** basemap (via the \pkg{basemaps} package), following
+#' the same approach as [plot_continuous_map()]. If the basemap cannot be
+#' fetched, a warning is emitted and the PNG is saved without a basemap.
 #'
 #' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
 #' @param title A character string giving the overall map title, shown above the
@@ -1074,24 +1107,26 @@ plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, h
 #'   PNG. Defaults to `300`.
 #'
 #' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
-#'   as a PNG to that path as a side effect.
+#'   as a PNG (with an Esri.WorldGrayCanvas basemap) to that path as a side
+#'   effect.
 #'
 #' @importFrom ggplot2 ggplot aes geom_sf scale_fill_manual scale_color_manual
 #'   theme_bw labs coord_sf guides guide_legend theme
 #'   element_blank element_text margin ggsave
 #' @importFrom tidyterra geom_spatraster
-#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type st_crs st_transform
 #' @importFrom scales hue_pal label_wrap
 #' @importFrom grid unit
-#' @importFrom terra levels
+#' @importFrom terra levels crs project
 #' @importFrom stats setNames
 #' @importFrom tools file_ext
 #' @importFrom utils read.csv
 #'
 #' @export
 plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL,
-                                 id_col = "ID", class_col = "class", legend = NULL, colors = NULL,
-                                 na_color = "white", label_wrap_width = 30, legend_ncol = 1,
+                                 id_col = "ID", class_col = "class", legend = NULL,
+                                 colors = NULL, na_color = "white",
+                                 label_wrap_width = 30, legend_ncol = 1,
                                  filepath = NULL, width = 7, height = 5, dpi = 300) {
   
   read_lookup <- function(path) {
@@ -1108,69 +1143,26 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
     }
   }
   
-  if (inherits(map, "SpatRaster")) {
+  build_plot <- function(map_data, basemap_layer = NULL) {
     
-    if (is.null(lookup)) {
-      stop("`lookup` (a .csv/.xlsx file with ID and class columns) is required for SpatRaster input.")
-    }
-    
-    lookup_df <- read_lookup(lookup)
-    if (!all(c(id_col, class_col) %in% names(lookup_df))) {
-      stop(sprintf("`lookup` must contain columns '%s' and '%s'.", id_col, class_col))
-    }
-    
-    cat_df <- data.frame(
-      id    = lookup_df[[id_col]],
-      class = as.character(lookup_df[[class_col]])
-    )
-    terra::levels(map) <- cat_df
-    
-    class_labels <- as.character(terra::levels(map)[[1]][[2]])
-    
-    if (is.null(colors)) {
-      pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
-    } else {
-      pal <- colors
-    }
-    
-    plot_lc <- ggplot2::ggplot() +
-      tidyterra::geom_spatraster(data = map) +
-      ggplot2::scale_fill_manual(
-        values   = pal,
-        na.value = na_color,
-        labels   = scales::label_wrap(label_wrap_width),
-        name     = if (!is.null(legend)) legend else NULL
+    if (inherits(map_data, "SpatRaster")) {
+      
+      if (is.null(lookup)) {
+        stop("`lookup` (a .csv/.xlsx file with ID and class columns) is required for SpatRaster input.")
+      }
+      
+      lookup_df <- read_lookup(lookup)
+      if (!all(c(id_col, class_col) %in% names(lookup_df))) {
+        stop(sprintf("`lookup` must contain columns '%s' and '%s'.", id_col, class_col))
+      }
+      
+      cat_df <- data.frame(
+        id    = lookup_df[[id_col]],
+        class = as.character(lookup_df[[class_col]])
       )
-    
-  } else if (inherits(map, "sf")) {
-    
-    if (is.null(column) || is.na(column) || column == "") {
-      map <- sf::st_zm(map, drop = TRUE, what = "ZM")
-      map <- sf::st_make_valid(map)
-      map <- map[!sf::st_is_empty(map), ]
+      terra::levels(map_data) <- cat_df
       
-      geom_types <- unique(as.character(sf::st_geometry_type(map)))
-      is_polygon <- any(grepl("POLYGON", geom_types))
-      
-      if (is_polygon) {
-        plot_lc <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = map, fill = "lightblue", color = "darkblue", size = 0.2)
-      } else {
-        plot_lc <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = map, color = "darkblue")
-      }
-      
-    } else {
-      if (!column %in% names(map)) {
-        stop(sprintf("Column '%s' not found in `map`.", column))
-      }
-      
-      map <- sf::st_zm(map, drop = TRUE, what = "ZM")
-      map <- sf::st_make_valid(map)
-      map <- map[!sf::st_is_empty(map), ]
-      
-      map[[column]] <- factor(map[[column]])
-      class_labels <- levels(map[[column]])
+      class_labels <- as.character(terra::levels(map_data)[[1]][[2]])
       
       if (is.null(colors)) {
         pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
@@ -1178,82 +1170,196 @@ plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL
         pal <- colors
       }
       
-      geom_types <- unique(as.character(sf::st_geometry_type(map)))
-      is_polygon <- any(grepl("POLYGON", geom_types))
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      p <- p +
+        tidyterra::geom_spatraster(data = map_data) +
+        ggplot2::scale_fill_manual(
+          values   = pal,
+          na.value = na_color,
+          labels   = scales::label_wrap(label_wrap_width),
+          name     = if (!is.null(legend)) legend else NULL
+        )
       
-      if (is_polygon) {
-        plot_lc <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = map, ggplot2::aes(fill = .data[[column]]), color = NA) +
-          ggplot2::scale_fill_manual(
-            values   = pal,
-            na.value = na_color,
-            labels   = scales::label_wrap(label_wrap_width),
-            name     = if (!is.null(legend)) legend else NULL
-          )
+    } else if (inherits(map_data, "sf")) {
+      
+      if (is.null(column) || is.na(column) || column == "") {
+        map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+        map_data <- sf::st_make_valid(map_data)
+        map_data <- map_data[!sf::st_is_empty(map_data), ]
+        
+        geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+        is_polygon <- any(grepl("POLYGON", geom_types))
+        
+        p <- ggplot2::ggplot()
+        if (!is.null(basemap_layer)) p <- p + basemap_layer
+        
+        if (is_polygon) {
+          p <- p + ggplot2::geom_sf(data = map_data, fill = "lightblue",
+                                    color = "darkblue", size = 0.2)
+        } else {
+          p <- p + ggplot2::geom_sf(data = map_data, color = "darkblue")
+        }
+        
       } else {
-        plot_lc <- ggplot2::ggplot() +
-          ggplot2::geom_sf(data = map, ggplot2::aes(color = .data[[column]])) +
-          ggplot2::scale_color_manual(
-            values   = pal,
-            na.value = na_color,
-            labels   = scales::label_wrap(label_wrap_width),
-            name     = if (!is.null(legend)) legend else NULL
-          )
+        if (!column %in% names(map_data)) {
+          stop(sprintf("Column '%s' not found in `map`.", column))
+        }
+        
+        map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+        map_data <- sf::st_make_valid(map_data)
+        map_data <- map_data[!sf::st_is_empty(map_data), ]
+        
+        map_data[[column]] <- factor(map_data[[column]])
+        class_labels <- levels(map_data[[column]])
+        
+        if (is.null(colors)) {
+          pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+        } else {
+          pal <- colors
+        }
+        
+        geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+        is_polygon <- any(grepl("POLYGON", geom_types))
+        
+        p <- ggplot2::ggplot()
+        if (!is.null(basemap_layer)) p <- p + basemap_layer
+        
+        if (is_polygon) {
+          p <- p +
+            ggplot2::geom_sf(data = map_data, ggplot2::aes(fill = .data[[column]]), color = NA) +
+            ggplot2::scale_fill_manual(
+              values   = pal,
+              na.value = na_color,
+              labels   = scales::label_wrap(label_wrap_width),
+              name     = if (!is.null(legend)) legend else NULL
+            )
+        } else {
+          p <- p +
+            ggplot2::geom_sf(data = map_data, ggplot2::aes(color = .data[[column]])) +
+            ggplot2::scale_color_manual(
+              values   = pal,
+              na.value = na_color,
+              labels   = scales::label_wrap(label_wrap_width),
+              name     = if (!is.null(legend)) legend else NULL
+            )
+        }
       }
+      
+    } else {
+      stop("`map` must be a SpatRaster or an sf object.")
     }
     
-  } else {
-    stop("`map` must be a SpatRaster or an sf object.")
-  }
-  
-  plot_lc <- plot_lc +
-    ggplot2::theme_bw() +
-    ggplot2::labs(title = title) +
-    ggplot2::coord_sf(expand = FALSE) +
-    ggplot2::theme(
-      axis.title.x = ggplot2::element_blank(),
-      axis.title.y = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(size = 8),
-      axis.text.y = ggplot2::element_text(size = 8),
-      panel.grid.major = ggplot2::element_blank(),
-      panel.grid.minor = ggplot2::element_blank(),
-      plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
-      plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
-    )
-  
-  if (inherits(map, "sf") && (is.null(column) || is.na(column) || column == "")) {
-    plot_lc <- plot_lc + ggplot2::theme(legend.position = "none")
-  } else {
-    plot_lc <- plot_lc +
-      ggplot2::guides(
-        fill = ggplot2::guide_legend(
-          title.position = "top",
-          ncol      = legend_ncol,
-          keywidth  = grid::unit(0.4, "cm"),
-          keyheight = grid::unit(0.4, "cm")
-        ),
-        color = ggplot2::guide_legend(
-          title.position = "top",
-          ncol      = legend_ncol,
-          keywidth  = grid::unit(0.4, "cm"),
-          keyheight = grid::unit(0.4, "cm")
-        )
-      ) +
+    p <- p +
+      ggplot2::theme_bw() +
+      ggplot2::labs(title = title) +
+      ggplot2::coord_sf(expand = FALSE) +
       ggplot2::theme(
-        legend.title = ggplot2::element_text(size = 12),
-        legend.text = ggplot2::element_text(size = 9),
-        legend.position = "right",
-        legend.justification = c(0, 0.5),
-        legend.box.spacing = grid::unit(0.5, "cm"),
-        legend.margin = ggplot2::margin(0, 0, 0, 0)
+        axis.title.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_blank(),
+        axis.text.x = ggplot2::element_text(size = 8),
+        axis.text.y = ggplot2::element_text(size = 8),
+        panel.grid.major = ggplot2::element_blank(),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+        plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
       )
+    
+    if (inherits(map_data, "sf") && (is.null(column) || is.na(column) || column == "")) {
+      p <- p + ggplot2::theme(legend.position = "none")
+    } else {
+      p <- p +
+        ggplot2::guides(
+          fill = ggplot2::guide_legend(
+            title.position = "top",
+            ncol      = legend_ncol,
+            keywidth  = grid::unit(0.4, "cm"),
+            keyheight = grid::unit(0.4, "cm")
+          ),
+          color = ggplot2::guide_legend(
+            title.position = "top",
+            ncol      = legend_ncol,
+            keywidth  = grid::unit(0.4, "cm"),
+            keyheight = grid::unit(0.4, "cm")
+          )
+        ) +
+        ggplot2::theme(
+          legend.title = ggplot2::element_text(size = 12),
+          legend.text = ggplot2::element_text(size = 9),
+          legend.position = "right",
+          legend.justification = c(0, 0.5),
+          legend.box.spacing = grid::unit(0.5, "cm"),
+          legend.margin = ggplot2::margin(0, 0, 0, 0)
+        )
+    }
+    
+    p
   }
+  
+  plot_lc <- build_plot(map)
   
   if (!is.null(filepath)) {
-    ggplot2::ggsave(filename = filepath, plot = plot_lc, width = width, height = height, dpi = dpi)
+    map_3857 <- .reproject_to_3857(map)
+    bm <- .get_esri_gray_basemap(map_3857)
+    export_plot <- if (!is.null(bm)) build_plot(map_3857, bm) else plot_lc
+    ggplot2::ggsave(filename = filepath, plot = export_plot,
+                    width = width, height = height, dpi = dpi)
   }
   
   return(plot_lc)
+}
+
+#' @noRd
+#' @keywords internal
+.reproject_to_3857 <- function(map) {
+  target <- "EPSG:3857"
+  if (inherits(map, "SpatRaster")) {
+    cur <- terra::crs(map)
+    if (is.na(cur) || is.null(cur) || identical(cur, "")) return(map)
+    if (!identical(terra::crs(map, proj = TRUE),
+                   terra::crs(target, proj = TRUE))) {
+      map <- terra::project(map, target)
+    }
+  } else if (inherits(map, "sf")) {
+    cur <- sf::st_crs(map)
+    if (is.na(cur)) return(map)
+    if (cur != sf::st_crs(target)) {
+      map <- sf::st_transform(map, target)
+    }
+  }
+  map
+}
+
+#' Fetch Esri.WorldGrayCanvas tiles and return them as a ggplot layer.
+#'
+#' Uses \pkg{maptiles} to download the tiles and \pkg{tidyterra} to render
+#' the returned RGB \code{SpatRaster} as a ggplot layer. Fails gracefully
+#' (returns \code{NULL} with a warning) if either package is unavailable or
+#' the tiles cannot be fetched (e.g. no internet).
+#'
+#' @noRd
+#' @keywords internal
+.get_esri_gray_basemap <- function(map) {
+  if (!requireNamespace("maptiles", quietly = TRUE)) {
+    warning("Package 'maptiles' is required to fetch the Esri.WorldGrayCanvas ",
+            "basemap. Install with install.packages('maptiles'). ",
+            "Proceeding without basemap.", call. = FALSE)
+    return(NULL)
+  }
+  tryCatch({
+    tiles <- maptiles::get_tiles(
+      x        = map,
+      provider = "Esri.WorldGrayCanvas",
+      crop     = TRUE,
+      project  = TRUE  
+    )
+    tidyterra::geom_spatraster_rgb(data = tiles)
+  }, error = function(e) {
+    warning("Failed to fetch Esri.WorldGrayCanvas basemap: ",
+            conditionMessage(e),
+            ". Proceeding without basemap.", call. = FALSE)
+    NULL
+  })
 }
 
 #' Module File Paths and Result Variable Names

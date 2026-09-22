@@ -879,7 +879,6 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
-        # ── 2. Luas RTRW ─────────────────────────────────────
         # ── 2. Wilayah Administrasi ─────────────────────────────────────
         {
           pa_adm <- rv$pair_attrs
