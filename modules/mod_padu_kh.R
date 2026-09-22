@@ -179,8 +179,8 @@ padu_kh_server <- function(id, output_dir) {
           fileInput(ns("lulc_file"), "Peta Tutupan/Penggunaan Lahan (.shp)",
                     accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE),
           textInput(ns("habitat_ids"), "ID Kelas yang menunjukkan habitat (pisahkan dengan koma)",
-                    value = "5, 6, 24, 25"),
-          tags$small(class = "text-muted", "Default: 5,6 (Mangrove), 24 (Terumbu Karang), 25 (Lamun)")
+                    placeholder = "5, 6, 24, 25"),
+          tags$small(class = "text-muted", "Contoh: 1 (Hutan Mangrove), 14 (Terumbu Karang), dll.")
         ),
         
         # Manual source UI – fixed slots with conditionalPanel
@@ -189,15 +189,17 @@ padu_kh_server <- function(id, output_dir) {
           div(
             style = "margin-bottom: 8px;",
             actionButton(ns("btn_add_habitat"), 
-                         tagList(tags$i(class = "bi bi-plus-circle me-1"), "Tambahkan Peta Habitat +"),
+                         tagList(tags$i(class = "bi bi-plus-circle me-1"), "Tambahkan Peta (+)"),
                          class = "btn-outline-primary btn-sm"),
             actionButton(ns("btn_remove_habitat"),
-                         tagList(tags$i(class = "bi bi-dash-circle me-1"), "Hapus Terakhir"),
+                         tagList(tags$i(class = "bi bi-dash-circle me-1"), "Hapus Peta (-)"),
                          class = "btn-outline-danger btn-sm")
           ),
-          # Hidden numeric input for active count
-          numericInput(ns("active_count"), label = NULL, value = 0, min = 0, max = 10, step = 1),
-          # Generate 10 slots, each wrapped in conditionalPanel
+          div(
+            style = "display: none;",
+            numericInput(ns("active_count"), label = NULL, value = 0,
+                         min = 0, max = 10, step = 1)
+          ),
           lapply(1:10, function(i) {
             conditionalPanel(
               condition = sprintf("input['%s'] >= %d", ns("active_count"), i),
@@ -206,7 +208,7 @@ padu_kh_server <- function(id, output_dir) {
                 textInput(ns(paste0("habitat_name_", i)), 
                           label = "Nama Habitat", 
                           value = "",
-                          placeholder = "Misal: Mangrove, Coral, Seagrass"),
+                          placeholder = "Contoh: Hutan Mangrove, Terumbu Karang, dll."),
                 fileInput(ns(paste0("habitat_file_", i)), 
                           label = "Peta Habitat (.shp)",
                           accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
@@ -421,7 +423,7 @@ padu_kh_server <- function(id, output_dir) {
       go_to_panel("step1")
     })
     
-    # ── Run analysis (with progress) ──────────────────────────
+    # ── Run analysis  ──────────────────────────
     observeEvent(input$btn_run, {
       
       # Check output directory 
