@@ -419,6 +419,8 @@ adjacent_server <- function(id, output_dir) {
             style = "color: #6c757d; display: block; margin-top: -5px; margin-bottom: 0; font-size: 0.85em;"
           ),
           
+          hr(),
+          
           checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
           numericInput(ns("workers"), "Jumlah kanal komputasi (cores)", value = 2, min = 1, step = 1)
         ),
@@ -602,6 +604,27 @@ adjacent_server <- function(id, output_dir) {
                 rasio_segmen = length / sum(length, na.rm = TRUE)
               )
             
+            # Per-pair administrative area set (list-column)
+            if ("admin" %in% names(raw_df)) {
+              admin_split <- split(as.character(raw_df$admin), raw_df$id_pu)
+              admin_split <- lapply(admin_split, function(vals) {
+                vals <- vals[!is.na(vals) & nzchar(trimws(vals))]
+                if (length(vals) == 0) return(character(0))
+                unique(unlist(strsplit(vals, "_", fixed = TRUE)))
+              })
+              rv$pair_attrs$admin_set <- lapply(
+                as.character(rv$pair_attrs$id_pu),
+                function(pid) {
+                  val <- admin_split[[pid]]
+                  if (is.null(val)) character(0) else val
+                }
+              )
+            } else {
+              rv$pair_attrs$admin_set <- replicate(
+                nrow(rv$pair_attrs), character(0), simplify = FALSE
+              )
+            }
+            
             idx_serasi_map_viz <- tryCatch({
               dissolve_id_pu(idx_serasi_map)
             }, error = function(e) {
@@ -733,49 +756,68 @@ adjacent_server <- function(id, output_dir) {
           value = FALSE
         ),
         
-        tags$div(
-          style = paste(
-            "margin: 8px 0 4px 0; padding: 12px 14px;",
-            "background-color: #F8FAFC; border-left: 3px solid #1b75ba;",
-            "border-radius: 6px; font-size: 0.82rem; color: #475569; line-height: 1.55;"
+        tags$details(
+          style = "margin: 8px 0 4px 0;",
+          tags$summary(
+            style = paste(
+              "cursor: pointer; padding: 10px 14px;",
+              "background-color: #EFF6FF; border-left: 3px solid #1b75ba;",
+              "border-radius: 6px; font-weight: 600; color: #1b75ba;",
+              "font-size: 0.85rem; list-style: none;"
+            ),
+            tags$i(class = "bi bi-info-circle me-2"),
+            "Apa yang dilakukan filter ini? (klik untuk detail)"
           ),
-          tags$p(
-            style = "margin: 0 0 8px 0;",
-            tags$strong("Apa yang dilakukan filter ini: "),
-            "Mempersempit hasil analisis area bertetangga berdasarkan ",
-            tags$em("Indeks SERASI"), ", ",
-            tags$em("luas kawasan RTRW"), ", ",
-            tags$em("luas kawasan RZWP3K"), ", ",
-            tags$em("rasio panjang segmen batas"), ", dan/atau ",
-            tags$em("ID tertentu (id_pu / id_group)")
-          ),
-          tags$p(
-            style = "margin: 0 0 8px 0;",
-            "Hasil yang lolos filter akan ditampilkan di ",
-            tags$em("Visualisasi Hasil"),
-            " dan diekspor sebagai file GPKG/XLSX tambahan di folder ",
-            tags$code("Analisis SERASI")
-          ),
+          
           tags$div(
             style = paste(
-              "padding: 8px 10px; background-color: #FEF3C7;",
-              "border-left: 3px solid #D97706; border-radius: 4px;",
-              "color: #92400E; font-size: 0.8rem;"
+              "margin-top: 6px; padding: 12px 14px;",
+              "background-color: #F8FAFC; border-left: 3px solid #1b75ba;",
+              "border-radius: 6px; font-size: 0.82rem; color: #475569; line-height: 1.55;"
+            ),
+            tags$p(
+              style = "margin: 0 0 8px 0; font-weight: 600; color: #334155;",
+              "Apa yang dilakukan filter ini"
+            ),
+            tags$p(
+              style = "margin: 0;",
+              "Mempersempit hasil analisis area bertetangga berdasarkan ",
+              tags$em("Indeks SERASI"), ", ",
+              tags$em("wilayah administrasi"), ", ",
+              tags$em("luas kawasan RTRW"), ", ",
+              tags$em("luas kawasan RZWP3K"), ", ",
+              tags$em("rasio panjang segmen batas"), ", dan/atau ",
+              tags$em("ID tertentu (id_pu / id_group)")
+            )
+          ),
+          
+          tags$div(
+            style = paste(
+              "margin-top: 8px; padding: 12px 14px;",
+              "background-color: #F8FAFC; border-left: 3px solid #1b75ba;",
+              "border-radius: 6px; font-size: 0.82rem; color: #475569; line-height: 1.55;"
             ),
             tags$div(
-              tags$i(class = "bi bi-info-circle-fill me-1"),
-              tags$strong("Pengecualian otomatis sebelum filter manual:")
-            ),
-            tags$div(
-              style = "margin-top: 4px;",
-              "Sistem sudah mengeluarkan secara otomatis dari hasil analisis: ",
-              tags$strong("(1)"), " pasangan dengan ",
-              tags$strong("Indeks SERASI = 1"),
-              " — artinya kedua pola/zona sudah sepenuhnya sesuai (tidak ada konflik); dan ",
-              tags$strong("(2)"), " pasangan dengan ",
-              tags$strong("luas salah satu sisi < 1 ha"),
-              ". Jika ID yang Anda masukkan tidak muncul pada pratinjau, kemungkinan pasangan ",
-              "tersebut sudah tersaring otomatis."
+              style = paste(
+                "padding: 8px 10px; background-color: #FEF3C7;",
+                "border-left: 3px solid #D97706; border-radius: 4px;",
+                "color: #92400E; font-size: 0.8rem;"
+              ),
+              tags$div(
+                tags$i(class = "bi bi-info-circle-fill me-1"),
+                tags$strong("Pengecualian otomatis sebelum filter manual:")
+              ),
+              tags$div(
+                style = "margin-top: 4px;",
+                "Sistem sudah mengeluarkan secara otomatis dari hasil analisis: ",
+                tags$strong("(1)"), " pasangan dengan ",
+                tags$strong("Indeks SERASI = 1"),
+                " — artinya kedua pola/zona sudah sepenuhnya sesuai (tidak ada konflik); dan ",
+                tags$strong("(2)"), " pasangan dengan ",
+                tags$strong("luas salah satu sisi < 1 ha"),
+                ". Jika ID yang Anda masukkan tidak muncul pada pratinjau, kemungkinan pasangan ",
+                "tersebut sudah tersaring otomatis."
+              )
             )
           )
         ),
@@ -838,8 +880,61 @@ adjacent_server <- function(id, output_dir) {
         ),
         
         # ── 2. Luas RTRW ─────────────────────────────────────
+        # ── 2. Wilayah Administrasi ─────────────────────────────────────
+        {
+          pa_adm <- rv$pair_attrs
+          admin_available <- !is.null(pa_adm) &&
+            "admin_set" %in% names(pa_adm) &&
+            any(lengths(pa_adm$admin_set) > 0)
+          
+          if (!admin_available) {
+            tagList(
+              tags$fieldset(
+                disabled = "disabled",
+                style = "border: none; padding: 0; margin: 0;",
+                checkboxInput(ns("use_admin"),
+                              tagList(tags$strong("2. Wilayah Administrasi")),
+                              value = FALSE)
+              ),
+              tags$small(
+                "Kolom administrasi tidak tersedia. Unggah peta administratif di Langkah 1 untuk mengaktifkan filter ini.",
+                style = "color: #92400E; display:block; margin:-6px 0 12px 0; font-size: 0.78em;"
+              )
+            )
+          } else {
+            all_admins <- sort(unique(unlist(pa_adm$admin_set)))
+            tagList(
+              checkboxInput(ns("use_admin"),
+                            tagList(tags$strong("2. Wilayah Administrasi")),
+                            value = FALSE),
+              conditionalPanel(
+                condition = paste0("input['", ns("use_admin"), "']"),
+                selectizeInput(
+                  ns("f_admin_values"),
+                  "Pilih wilayah administrasi:",
+                  choices  = all_admins,
+                  selected = character(0),
+                  multiple = TRUE,
+                  options  = list(
+                    placeholder = "Pilih satu atau lebih wilayah...",
+                    plugins     = list("remove_button")
+                  )
+                ),
+                tags$small(
+                  sprintf(
+                    "Tersedia: %d wilayah administrasi. Sebuah pasangan dipertahankan jika salah satu anggotanya berada di wilayah yang dipilih.",
+                    length(all_admins)
+                  ),
+                  style = "color: #6c757d; display:block; margin:-6px 0 12px 0; font-size: 0.78em;"
+                )
+              )
+            )
+          }
+        },
+        
+        # ── 3. Luas RTRW (ha) ──────────────────────────────────────────
         checkboxInput(ns("use_lrtrw"),
-                      tagList(tags$strong("2. Luas RTRW (ha)")),
+                      tagList(tags$strong("3. Luas RTRW (ha)")),
                       value = FALSE),
         conditionalPanel(
           condition = paste0("input['", ns("use_lrtrw"), "']"),
@@ -857,9 +952,9 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
-        # ── 3. Luas RZWP3K ───────────────────────────────────
+        # ── 4. Luas RZWP3K (ha) ────────────────────────────────────────
         checkboxInput(ns("use_lrzwp"),
-                      tagList(tags$strong("3. Luas RZWP3K (ha)")),
+                      tagList(tags$strong("4. Luas RZWP3K (ha)")),
                       value = FALSE),
         conditionalPanel(
           condition = paste0("input['", ns("use_lrzwp"), "']"),
@@ -876,14 +971,10 @@ adjacent_server <- function(id, output_dir) {
             style = "color: #6c757d; display:block; margin:-6px 0 12px 0; font-size: 0.78em;"
           )
         ),
-        tags$small(
-          "Jika kedua komponen luas aktif, pasangan harus lolos rentang RTRW DAN rentang RZWP3K.",
-          style = "color: #6c757d; display:block; margin-bottom: 10px; font-size: 0.8em;"
-        ),
         
-        # ── 4. Rasio segmen (persen) ─────────────────────────
+        # ── 5. Rasio segmen (persen) ───────────────────────────────────
         checkboxInput(ns("use_rasio"),
-                      tagList(tags$strong("4. Rasio Panjang Segmen (%)")),
+                      tagList(tags$strong("5. Rasio Panjang Segmen (%)")),
                       value = FALSE),
         conditionalPanel(
           condition = paste0("input['", ns("use_rasio"), "']"),
@@ -912,9 +1003,9 @@ adjacent_server <- function(id, output_dir) {
           )
         ),
         
-        # ── 5. ID filter ─────────────────────────────────────
+        # ── 6. ID filter ───────────────────────────────────────────────
         checkboxInput(ns("use_id"),
-                      tagList(tags$strong("5. Filter ID")),
+                      tagList(tags$strong("6. Filter ID")),
                       value = FALSE),
         conditionalPanel(
           condition = paste0("input['", ns("use_id"), "']"),
@@ -925,6 +1016,7 @@ adjacent_server <- function(id, output_dir) {
           uiOutput(ns("id_hint_ui"))
         ),
         
+        # ── Action buttons ─────────────────────────────────────────────
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;",
           actionButton(ns("btn_apply_filter"),
@@ -1082,7 +1174,21 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kis
       }
       
-      # ── 2. Luas RTRW ──
+      # ── 2. Wilayah Administrasi ──
+      if (isTRUE(input$use_admin) && "admin_set" %in% names(pa)) {
+        sel_admin <- input$f_admin_values
+        if (!is.null(sel_admin) && length(sel_admin) > 0) {
+          sel_norm <- tolower(trimws(as.character(sel_admin)))
+          has_match <- vapply(pa$admin_set, function(admins) {
+            if (is.null(admins) || length(admins) == 0) return(FALSE)
+            admins_norm <- tolower(trimws(as.character(admins)))
+            any(admins_norm %in% sel_norm)
+          }, logical(1))
+          keep <- keep & has_match
+        }
+      }
+      
+      # ── 3. Luas RTRW ──
       if (isTRUE(input$use_lrtrw)) {
         kr <- rep(TRUE, nrow(pa))
         mn <- input$f_lrtrw_min
@@ -1093,7 +1199,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kr
       }
       
-      # ── 3. Luas RZWP3K ──
+      # ── 4. Luas RZWP3K ──
       if (isTRUE(input$use_lrzwp)) {
         kz <- rep(TRUE, nrow(pa))
         mn <- input$f_lrzwp_min
@@ -1104,7 +1210,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & kz
       }
       
-      # ── 4. Rasio segmen (input %, internal 0–1) ──
+      # ── 5. Rasio segmen (input %, internal 0–1) ──
       if (isTRUE(input$use_rasio)) {
         krs <- rep(TRUE, nrow(pa))
         mn <- input$f_rasio_min
@@ -1115,7 +1221,7 @@ adjacent_server <- function(id, output_dir) {
         keep <- keep & krs
       }
       
-      # ── 5. ID filter ──
+      # ── 6. ID filter ──
       if (isTRUE(input$use_id)) {
         id_type <- input$f_id_type
         if (is.null(id_type) || !nzchar(id_type)) id_type <- "id_pu"
@@ -1134,9 +1240,10 @@ adjacent_server <- function(id, output_dir) {
       req(rv$pair_attrs)
       
       any_enabled <- isTRUE(input$use_idx_serasi) ||
-        isTRUE(input$use_lrtrw)      ||
-        isTRUE(input$use_lrzwp)      ||
-        isTRUE(input$use_rasio)      ||
+        isTRUE(input$use_admin)       ||
+        isTRUE(input$use_lrtrw)       ||
+        isTRUE(input$use_lrzwp)       ||
+        isTRUE(input$use_rasio)       ||
         isTRUE(input$use_id)
       
       if (!any_enabled) {
@@ -1169,9 +1276,10 @@ adjacent_server <- function(id, output_dir) {
       req(rv$idx_serasi_map_raw, rv$pair_attrs, output_dir())
       
       any_enabled <- isTRUE(input$use_idx_serasi) ||
-        isTRUE(input$use_lrtrw)      ||
-        isTRUE(input$use_lrzwp)      ||
-        isTRUE(input$use_rasio)      ||
+        isTRUE(input$use_admin)       ||
+        isTRUE(input$use_lrtrw)       ||
+        isTRUE(input$use_lrzwp)       ||
+        isTRUE(input$use_rasio)       ||
         isTRUE(input$use_id)
       
       if (!any_enabled) {
@@ -1195,7 +1303,7 @@ adjacent_server <- function(id, output_dir) {
         return()
       }
       
-      # ── Build suffix — only include enabled components ───
+      # Build suffix
       parts <- character(0)
       build_range <- function(mn, mx, nm, digits = 0) {
         has_mn <- !is.null(mn) && !is.na(mn)
@@ -1209,6 +1317,11 @@ adjacent_server <- function(id, output_dir) {
       if (isTRUE(input$use_idx_serasi)) {
         r <- build_range(input$f_serasi_min, input$f_serasi_max, "idx_serasi", 2)
         if (!is.null(r)) parts <- c(parts, r)
+      }
+      if (isTRUE(input$use_admin) &&
+          !is.null(input$f_admin_values) &&
+          length(input$f_admin_values) > 0) {
+        parts <- c(parts, sprintf("admin%d", length(input$f_admin_values)))
       }
       if (isTRUE(input$use_lrtrw)) {
         r <- build_range(input$f_lrtrw_min, input$f_lrtrw_max, "luas_rtrw", 0)
