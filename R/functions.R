@@ -826,22 +826,102 @@ st_get_precision_for_meters <- function(x, m_precision = 1, silent = FALSE) {
 #' Helper: build a shape with real multi-line text.
 #' create_shape() only supports one paragraph/run, so this splits `lines`
 #' into separate runs joined by <a:br/> (proper line breaks).
-create_multiline_shape <- function(lines, ...) {
-  base_xml <- as.character(create_shape(text = "PLACEHOLDER", ...))
-  run_match <- regmatches(base_xml, regexpr("<a:r>.*?</a:r>", base_xml, perl = TRUE))
-  rpr <- regmatches(run_match, regexpr("<a:rPr.*?</a:rPr>|<a:rPr[^>]*/>", run_match, perl = TRUE))
-  if (length(rpr) == 0) rpr <- ""
+create_multiline_shape <- function(lines,
+                                   shape = "rect",
+                                   name = "instructions_box",
+                                   fill_color = "F5F5DC",
+                                   text_color = "000000",
+                                   line_color = "000000",
+                                   text_align = "left",
+                                   from_col = 1, from_row = 1,
+                                   to_col   = 8, to_row   = 12,
+                                   ...) {
   
-  make_run <- function(txt) {
+  clean_col <- function(col) {
+    col_str <- gsub("^#", "", as.character(col))
+    if (length(col_str) > 1) col_str <- col_str[1]
+    if (nchar(col_str) == 8 && toupper(substr(col_str, 1, 2)) == "FF") {
+      col_str <- substr(col_str, 3, 8)
+    }
+    col_str
+  }
+  
+  fill_hex <- clean_col(fill_color)
+  text_hex <- clean_col(text_color)
+  line_hex <- clean_col(line_color)
+  
+  align_val <- switch(tolower(text_align),
+                      "left"    = "l",
+                      "right"   = "r",
+                      "center"  = "ctr",
+                      "justify" = "just",
+                      "l")
+  
+  escape_xml <- function(txt) {
     txt <- gsub("&", "&amp;", txt, fixed = TRUE)
     txt <- gsub("<", "&lt;",  txt, fixed = TRUE)
     txt <- gsub(">", "&gt;",  txt, fixed = TRUE)
-    sprintf('<a:r>%s<a:t xml:space="preserve">%s</a:t></a:r>', rpr, txt)
+    txt
   }
   
-  runs <- paste(vapply(lines, make_run, NA_character_), collapse = "<a:br/>")
-  out <- sub("<a:r>.*?</a:r>", runs, base_xml, perl = TRUE)
-  read_xml(out, pointer = FALSE)
+  p_runs <- paste(
+    vapply(lines, function(line) {
+      if (trimws(line) == "") {
+        return(sprintf('<a:p><a:pPr algn="%s"/><a:endParaRPr sz="1100"/></a:p>', align_val))
+      }
+      sprintf(
+        '<a:p><a:pPr algn="%s"/><a:r><a:rPr sz="1100"><a:solidFill><a:srgbClr val="%s"/></a:solidFill></a:rPr><a:t xml:space="preserve">%s</a:t></a:r></a:p>',
+        align_val, text_hex, escape_xml(line)
+      )
+    }, NA_character_),
+    collapse = ""
+  )
+  
+  sp_str <- sprintf(
+    '<xdr:sp>
+      <xdr:nvSpPr>
+        <xdr:cNvPr id="1" name="%s"/>
+        <xdr:cNvSpPr/>
+      </xdr:nvSpPr>
+      <xdr:spPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>
+        <a:prstGeom prst="%s"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="%s"/></a:solidFill>
+        <a:ln><a:solidFill><a:srgbClr val="%s"/></a:solidFill></a:ln>
+      </xdr:spPr>
+      <xdr:txBody>
+        <a:bodyPr vertOverflow="clip" horzOverflow="clip" rtlCol="0" wrap="square"/>
+        <a:lstStyle/>
+        %s
+      </xdr:txBody>
+    </xdr:sp>',
+    name, shape, fill_hex, line_hex, p_runs
+  )
+  
+  # Columns/rows in DrawingML anchors are 0-based
+  xml_str <- sprintf(
+    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <xdr:twoCellAnchor editAs="oneCell">
+        <xdr:from>
+          <xdr:col>%d</xdr:col>
+          <xdr:colOff>0</xdr:colOff>
+          <xdr:row>%d</xdr:row>
+          <xdr:rowOff>0</xdr:rowOff>
+        </xdr:from>
+        <xdr:to>
+          <xdr:col>%d</xdr:col>
+          <xdr:colOff>0</xdr:colOff>
+          <xdr:row>%d</xdr:row>
+          <xdr:rowOff>0</xdr:rowOff>
+        </xdr:to>
+        %s
+        <xdr:clientData/>
+      </xdr:twoCellAnchor>
+    </xdr:wsDr>',
+    from_col, from_row, to_col, to_row, sp_str
+  )
+  
+  openxlsx2:::read_xml(xml_str, pointer = FALSE)
 }
 
 #' Generate a Compatibility Matrix (SERASI)
@@ -927,32 +1007,39 @@ generate_matrix_serasi <- function(sf_1, sf_2, fill_value = NA, file_path = NULL
   wb$set_col_widths(cols = 1, width = 30)
   if (ncols >= 2) wb$set_col_widths(cols = 2:ncols, width = 25)
   
-  # Instructions as a floating text box 
+  # instruction box
   instr_row <- nrows + 4
   
   instr_lines <- c(
-    "Template matriks SERASI ini menyatakan tingkat kesesuaian lintas-ruang (darat-laut) dan menjadi \u201ckamus kebijakan\u201d yang dipakai LaSPUR untuk menilai kesesuaian pasangan kategori (existing maupun usulan).",
+    "Template matriks PADU-KE ini menyatakan tingkat keterpaduan penggunaan lahan dan lautan dalam bentang darat-laut",
     "",
     "Instruksi Pengisian:",
-    "1. Matriks hanya boleh diisi dengan nilai numerik 0, 0.5, dan 1",
-    "2. Pengisian nilai disesuaikan dengan hubungan pasangan kawasan, dengan deskripsi sebagai berikut:",
-    "     1 = sangat sesuai / langsung selaras kebijakan;",
-    "     0.5 = sesuai bersyarat (dapat berjalan dengan pengaturan/mitigasi);",
-    "     0 = tidak sesuai (konflik mendasar/harus dihindari).",
+    "1. Matriks hanya boleh diisi dengan nilai numerik 0, 1, 2, dan 3",
+    "2. Pengisian nilai disesuaikan dengan hubungan pasangan jenis penutup lahan, dengan deskripsi sebagai berikut:",
+    "    3 = Konektivitas alami tinggi",
+    "    2 = Bisa berdampingan dengan pengaturan",
+    "    1 = Kurang cocok/risiko",
+    "    0 = Tidak cocok/terlarang",
     "3. Tidak diperkenankan mengubah header kolom dan baris serta mengisi cell di luar matriks"
   )
   
+  # Convert to 0-based DrawingML anchor coordinates
   shape_xml <- create_multiline_shape(
     instr_lines,
     shape      = "rect",
     name       = "instructions_box",
-    fill_color = wb_color(hex = "FFF5F5DC"),
-    text_color = black,
-    line_color = black,
-    text_align = "left"
+    fill_color = "FFF5F5DC",
+    text_color = "FF000000",
+    line_color = "FF000000",
+    text_align = "left",
+    from_col   = 1,
+    from_row   = instr_row - 1,
+    to_col     = max(ncols, 6) - 1,
+    to_row     = instr_row + 10 - 1
   )
   
-  instr_dims <- paste0("B", instr_row, ":", int2col(max(ncols, 4)), instr_row + 10)
+  # Position the box from column B down
+  instr_dims <- paste0("B", instr_row, ":", int2col(max(ncols, 6)), instr_row + 10)
   wb$add_drawing(dims = instr_dims, xml = shape_xml)
   
   wb$save(file_path, overwrite = TRUE)
@@ -1218,17 +1305,18 @@ generate_matrix_padu_ke <- function(tbl, fill_value = NA, file_path = NULL) {
     instr_lines,
     shape      = "rect",
     name       = "instructions_box",
-    fill_color = wb_color(hex = "FFF5F5DC"),
-    text_color = black,
-    line_color = black,
-    text_align = "left"
+    fill_color = "FFF5F5DC",
+    text_color = "FF000000",
+    line_color = "FF000000",
+    text_align = "left",
+    from_col   = 1,
+    from_row   = instr_row - 1,
+    to_col     = max(ncols, 6) - 1,
+    to_row     = instr_row + 10 - 1
   )
   
-  # Position the box from column B down, spanning enough columns and rows
-  # Use max(ncols, 6) to give reasonable width
   instr_dims <- paste0("B", instr_row, ":", int2col(max(ncols, 6)), instr_row + 10)
   wb$add_drawing(dims = instr_dims, xml = shape_xml)
-  
   wb$save(file_path, overwrite = TRUE)
   
   invisible(wb)
@@ -3911,7 +3999,7 @@ dissolve_id_pu <- function(sf_obj) {
   
   base_required <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha", "admin")
   stopifnot(all(base_required %in% colnames(sf_obj)))
-
+  
   geom_col <- attr(sf_obj, "sf_column")
   
   rtrw   <- sf_obj %>% filter(!is.na(RTRW))
