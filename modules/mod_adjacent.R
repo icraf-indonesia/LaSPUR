@@ -363,19 +363,19 @@ adjacent_server <- function(id, output_dir) {
     
     # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
-      if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
-          is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
-        showNotification("Harap unggah semua data utama (peta dan prioritas) sebelum melanjutkan.",
-                         type = "warning", duration = 8)
-        return()
-      }
+      # if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
+      #     is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
+      #   showNotification("Harap unggah semua data utama (peta dan prioritas) sebelum melanjutkan.",
+      #                    type = "warning", duration = 8)
+      #   return()
+      # }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       
       tagList(
         tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Matriks SERASI (.xlsx)",
@@ -472,6 +472,15 @@ adjacent_server <- function(id, output_dir) {
     
     # ── Run analysis ───────────────────────────────────────────
     observeEvent(input$btn_run, {
+      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
+        showNotification(
+          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      
       req(rv$rtrw_vect, rv$rzwp3k_vect,
           rv$rtrw_prioritas, rv$rzwp3k_prioritas,
           rv$matriks_serasi)
@@ -746,9 +755,9 @@ adjacent_server <- function(id, output_dir) {
     # ── Step 3 UI ──────────────────────────────────────────────
     
     output$step3_ui <- renderUI({
-      if (rv$unlocked < 3 || is.null(rv$analysis_result_original)) {
-        return(.locked_panel("Jalankan analisis terlebih dahulu untuk mengaktifkan filter."))
-      }
+      # if (rv$unlocked < 3 || is.null(rv$analysis_result_original)) {
+      #   return(.locked_panel("Jalankan analisis terlebih dahulu untuk mengaktifkan filter."))
+      # }
       tagList(
         checkboxInput(
           ns("enable_filter"),

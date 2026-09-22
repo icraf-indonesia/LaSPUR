@@ -300,18 +300,18 @@ padu_hs_server <- function(id, output_dir) {
     
     # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
-      if (is.null(rv$idx_serasi_map) || is.null(rv$tss_rast) || is.null(rv$euc_dist_rast)) {
-        showNotification("Harap lengkapi semua data utama (SERASI, TSS, dan jarak estuari) sebelum melanjutkan.",
-                         type = "warning", duration = 8)
-        return()
-      }
+      # if (is.null(rv$idx_serasi_map) || is.null(rv$tss_rast) || is.null(rv$euc_dist_rast)) {
+      #   showNotification("Harap lengkapi semua data utama (SERASI, TSS, dan jarak estuari) sebelum melanjutkan.",
+      #                    type = "warning", duration = 8)
+      #   return()
+      # }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       
       tagList(
         tags$p(tags$i(class = "bi bi-sliders me-1"), "Parameter",

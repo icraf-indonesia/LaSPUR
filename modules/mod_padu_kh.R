@@ -367,7 +367,7 @@ padu_kh_server <- function(id, output_dir) {
         }
         for (i in 1:rv$active_count) {
           if (nchar(rv$entry_names[i]) == 0) {
-            showNotification(paste("Isi nama untuk habitat slot", i), type = "warning")
+            showNotification(paste("Isi nama untuk habitat", i), type = "warning")
             return()
           }
           if (is.null(rv$entry_paths[[i]])) {
@@ -383,7 +383,7 @@ padu_kh_server <- function(id, output_dir) {
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       
       tagList(
         tags$p(tags$i(class = "bi bi-gear me-1"), "Pengaturan Lanjutan",

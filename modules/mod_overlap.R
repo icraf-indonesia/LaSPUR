@@ -319,19 +319,19 @@ overlap_server <- function(id, output_dir) {
     # ── Step 1 -> Step 2 ──────────────────────────────────────
     observeEvent(input$btn_next_1, {
       # Validate that all required files are uploaded
-      if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
-          is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
-        showNotification("Harap unggah semua data utama (peta dan prioritas) sebelum melanjutkan.",
-                         type = "warning", duration = 8)
-        return()
-      }
+      # if (is.null(rv$rtrw_vect) || is.null(rv$rzwp3k_vect) ||
+      #     is.null(rv$rtrw_prioritas) || is.null(rv$rzwp3k_prioritas)) {
+      #   showNotification("Harap unggah semua data utama (peta dan prioritas) sebelum melanjutkan.",
+      #                    type = "warning", duration = 8)
+      #   return()
+      # }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       
       tagList(
         tags$p(tags$i(class = "bi bi-table me-1"), "Tabel Matriks SERASI (.xlsx)",

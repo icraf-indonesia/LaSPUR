@@ -420,7 +420,7 @@ padu_rtp_server <- function(id, output_dir) {
     
     # ── Step 2 UI ──────────────────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       
       tagList(
         tags$p(tags$i(class = "bi bi-sliders me-1"), "Parameter",

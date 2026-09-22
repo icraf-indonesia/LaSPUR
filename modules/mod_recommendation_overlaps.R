@@ -324,10 +324,10 @@ recommendation_overlaps_server <- function(id, output_dir) {
     
     # Step 1 -> Step 2
     observeEvent(input$btn_next_1, {
-      if (is.null(rv$idx_padan_map_filter)) {
-        showNotification("Terapkan filter terlebih dahulu.", type = "warning")
-        return()
-      }
+      # if (is.null(rv$idx_padan_map_filter)) {
+      #   showNotification("Terapkan filter terlebih dahulu.", type = "warning")
+      #   return()
+      # }
       rv$filter_snapshot <- list(
         apply_area = input$apply_area,
         area_filter = input$area_filter,
@@ -340,7 +340,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         numericInput(ns("n_alt"), "Jumlah Opsi Alternatif per Kasus", value = 5, min = 1, max = 10, step = 1),
@@ -530,17 +530,17 @@ recommendation_overlaps_server <- function(id, output_dir) {
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
     observeEvent(input$btn_next_2, {
-      if (is.null(rv$idx_padan_map_alt)) {
-        showNotification("Unggah dan validasi template alternatif terlebih dahulu.", type = "warning")
-        return()
-      }
+      # if (is.null(rv$idx_padan_map_alt)) {
+      #   showNotification("Unggah dan validasi template alternatif terlebih dahulu.", type = "warning")
+      #   return()
+      # }
       rv$unlocked <- max(rv$unlocked, 3)
       go_to_panel("step3")
     })
     
     # ── Step 3 UI (final recommendation) ──────────────────────
     output$step3_ui <- renderUI({
-      if (rv$unlocked < 3) return(.locked_panel())
+      # if (rv$unlocked < 3) return(.locked_panel())
       tagList(
         layout_column_wrap(
           width = 1/2,

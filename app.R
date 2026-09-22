@@ -733,6 +733,32 @@ ui <- page_sidebar(
     .module-panel-wrapper hr {
       margin: 0.5rem 0 !important;
     }
+
+    /* ========================================================
+       ANALYSIS BUTTON LOADING STATE (frozen while running)
+       ======================================================== */
+    .laspur-btn-loading {
+      opacity: 0.55 !important;
+      cursor: not-allowed !important;
+      pointer-events: none !important;
+      filter: grayscale(0.35);
+      position: relative;
+    }
+    .laspur-btn-loading::after {
+      content: '';
+      display: inline-block;
+      width: 0.85em;
+      height: 0.85em;
+      margin-left: 8px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: laspur-spin 0.7s linear infinite;
+      vertical-align: -0.15em;
+    }
+    @keyframes laspur-spin {
+      to { transform: rotate(360deg); }
+    }
   ")),
   
   sidebar = sidebar(
@@ -1822,6 +1848,59 @@ $(document).ready(function() {
   Shiny.addCustomMessageHandler('update_modal_label', function(msg) {
     document.getElementById('modal_tab_label').innerText = msg.label;
   });
+
+  // ============================================================
+  //  GLOBAL ANALYSIS BUTTON FREEZING
+  // ============================================================
+  (function () {
+    var RUN_BUTTON_SELECTOR = [
+      'button[id$=\"-btn_run\"]',
+      'button[id$=\"-btn_run_final\"]',
+      'button[id$=\"-btn_run_reconcile\"]',
+      'button[id$=\"-btn_calc_npv\"]',
+      'button[id$=\"-btn_calc_estuari_dist\"]',
+      'button[id$=\"-btn_calc_ind_dist\"]',
+      'button[id$=\"-btn_calc_pel_dist\"]',
+      'button[id$=\"-btn_apply_filter\"]'
+    ].join(',');
+
+    var lastClickTime = 0;
+    var MIN_START_DELAY_MS = 750;  
+
+    function isAnalysisRunning() {
+      return $('#shiny-notification-panel .progress').length > 0;
+    }
+
+    function setRunButtonsState(disabled) {
+      var $btns = $(RUN_BUTTON_SELECTOR);
+      if (disabled) {
+        $btns.prop('disabled', true).addClass('laspur-btn-loading');
+      } else {
+        $btns.prop('disabled', false).removeClass('laspur-btn-loading');
+      }
+    }
+
+    $(document).on('click', RUN_BUTTON_SELECTOR, function () {
+      lastClickTime = Date.now();
+      setRunButtonsState(true);
+    });
+
+    setInterval(function () {
+      var elapsed = Date.now() - lastClickTime;
+      if (elapsed < MIN_START_DELAY_MS) return;
+
+      var stillFrozen = $(RUN_BUTTON_SELECTOR + '.laspur-btn-loading').length > 0;
+      if (!stillFrozen) return;
+
+      if (!isAnalysisRunning()) {
+        setRunButtonsState(false);
+      }
+    }, 400);
+
+    $(document).on('shown.bs.modal hidden.bs.modal', function () {
+      if (!isAnalysisRunning()) setRunButtonsState(false);
+    });
+  })();
 
 });
 "

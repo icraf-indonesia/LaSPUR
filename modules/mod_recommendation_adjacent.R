@@ -336,10 +336,10 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     # ── Step 1 -> Step 2 ────────────────────────────────────
     observeEvent(input$btn_next_1, {
-      if (is.null(rv$idx_padan_map_filter)) {
-        showNotification("Terapkan filter terlebih dahulu.", type = "warning")
-        return()
-      }
+      # if (is.null(rv$idx_padan_map_filter)) {
+      #   showNotification("Terapkan filter terlebih dahulu.", type = "warning")
+      #   return()
+      # }
       rv$filter_snapshot <- list(
         apply_length = input$apply_length,
         length_filter = input$length_filter,
@@ -352,7 +352,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     # ── Step 2 UI ────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         numericInput(ns("n_alt"), "Jumlah Opsi Alternatif per Kasus", value = 5, min = 1, max = 10, step = 1),
@@ -524,17 +524,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
     observeEvent(input$btn_next_2, {
-      if (is.null(rv$idx_padan_map_alt)) {
-        showNotification("Unggah dan validasi template alternatif terlebih dahulu.", type = "warning")
-        return()
-      }
+      # if (is.null(rv$idx_padan_map_alt)) {
+      #   showNotification("Unggah dan validasi template alternatif terlebih dahulu.", type = "warning")
+      #   return()
+      # }
       rv$unlocked <- max(rv$unlocked, 3)
       go_to_panel("step3")
     })
     
     # ── Step 3 UI ────────────────────────────────────────────
     output$step3_ui <- renderUI({
-      if (rv$unlocked < 3) return(.locked_panel())
+      # if (rv$unlocked < 3) return(.locked_panel())
       tagList(
         checkboxInput(ns("npv_enable"), "Hitung Nilai Ekonomi (NPV)?", value = FALSE),
         conditionalPanel(
@@ -585,31 +585,28 @@ recommendation_adjacent_server <- function(id, output_dir) {
     observeEvent(input$btn_back_3, go_to_panel("step2"))
     
     observeEvent(input$btn_next_3, {
-      req(rv$idx_padan_map_alt)
+      # req(rv$idx_padan_map_alt)
       
-      if (isTRUE(input$npv_enable)) {
-        if (is.null(rv$adjacent_economy_map)) {
-          showNotification("Hitung NPV terlebih dahulu, atau nonaktifkan opsi Nilai Ekonomi.", type = "warning")
-          return()
-        }
-      } else {
+      if (isTRUE(input$npv_enable) && is.null(rv$adjacent_economy_map)) {
+      } else if (!isTRUE(input$npv_enable)) {
         base_map <- rv$idx_padan_map_alt
-        has_econ_rtrw <- "econ_rtrw_delta" %in% names(base_map)
-        has_econ_rz   <- "econ_rzwp3k_delta" %in% names(base_map)
-        rv$adjacent_economy_map <- base_map %>%
-          dplyr::mutate(
-            econ_rtrw_delta   = if (has_econ_rtrw) econ_rtrw_delta   else 0,
-            econ_rzwp3k_delta = if (has_econ_rz)   econ_rzwp3k_delta else 0
-          )
+        if (!is.null(base_map)) {
+          has_econ_rtrw <- "econ_rtrw_delta" %in% names(base_map)
+          has_econ_rz   <- "econ_rzwp3k_delta" %in% names(base_map)
+          rv$adjacent_economy_map <- base_map %>%
+            dplyr::mutate(
+              econ_rtrw_delta   = if (has_econ_rtrw) econ_rtrw_delta   else 0,
+              econ_rzwp3k_delta = if (has_econ_rz)   econ_rzwp3k_delta else 0
+            )
+        }
       }
-      
       rv$unlocked <- max(rv$unlocked, 4)
       go_to_panel("step4")
     })
     
     # ── Step 4 UI ────────────────────────────────────────────
     output$step4_ui <- renderUI({
-      if (rv$unlocked < 4) return(.locked_panel())
+      # if (rv$unlocked < 4) return(.locked_panel())
       tagList(
         layout_column_wrap(
           width = 1/2,

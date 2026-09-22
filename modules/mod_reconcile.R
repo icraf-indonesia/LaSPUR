@@ -358,7 +358,7 @@ reconcile_server <- function(id, output_dir) {
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      if (rv$unlocked < 2) return(.locked_panel())
+      # if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("recon_table_filled_file"), "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)", accept = ".xlsx"),
         if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
