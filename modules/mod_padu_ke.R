@@ -196,8 +196,9 @@ padu_ke_server <- function(id, output_dir) {
       req(rv$lulc_ref)
       withProgress(message = "Membuat Templat Matriks PADU-KE", value = 0, {
         tryCatch({
-          out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          padu_ke_dir <- file.path(output_dir(), "Analisis PADU-KE")
+          dir.create(padu_ke_dir, recursive = TRUE, showWarnings = FALSE)
+          out_path <- file.path(padu_ke_dir, "matriks_padu_ke_template.xlsx")
           generate_matrix_padu_ke(rv$lulc_ref, file_path = out_path)
           matrix_template_path(out_path)
           showNotification(paste("Template dibuat \u2192", out_path),
@@ -342,12 +343,24 @@ padu_ke_server <- function(id, output_dir) {
           padu_ke_dir <- file.path(output_dir(), "Analisis PADU-KE")
           if (!dir.exists(padu_ke_dir))
             dir.create(padu_ke_dir, recursive = TRUE, showWarnings = FALSE)
+          log_dir <- file.path(padu_ke_dir, "log")
+          if (!dir.exists(log_dir))
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           
           gpkg_path <- file.path(padu_ke_dir, "idx_padu_ke.gpkg")
           xlsx_path <- file.path(padu_ke_dir, "idx_padu_ke.xlsx")
           sf::st_write(idx_padu_ke_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           result_table <- as_tibble(idx_padu_ke_map %>% sf::st_drop_geometry())
           openxlsx::write.xlsx(result_table, xlsx_path)
+          
+          matriks_filled_name <- "matriks_padu_ke_filled.xlsx"
+          matriks_filled_xlsx <- file.path(log_dir, matriks_filled_name)
+          tryCatch({
+            file.copy(input$matriks_padu_ke_file$datapath,
+                      matriks_filled_xlsx, overwrite = TRUE)
+          }, error = function(e) {
+            warning("Gagal menyalin matriks PADU-KE: ", e$message)
+          })
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
@@ -364,6 +377,7 @@ padu_ke_server <- function(id, output_dir) {
               lulc_id_col            = rv$lulc_id_col,
               lulc_class_col         = rv$lulc_class_col,
               matriks_padu_ke_path   = input$matriks_padu_ke_file,
+              matriks_padu_ke_uploaded = matriks_filled_name,
               output_dir             = output_dir()
             ),
             result = list(
@@ -377,9 +391,6 @@ padu_ke_server <- function(id, output_dir) {
             )
           )
           
-          log_dir <- file.path(padu_ke_dir, "log")
-          if (!dir.exists(log_dir))
-            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           tryCatch({
             inputs <- out$inputs
             save(inputs, file = file.path(log_dir, "idx_padu_ke_log.rda"))

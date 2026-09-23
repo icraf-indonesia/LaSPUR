@@ -337,8 +337,9 @@ adjacent_server <- function(id, output_dir) {
       withProgress(message = "Membuat Templat Matriks SERASI", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Menyiapkan direktori output...")
-          out_path <- file.path(output_dir(), "matriks_serasi.xlsx")
-          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          serasi_dir <- file.path(output_dir(), "Analisis SERASI")
+          dir.create(serasi_dir, recursive = TRUE, showWarnings = FALSE)
+          out_path <- file.path(serasi_dir, "matriks_serasi_adjacent_template.xlsx")
           
           incProgress(0.4, detail = "Membuat matriks dari kelas RTRW & RZWP3K...")
           generate_matrix_serasi(rv$rtrw_vect, rv$rzwp3k_vect, file_path = out_path)
@@ -364,7 +365,7 @@ adjacent_server <- function(id, output_dir) {
     })
     
     output$dl_matrix_template <- downloadHandler(
-      filename = function() "matriks_serasi_adjacent.xlsx",
+      filename = function() "matriks_serasi_adjacent_template.xlsx",
       content = function(file) {
         req(matrix_template_path())
         file.copy(matrix_template_path(), file, overwrite = TRUE)
@@ -583,6 +584,10 @@ adjacent_server <- function(id, output_dir) {
             if (!dir.exists(serasi_dir)) {
               dir.create(serasi_dir, recursive = TRUE, showWarnings = FALSE)
             }
+            log_dir <- file.path(serasi_dir, "log")
+            if (!dir.exists(log_dir)) {
+              dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+            }
             
             if (!dir.exists(serasi_dir)) {
               stop("Tidak dapat membuat atau mengakses direktori: ", serasi_dir)
@@ -594,11 +599,13 @@ adjacent_server <- function(id, output_dir) {
             sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
             openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
             
-            matriks_xlsx <- file.path(serasi_dir, "matriks_serasi_input.xlsx")
+            matriks_filled_name <- "matriks_serasi_adjacent_filled.xlsx"
+            matriks_filled_xlsx <- file.path(log_dir, matriks_filled_name)
             tryCatch({
-              openxlsx::write.xlsx(rv$matriks_serasi, matriks_xlsx)
+              file.copy(input$matriks_serasi_file$datapath,
+                        matriks_filled_xlsx, overwrite = TRUE)
             }, error = function(e) {
-              warning("Gagal menyimpan matriks SERASI: ", e$message)
+              warning("Gagal menyalin matriks SERASI: ", e$message)
             })
             
             rv$gpkg_path <- gpkg_path
@@ -667,6 +674,7 @@ adjacent_server <- function(id, output_dir) {
                 rtrw_prioritas_path = input$rtrw_prioritas_file,
                 rzwp3k_prioritas_path = input$rzwp3k_prioritas_file,
                 matriks_serasi_path = input$matriks_serasi_file,
+                matriks_serasi_uploaded = matriks_filled_name,
                 output_dir = output_dir()
               ),
               result = list(
@@ -680,10 +688,6 @@ adjacent_server <- function(id, output_dir) {
               )
             )
             
-            log_dir <- file.path(serasi_dir, "log")
-            if (!dir.exists(log_dir)) {
-              dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
-            }
             log_path <- file.path(log_dir, "idx_serasi_log.rda")
             if (dir.exists(log_dir)) {
               tryCatch({

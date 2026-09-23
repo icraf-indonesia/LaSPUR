@@ -1576,9 +1576,62 @@ load_serasi_from_files <- function(base_dir, cfg) {
     result[[names_list$map]] <- map_obj
     result[[names_list$table]] <- table_obj
     
-    matriks_xlsx <- file.path(base_dir, "matriks_serasi_input.xlsx")
-    if (file.exists(matriks_xlsx)) {
-      result$matriks_serasi <- openxlsx::read.xlsx(matriks_xlsx)
+    log_dir <- file.path(base_dir, "log")
+    matriks_result <- NULL
+    if (dir.exists(log_dir)) {
+      candidate_paths <- character(0)
+
+      uploaded_name <- tryCatch(inputs$matriks_serasi_uploaded,
+                                error = function(e) NULL)
+      if (!is.null(uploaded_name) && length(uploaded_name) == 1 &&
+          nzchar(uploaded_name)) {
+        candidate_paths <- c(candidate_paths,
+                             file.path(log_dir, uploaded_name))
+      }
+
+      canonical_name <- sprintf("matriks_serasi_%s_filled.xlsx", case)
+      candidate_paths <- c(candidate_paths,
+                           file.path(log_dir, canonical_name))
+
+      pattern_files <- list.files(
+        log_dir,
+        pattern = "^matriks_serasi.*_filled.*\\.xlsx$",
+        full.names = TRUE, ignore.case = TRUE
+      )
+      if (length(pattern_files) > 0) {
+        pattern_files <- pattern_files[
+          order(file.info(pattern_files)$mtime, decreasing = TRUE)
+        ]
+        candidate_paths <- c(candidate_paths, pattern_files)
+      }
+
+      fallback_files <- list.files(
+        log_dir,
+        pattern = "^matriks_serasi.*\\.xlsx$",
+        full.names = TRUE, ignore.case = TRUE
+      )
+      if (length(fallback_files) > 0) {
+        fallback_files <- fallback_files[
+          order(file.info(fallback_files)$mtime, decreasing = TRUE)
+        ]
+        candidate_paths <- c(candidate_paths, fallback_files)
+      }
+      
+      for (p in candidate_paths) {
+        if (!file.exists(p)) next
+        parsed <- tryCatch(
+          load_validate_matrix_table(p, title = "serasi"),
+          error = function(e) NULL
+        )
+        if (!is.null(parsed)) {
+          matriks_result <- parsed
+          break
+        }
+      }
+    }
+    
+    if (!is.null(matriks_result)) {
+      result$matriks_serasi <- matriks_result
     }
     
     out <- list(inputs = inputs, result = result)
@@ -1844,6 +1897,48 @@ module_ready_and_data <- function(module_id, output_dir, session) {
     result <- list()
     result[[names_list$map]] <- map_obj
     result[[names_list$table]] <- table_obj
+    
+    if (identical(mod_key, "padu_ke")) {
+      log_dir <- file.path(base_dir, "log")
+      matriks_result <- NULL
+      if (dir.exists(log_dir)) {
+        candidate_paths <- character(0)
+        uploaded_name <- tryCatch(inputs$matriks_padu_ke_uploaded,
+                                  error = function(e) NULL)
+        if (!is.null(uploaded_name) && length(uploaded_name) == 1 &&
+            nzchar(uploaded_name)) {
+          candidate_paths <- c(candidate_paths,
+                               file.path(log_dir, uploaded_name))
+        }
+        candidate_paths <- c(candidate_paths,
+                             file.path(log_dir, "matriks_padu_ke_filled.xlsx"))
+        pattern_files <- list.files(
+          log_dir,
+          pattern = "^matriks_padu_ke.*_filled.*\\.xlsx$",
+          full.names = TRUE, ignore.case = TRUE
+        )
+        if (length(pattern_files) > 0) {
+          pattern_files <- pattern_files[
+            order(file.info(pattern_files)$mtime, decreasing = TRUE)
+          ]
+          candidate_paths <- c(candidate_paths, pattern_files)
+        }
+        for (p in candidate_paths) {
+          if (!file.exists(p)) next
+          parsed <- tryCatch(
+            load_validate_matrix_table(p, title = "padu_ke"),
+            error = function(e) NULL
+          )
+          if (!is.null(parsed)) {
+            matriks_result <- parsed
+            break
+          }
+        }
+      }
+      if (!is.null(matriks_result)) {
+        result$matriks_padu_ke <- matriks_result
+      }
+    }
     
     out <- list(inputs = inputs, result = result)
     return(list(ready = TRUE, data = out, source = "files"))
