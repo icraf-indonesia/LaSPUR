@@ -279,7 +279,7 @@ overlap_server <- function(id, output_dir) {
     
     # ── Generate matrix template ───────────────────────────────
     matrix_template_path <- reactiveVal(NULL)
-    
+
     observeEvent(input$btn_generate_matrix, {
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification("Direktori output belum diatur...", type = "error", duration = 5)
@@ -287,17 +287,26 @@ overlap_server <- function(id, output_dir) {
       }
       
       req(rv$rtrw_vect, rv$rzwp3k_vect)
-      tryCatch({
-        out_path <- file.path(output_dir(), "matriks_serasi.xlsx")
-        dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-        
-        # Writes the styled file and returns invisibly
-        generate_matrix_serasi(rv$rtrw_vect, rv$rzwp3k_vect, file_path = out_path)
-        
-        matrix_template_path(out_path)
-        showNotification(paste("Template matriks dibuat →", out_path), type = "message", duration = 5)
-      }, error = function(e) {
-        showNotification(paste("Gagal membuat template matriks:", e$message), type = "error", duration = 8)
+      
+      withProgress(message = "Membuat Templat Matriks SERASI", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Menyiapkan direktori output...")
+          out_path <- file.path(output_dir(), "matriks_serasi.xlsx")
+          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          incProgress(0.4, detail = "Membuat matriks dari kelas RTRW & RZWP3K...")
+          generate_matrix_serasi(rv$rtrw_vect, rv$rzwp3k_vect, file_path = out_path)
+          
+          incProgress(0.9, detail = "Menyimpan berkas...")
+          matrix_template_path(out_path)
+          incProgress(1.0, detail = "Selesai!")
+          
+          showNotification(paste("Template matriks dibuat →", out_path),
+                           type = "message", duration = 5)
+        }, error = function(e) {
+          showNotification(paste("Gagal membuat template matriks:", e$message),
+                           type = "error", duration = 8)
+        })
       })
     })
     

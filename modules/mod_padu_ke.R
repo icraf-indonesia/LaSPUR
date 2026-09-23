@@ -286,18 +286,25 @@ padu_ke_server <- function(id, output_dir) {
         return()
       }
       
-      tryCatch({
-        out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
-        dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
-        
-        generate_matrix_padu_ke(rv$lulc_ref, file_path = out_path)
-        
-        matrix_template_path(out_path)
-        showNotification(paste("Template matriks PADU-KE dibuat →", out_path),
-                         type = "message", duration = 5)
-      }, error = function(e) {
-        showNotification(paste("Gagal membuat template matriks:", e$message),
-                         type = "error", duration = 8)
+      withProgress(message = "Membuat Templat Matriks PADU-KE", value = 0, {
+        tryCatch({
+          incProgress(0.2, detail = "Menyiapkan direktori output...")
+          out_path <- file.path(output_dir(), "matriks_padu_ke_template.xlsx")
+          dir.create(output_dir(), recursive = TRUE, showWarnings = FALSE)
+          
+          incProgress(0.4, detail = "Membuat matriks dari kelas tutupan lahan...")
+          generate_matrix_padu_ke(rv$lulc_ref, file_path = out_path)
+          
+          incProgress(0.9, detail = "Menyimpan berkas...")
+          matrix_template_path(out_path)
+          incProgress(1.0, detail = "Selesai!")
+          
+          showNotification(paste("Template matriks PADU-KE dibuat →", out_path),
+                           type = "message", duration = 5)
+        }, error = function(e) {
+          showNotification(paste("Gagal membuat template matriks:", e$message),
+                           type = "error", duration = 8)
+        })
       })
     })
     
