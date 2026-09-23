@@ -819,8 +819,14 @@ recommendation_adjacent_server <- function(id, output_dir) {
             ))
           )
           
-          # Dissolve for visualization
-          adjacent_recom_map_viz <- dissolve_id_pu(adjacent_recom_map)
+          adjacent_recom_map_viz <- tryCatch({
+            viz <- dissolve_id_pu(adjacent_recom_map)
+            if (any(!sf::st_is_valid(viz))) viz <- sf::st_make_valid(viz)
+            viz
+          }, error = function(e) {
+            warning("dissolve_id_pu failed, using raw map with st_make_valid: ", conditionMessage(e))
+            sf::st_make_valid(adjacent_recom_map)
+          })
           
           rv$final_result <- list(
             map = adjacent_recom_map_viz,
@@ -1005,6 +1011,10 @@ recommendation_adjacent_server <- function(id, output_dir) {
                  leaflet::addControl("Tidak ada data untuk ditampilkan.", position = "topright"))
       }
       
+      if (any(!sf::st_is_valid(map_sf))) {
+        map_sf <- sf::st_make_valid(map_sf)
+      }
+      
       if (!sf::st_is_longlat(map_sf)) {
         map_sf <- sf::st_transform(map_sf, crs = 4326)
       }
@@ -1111,7 +1121,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
       selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
       req(nrow(selected_polygon) > 0)
       
-      centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
+      if (any(!sf::st_is_valid(selected_polygon))) {
+        selected_polygon <- sf::st_make_valid(selected_polygon)
+      }
+      
+      centroid_coord <- suppressWarnings(
+        sf::st_coordinates(sf::st_centroid(sf::st_union(sf::st_geometry(selected_polygon))))
+      )
       
       popup_text <- paste0(
         "<b>ID PU:</b> ", selected_polygon$id_pu[1], "<br>",
@@ -1123,7 +1139,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       
       leaflet::leafletProxy("recommendation_map", session = session) %>%
         leaflet::clearGroup("row_highlight") %>%
-        leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
+        leaflet::setView(lng = centroid_coord[1, 1], lat = centroid_coord[1, 2], zoom = 13) %>%
         leaflet::addPolygons(
           data        = selected_polygon,
           color       = "#FF4136",

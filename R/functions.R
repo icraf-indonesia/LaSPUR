@@ -4037,7 +4037,8 @@ dissolve_id_pu <- function(sf_obj) {
   
   geom_union <- sf_obj %>%
     group_by(id_pu) %>%
-    summarise(geometry = st_union(.data[[geom_col]]), .groups = "drop")
+    summarise(geometry = st_union(.data[[geom_col]]), .groups = "drop") %>%
+    sf::st_make_valid()
   
   result <- geom_union %>%
     inner_join(combined, by = "id_pu") %>%
