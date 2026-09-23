@@ -3261,6 +3261,149 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
   return(NA_real_)
 }
 
+#' Dissolve adjacent feature pairs to one row per `id_pu`
+#'
+#' @description
+#' Takes an sf/data.frame with 2 rows per `id_pu` (one RTRW feature row and
+#' one RZWP3K feature row, as produced by `identify_adjacent()`) and returns a
+#' 1-row-per-`id_pu` data.frame with side-by-side attributes.
+#'
+#' Column mapping:
+#' \itemize{
+#'   \item `id`      → `id_rtrw` + `id_rzwp3k`
+#'   \item `RTRW`    → filled from the RTRW side; `RZWP3K` from the RZWP3K side
+#'   \item `area_ha` → `area_ha_rtrw` + `area_ha_rzwp3k`
+#'   \item everything else → first non-NA value across the two sides
+#' }
+#'
+#' @param sf_obj An `sf` or data.frame in feature form (2 rows per `id_pu`).
+#'
+#' @return A `tibble` with one row per `id_pu`.
+#' @export
+dissolve_adjacent_pairs <- function(sf_obj) {
+  if (inherits(sf_obj, "sf")) {
+    df <- sf::st_drop_geometry(sf_obj)
+  } else if (is.data.frame(sf_obj)) {
+    df <- as.data.frame(sf_obj, stringsAsFactors = FALSE)
+  } else {
+    stop("dissolve_adjacent_pairs: 'sf_obj' must be an sf object or data.frame.")
+  }
+  
+  required <- c("id_pu", "RTRW", "RZWP3K")
+  missing <- setdiff(required, names(df))
+  if (length(missing) > 0) {
+    stop("dissolve_adjacent_pairs: missing columns: ",
+         paste(missing, collapse = ", "))
+  }
+  
+  rtrw_df <- df[!is.na(df$RTRW), , drop = FALSE]
+  rz_df   <- df[!is.na(df$RZWP3K), , drop = FALSE]
+  
+  if (nrow(rtrw_df) != nrow(rz_df)) {
+    stop("dissolve_adjacent_pairs: unequal number of RTRW and RZWP3K rows (",
+         nrow(rtrw_df), " vs ", nrow(rz_df), ").")
+  }
+  if (nrow(rtrw_df) == 0) return(tibble::tibble())
+  if (!all(rtrw_df$id_pu == rz_df$id_pu)) {
+    stop("dissolve_adjacent_pairs: id_pu mismatch between RTRW and RZWP3K rows.")
+  }
+  
+  out <- tibble::tibble(id_pu = rtrw_df$id_pu)
+  if ("id" %in% names(df)) {
+    out$id_rtrw   <- rtrw_df$id
+    out$id_rzwp3k <- rz_df$id
+  }
+  out$RTRW   <- as.character(rtrw_df$RTRW)
+  out$RZWP3K <- as.character(rz_df$RZWP3K)
+  if ("area_ha" %in% names(df)) {
+    out$area_ha_rtrw   <- rtrw_df$area_ha
+    out$area_ha_rzwp3k <- rz_df$area_ha
+  }
+  
+  handled    <- c("id", "id_pu", "RTRW", "RZWP3K", "area_ha")
+  other_cols <- setdiff(intersect(names(rtrw_df), names(rz_df)), handled)
+  for (col in other_cols) {
+    out[[col]] <- dplyr::coalesce(rtrw_df[[col]], rz_df[[col]])
+  }
+  
+  special <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K",
+               "area_ha_rtrw", "area_ha_rzwp3k")
+  front <- intersect(special, names(out))
+  rest  <- setdiff(names(out), front)
+  out[, c(front, rest), drop = FALSE]
+}
+
+#' Expand a dissolved adjacent table back to feature form
+#'
+#' @description
+#' Reverse of `dissolve_adjacent_pairs()`. Takes a 1-row-per-`id_pu` table
+#' and returns a 2-rows-per-`id_pu` data.frame (one row per side).
+#'
+#' @param dissolved_df A data.frame with columns `id_pu`, `RTRW`, `RZWP3K`
+#'   (optionally `id_rtrw`/`id_rzwp3k` and `area_ha_rtrw`/`area_ha_rzwp3k`).
+#' @param decisions_rtrw_col   Optional column name; if present, its value is
+#'   kept only on the RTRW row and set to `NA` on the RZWP3K row.
+#' @param decisions_rzwp3k_col Optional column name; if present, its value is
+#'   kept only on the RZWP3K row and set to `NA` on the RTRW row.
+#'
+#' @return A `tibble` with 2 rows per `id_pu` (`id`, `id_pu`, `RTRW`, `RZWP3K`,
+#'   `area_ha` restored).
+#' @export
+undissolve_adjacent_pairs <- function(dissolved_df,
+                                      decisions_rtrw_col   = NULL,
+                                      decisions_rzwp3k_col = NULL) {
+  df <- as.data.frame(dissolved_df, stringsAsFactors = FALSE)
+  
+  if (!"id_pu"  %in% names(df)) stop("undissolve_adjacent_pairs: 'id_pu' missing.")
+  if (!"RTRW"   %in% names(df)) stop("undissolve_adjacent_pairs: 'RTRW' missing.")
+  if (!"RZWP3K" %in% names(df)) stop("undissolve_adjacent_pairs: 'RZWP3K' missing.")
+  
+  has_ids        <- all(c("id_rtrw", "id_rzwp3k") %in% names(df))
+  has_area_split <- all(c("area_ha_rtrw", "area_ha_rzwp3k") %in% names(df))
+  n <- nrow(df)
+  if (n == 0) return(tibble::tibble())
+  
+  ids_rtrw   <- if (has_ids) df$id_rtrw   else seq_len(n)
+  ids_rzwp3k <- if (has_ids) df$id_rzwp3k else seq_len(n)
+  
+  special <- c("id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K",
+               "area_ha_rtrw", "area_ha_rzwp3k")
+  common_cols <- setdiff(names(df), special)
+  
+  row_rtrw <- df[, common_cols, drop = FALSE]
+  row_rtrw$id     <- ids_rtrw
+  row_rtrw$RTRW   <- as.character(df$RTRW)
+  row_rtrw$RZWP3K <- NA_character_
+  if (has_area_split) row_rtrw$area_ha <- df$area_ha_rtrw
+  
+  row_rz <- df[, common_cols, drop = FALSE]
+  row_rz$id     <- ids_rzwp3k
+  row_rz$RTRW   <- NA_character_
+  row_rz$RZWP3K <- as.character(df$RZWP3K)
+  if (has_area_split) row_rz$area_ha <- df$area_ha_rzwp3k
+  
+  if (!is.null(decisions_rtrw_col) && decisions_rtrw_col %in% names(row_rz)) {
+    row_rz[[decisions_rtrw_col]] <- NA
+  }
+  if (!is.null(decisions_rzwp3k_col) && decisions_rzwp3k_col %in% names(row_rtrw)) {
+    row_rtrw[[decisions_rzwp3k_col]] <- NA
+  }
+  
+  # Ensure identical column ordering before interleaving
+  all_cols <- union(names(row_rtrw), names(row_rz))
+  for (c_ in setdiff(all_cols, names(row_rtrw))) row_rtrw[[c_]] <- NA
+  for (c_ in setdiff(all_cols, names(row_rz)))   row_rz[[c_]]   <- NA
+  row_rtrw <- row_rtrw[, all_cols, drop = FALSE]
+  row_rz   <- row_rz[,   all_cols, drop = FALSE]
+  
+  out_list <- vector("list", 2 * n)
+  for (i in seq_len(n)) {
+    out_list[[2 * i - 1]] <- row_rtrw[i, , drop = FALSE]
+    out_list[[2 * i]]     <- row_rz[i,   , drop = FALSE]
+  }
+  dplyr::bind_rows(out_list)
+}
+
 #' Determine alternative zones and create an Excel workbook with dropdowns
 #'
 #' @param idx_padan_map_filter sf object. For step = "step2", must contain
@@ -3289,17 +3432,16 @@ determine_alternative_zones <- function(idx_padan_map_filter,
                                         serasi_matrix,
                                         step = c("step2", "step1"),
                                         n_alt = 5,
-                                        output_dir = ".") {
+                                        output_dir = ".",
+                                        dissolve_step2 = TRUE) {
   
   step <- match.arg(step)
   
-  # Package requirements
   if (!require(openxlsx)) stop("Package 'openxlsx' is required but not installed.")
   if (!require(dplyr))    stop("Package 'dplyr' is required but not installed.")
   if (!require(tidyr))    stop("Package 'tidyr' is required but not installed.")
   if (!require(sf))       stop("Package 'sf' is required but not installed.")
   
-  # Input validation
   if (!inherits(idx_padan_map_filter, "sf")) {
     stop("'idx_padan_map_filter' must be an sf object.")
   }
@@ -3310,81 +3452,135 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     addWorksheet(wb, "Validation_Lists")
     return(list(workbook = wb, data = data.frame()))
   }
-  
-  # Required columns and base export columns differ by step
-  if (step == "step2") {
-    required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
-    base_cols     <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
-  } else {
-    required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")
-    base_cols     <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")
-  }
-  
-  missing <- setdiff(required_cols, names(idx_padan_map_filter))
-  if (length(missing) > 0) {
-    stop("Input data missing required columns: ", paste(missing, collapse = ", "))
-  }
-  
   if (!is.data.frame(serasi_matrix)) {
     stop("'serasi_matrix' must be a data.frame or tibble.")
   }
   matriks_serasi <- serasi_matrix
   
+  input_cols <- names(idx_padan_map_filter)
+  
   if (step == "step2") {
+    input_is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% input_cols) &&
+      !"id" %in% input_cols
+    
+    if (dissolve_step2) {
+      if (input_is_dissolved) {
+        work <- sf::st_drop_geometry(idx_padan_map_filter)
+      } else {
+        required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K",
+                           "admin", "area_ha", "length", "idx_serasi")
+        missing <- setdiff(required_cols, input_cols)
+        if (length(missing) > 0)
+          stop("Input data missing required columns: ",
+               paste(missing, collapse = ", "))
+        work <- dissolve_adjacent_pairs(idx_padan_map_filter)
+      }
+      
+      base_cols <- c("id_pu", "id_group", "id_rtrw", "id_rzwp3k",
+                     "RTRW", "RZWP3K", "admin",
+                     "area_ha_rtrw", "area_ha_rzwp3k",
+                     "length", "idx_serasi")
+      base_cols <- intersect(base_cols, names(work))
+      
+      idx_padan_map_alt <- work %>%
+        rowwise() %>%
+        mutate(
+          alt_RTRW_list   = list(get_alternative_zone(RZWP3K, RTRW, "RTRW",
+                                                      matriks_serasi, n_alt = n_alt)),
+          alt_RZWP3K_list = list(get_alternative_zone(RTRW, RZWP3K, "RZWP3K",
+                                                      matriks_serasi, n_alt = n_alt))
+        ) %>%
+        ungroup() %>%
+        unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
+        unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
+        rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
+                    starts_with("alt_RTRW_list_")) %>%
+        rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
+                    starts_with("alt_RZWP3K_list_"))
+      
+      df_export <- idx_padan_map_alt %>%
+        filter(!is.na(id_pu) & id_pu != "") %>%
+        select(all_of(base_cols),
+               starts_with("alt_RTRW_"),
+               starts_with("alt_RZWP3K_")) %>%
+        mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
+        select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
+      
+    } else {
+      required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K",
+                         "admin", "area_ha", "length", "idx_serasi")
+      missing <- setdiff(required_cols, input_cols)
+      if (length(missing) > 0)
+        stop("Input data missing required columns: ",
+             paste(missing, collapse = ", "))
+      base_cols <- required_cols
+      
+      idx_padan_map_alt <- idx_padan_map_filter %>%
+        mutate(RZWP3K_plus1 = lead(RZWP3K), RTRW_minus1 = lag(RTRW)) %>%
+        rowwise() %>%
+        mutate(
+          alt_RTRW_list   = list(get_alternative_zone(RZWP3K_plus1, RTRW, "RTRW",
+                                                      matriks_serasi, n_alt = n_alt)),
+          alt_RZWP3K_list = list(get_alternative_zone(RTRW_minus1,  RZWP3K, "RZWP3K",
+                                                      matriks_serasi, n_alt = n_alt))
+        ) %>%
+        ungroup() %>%
+        unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
+        unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
+        select(-RZWP3K_plus1, -RTRW_minus1) %>%
+        rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
+                    starts_with("alt_RTRW_list_")) %>%
+        rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
+                    starts_with("alt_RZWP3K_list_"))
+      
+      df_export <- idx_padan_map_alt %>%
+        st_drop_geometry() %>%
+        filter(!is.na(id_pu) & id_pu != "") %>%
+        select(all_of(base_cols),
+               starts_with("alt_RTRW_"),
+               starts_with("alt_RZWP3K_")) %>%
+        mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
+        select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
+    }
+    
+  } else {
+    required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K",
+                       "admin", "area_ha", "idx_serasi")
+    base_cols     <- required_cols
+    missing <- setdiff(required_cols, input_cols)
+    if (length(missing) > 0)
+      stop("Input data missing required columns: ",
+           paste(missing, collapse = ", "))
     
     idx_padan_map_alt <- idx_padan_map_filter %>%
-      mutate(
-        RZWP3K_plus1 = lead(RZWP3K),
-        RTRW_minus1  = lag(RTRW)
-      ) %>%
       rowwise() %>%
       mutate(
-        alt_RTRW_list = list(
-          get_alternative_zone(RZWP3K_plus1, RTRW, "RTRW", matriks_serasi, n_alt = n_alt)
-        ),
-        alt_RZWP3K_list = list(
-          get_alternative_zone(RTRW_minus1, RZWP3K, "RZWP3K", matriks_serasi, n_alt = n_alt)
-        )
+        alt_RTRW_list   = list(get_alternative_zone(RZWP3K, RTRW, "RTRW",
+                                                    matriks_serasi, n_alt = n_alt)),
+        alt_RZWP3K_list = list(get_alternative_zone(RTRW, RZWP3K, "RZWP3K",
+                                                    matriks_serasi, n_alt = n_alt))
       ) %>%
       ungroup() %>%
-      unnest_wider(alt_RTRW_list, names_sep = "_", names_repair = "unique") %>%
+      unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
       unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
-      select(-RZWP3K_plus1, -RTRW_minus1) %>%
-      rename_with(~ gsub("alt_RTRW_list_", "alt_RTRW_", .x), starts_with("alt_RTRW_list_")) %>%
-      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x), starts_with("alt_RZWP3K_list_"))
+      rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
+                  starts_with("alt_RTRW_list_")) %>%
+      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
+                  starts_with("alt_RZWP3K_list_"))
     
-  } else { # step1
-    
-    idx_padan_map_alt <- idx_padan_map_filter %>%
-      rowwise() %>%
-      mutate(
-        alt_RTRW_list = list(
-          get_alternative_zone(RZWP3K, RTRW, "RTRW", matriks_serasi, n_alt = n_alt)
-        ),
-        alt_RZWP3K_list = list(
-          get_alternative_zone(RTRW, RZWP3K, "RZWP3K", matriks_serasi, n_alt = n_alt)
-        )
-      ) %>%
-      ungroup() %>%
-      unnest_wider(alt_RTRW_list, names_sep = "_", names_repair = "unique") %>%
-      unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
-      rename_with(~ gsub("alt_RTRW_list_", "alt_RTRW_", .x), starts_with("alt_RTRW_list_")) %>%
-      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x), starts_with("alt_RZWP3K_list_"))
-    
+    df_export <- idx_padan_map_alt %>%
+      st_drop_geometry() %>%
+      filter(!is.na(id_pu) & id_pu != "") %>%
+      select(all_of(base_cols),
+             starts_with("alt_RTRW_"),
+             starts_with("alt_RZWP3K_")) %>%
+      mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
+      select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
   }
   
-  # Prepare data frame for export and remove empty rows
-  df_export <- idx_padan_map_alt %>%
-    st_drop_geometry() %>%
-    filter(!is.na(id_pu) & id_pu != "") %>%  
-    select(all_of(base_cols), starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
-    mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
-    select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
-  
-  rtrw_cols <- grep("^alt_RTRW_", names(df_export), value = TRUE)
+  rtrw_cols   <- grep("^alt_RTRW_",   names(df_export), value = TRUE)
   rzwp3k_cols <- grep("^alt_RZWP3K_", names(df_export), value = TRUE)
   
-  # Helper: clean alternatives
   clean_alternatives <- function(df, cols) {
     mat <- as.matrix(df[, cols, drop = FALSE])
     cleaned <- t(apply(mat, 1, function(x) {
@@ -3395,17 +3591,13 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     as.data.frame(cleaned, stringsAsFactors = FALSE)
   }
   
-  df_lists_rtrw <- clean_alternatives(df_export, rtrw_cols)
-  df_lists_rzwp3k <- clean_alternatives(df_export, rzwp3k_cols)
+  df_lists_rtrw      <- clean_alternatives(df_export, rtrw_cols)
+  df_lists_rzwp3k    <- clean_alternatives(df_export, rzwp3k_cols)
   df_validation_lists <- cbind(df_lists_rtrw, df_lists_rzwp3k)
-  names(df_validation_lists) <- c(
-    paste0("RTRW_", seq_along(rtrw_cols)),
-    paste0("RZWP3K_", seq_along(rzwp3k_cols))
-  )
-  
+  names(df_validation_lists) <- c(paste0("RTRW_", seq_along(rtrw_cols)),
+                                  paste0("RZWP3K_", seq_along(rzwp3k_cols)))
   df_export_clean <- df_export %>% select(-all_of(c(rtrw_cols, rzwp3k_cols)))
   
-  # Create workbook
   wb <- createWorkbook()
   addWorksheet(wb, "Data")
   addWorksheet(wb, "Validation_Lists")
@@ -3414,89 +3606,55 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   
   unique_pu <- unique(df_export_clean$id_pu)
   if (length(unique_pu) > 0) {
-    color1 <- "#DCE6F1"  # light blue
-    color2 <- "#FFFFFF"  # white
-    style_group1 <- createStyle(fgFill = color1)
-    style_group2 <- createStyle(fgFill = color2)
-    
-    # Excel row numbers
+    style_group1 <- createStyle(fgFill = "#DCE6F1")
+    style_group2 <- createStyle(fgFill = "#FFFFFF")
     for (i in seq_along(unique_pu)) {
-      pu <- unique_pu[i]
-      rows_data <- which(df_export_clean$id_pu == pu)
-      rows_excel <- rows_data + 1
+      rows_excel <- which(df_export_clean$id_pu == unique_pu[i]) + 1
       style <- if (i %% 2 == 1) style_group1 else style_group2
-      addStyle(wb, "Data", style = style,
-               rows = rows_excel,
-               cols = 1:ncol(df_export_clean),
-               gridExpand = TRUE)
+      addStyle(wb, "Data", style = style, rows = rows_excel,
+               cols = 1:ncol(df_export_clean), gridExpand = TRUE)
     }
   }
   
-  alt_rtrw_col_idx <- which(names(df_export_clean) == "alt_RTRW")
+  alt_rtrw_col_idx   <- which(names(df_export_clean) == "alt_RTRW")
   alt_rzwp3k_col_idx <- which(names(df_export_clean) == "alt_RZWP3K")
-  
-  rtrw_start <- int2col(1)
-  rtrw_end   <- int2col(length(rtrw_cols))
+  rtrw_start   <- int2col(1)
+  rtrw_end     <- int2col(length(rtrw_cols))
   rzwp3k_start <- int2col(length(rtrw_cols) + 1)
   rzwp3k_end   <- int2col(length(rtrw_cols) + length(rzwp3k_cols))
-  
-  valid_rows_rtrw <- which(df_lists_rtrw[, 1] != "No alternative") + 1
-  valid_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] != "No alternative") + 1
   
   get_contiguous_blocks <- function(indices) {
     if (length(indices) == 0) return(list())
     split(indices, cumsum(c(1, diff(indices) != 1)))
   }
-  
-  blocks_rtrw <- get_contiguous_blocks(valid_rows_rtrw)
-  blocks_rzwp3k <- get_contiguous_blocks(valid_rows_rzwp3k)
-  
-  # Apply dropdowns
-  for (block in blocks_rtrw) {
-    start_r <- min(block)
-    end_r <- max(block)
-    rtrw_formula <- sprintf("'Validation_Lists'!$%s%d:$%s%d", rtrw_start, start_r, rtrw_end, start_r)
-    dataValidation(
-      wb = wb, sheet = "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
-      type = "list", value = rtrw_formula
-    )
+  valid_rows_rtrw   <- which(df_lists_rtrw[, 1]   != "No alternative") + 1
+  valid_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] != "No alternative") + 1
+  for (block in get_contiguous_blocks(valid_rows_rtrw)) {
+    start_r <- min(block); end_r <- max(block)
+    dataValidation(wb, "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
+                   type = "list",
+                   value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                   rtrw_start, start_r, rtrw_end, start_r))
+  }
+  for (block in get_contiguous_blocks(valid_rows_rzwp3k)) {
+    start_r <- min(block); end_r <- max(block)
+    dataValidation(wb, "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
+                   type = "list",
+                   value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                   rzwp3k_start, start_r, rzwp3k_end, start_r))
   }
   
-  for (block in blocks_rzwp3k) {
-    start_r <- min(block)
-    end_r <- max(block)
-    rzwp3k_formula <- sprintf("'Validation_Lists'!$%s%d:$%s%d", rzwp3k_start, start_r, rzwp3k_end, start_r)
-    dataValidation(
-      wb = wb, sheet = "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
-      type = "list", value = rzwp3k_formula
-    )
-  }
-  
-  # Colour "No alternative" cells black 
   black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
-  black_rows_rtrw <- which(df_lists_rtrw[, 1] == "No alternative") + 1
-  black_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] == "No alternative") + 1
-  
-  if (length(black_rows_rtrw) > 0) {
-    addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx, rows = black_rows_rtrw, gridExpand = FALSE)
-  }
-  if (length(black_rows_rzwp3k) > 0) {
-    addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = black_rows_rzwp3k, gridExpand = FALSE)
-  }
+  for (r in which(df_lists_rtrw[, 1]   == "No alternative") + 1)
+    addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx,   rows = r)
+  for (r in which(df_lists_rzwp3k[, 1] == "No alternative") + 1)
+    addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = r)
   
   freezePane(wb, "Data", firstRow = TRUE)
-  
-  # Ensure output directory exists
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir, recursive = TRUE)
-  }
-  output_filename <- if (step == "step2") {
-    "adjacent_alternative_zones_selections.xlsx"
-  } else {
-    "overlaps_alternative_zones_selections.xlsx"
-  }
-  output_path <- file.path(output_dir, output_filename)
-  saveWorkbook(wb, output_path, overwrite = TRUE)
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  output_filename <- if (step == "step2") "adjacent_alternative_zones_selections.xlsx"
+  else                 "overlaps_alternative_zones_selections.xlsx"
+  saveWorkbook(wb, file.path(output_dir, output_filename), overwrite = TRUE)
   
   invisible(list(workbook = wb, data = df_export_clean))
 }
@@ -3742,7 +3900,8 @@ generate_reconciliation_excel <- function(recon_map,
                                           output_dir, 
                                           step, 
                                           file_name = "recon_map.xlsx",
-                                          group_col = NULL) {
+                                          group_col = NULL,
+                                          dissolve_adjacent = TRUE) {
   
   # Validate step argument
   if (missing(step) || !(step %in% c(1, 2))) {
@@ -3752,7 +3911,11 @@ generate_reconciliation_excel <- function(recon_map,
   if (!requireNamespace("openxlsx", quietly = TRUE)) stop("package 'openxlsx' is required.")
   if (!requireNamespace("sf", quietly = TRUE)) stop("package 'sf' is required.")
   
-  df_flat <- sf::st_drop_geometry(recon_map)
+  if (step == 2 && isTRUE(dissolve_adjacent)) {
+    df_flat <- dissolve_adjacent_pairs(recon_map)
+  } else {
+    df_flat <- sf::st_drop_geometry(recon_map)
+  }
   
   if (step == 2) {
     df_flat$user_decision_rtrw   <- NA_character_
@@ -4219,7 +4382,11 @@ reconcilliation_step2 <- function(recon_table_path,
   }
   
   # Read reconciliation table
-  recon_table <- read_xlsx(recon_table_path)
+  if (is.data.frame(recon_table_path)) {
+    recon_table <- recon_table_path
+  } else {
+    recon_table <- read_xlsx(recon_table_path)
+  }
   
   # Most common RTRW decision per (id, id_pu)
   decision_rtrw <- recon_table %>%

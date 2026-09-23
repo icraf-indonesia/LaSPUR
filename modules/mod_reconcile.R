@@ -405,14 +405,29 @@ reconcile_server <- function(id, output_dir) {
             
           } else if (rv$detected_step == 2) {
             # ── Step 2 (Adjacent) ─────────────────────────────
+            incProgress(0.1, detail = "Membaca tabel keputusan...")
+            recon_table_filled <- load_and_validate_table(input$recon_table_filled_file$datapath)
+            
+            is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% names(recon_table_filled)) &&
+              !"id" %in% names(recon_table_filled)
+            
+            if (is_dissolved) {
+              incProgress(0.15, detail = "Mengubah tabel ke bentuk fitur...")
+              recon_table_filled <- undissolve_adjacent_pairs(
+                recon_table_filled,
+                decisions_rtrw_col   = "user_decision_rtrw",
+                decisions_rzwp3k_col = "user_decision_rzwp3k"
+              )
+            }
+            
             incProgress(0.2, detail = "Menjalankan rekonsiliasi Bertetangga...")
             result <- reconcilliation_step2(
-              recon_table_path = input$recon_table_filled_file$datapath,
+              recon_table_path   = recon_table_filled,  
               adjacent_recom_map = rv$recon_map,
-              rtrw_vect = rv$rtrw_vect,
-              rzwp3k_vect = rv$rzwp3k_vect,
-              matriks_serasi = rv$serasi_matrix,
-              alpha = 0.5
+              rtrw_vect          = rv$rtrw_vect,
+              rzwp3k_vect        = rv$rzwp3k_vect,
+              matriks_serasi     = rv$serasi_matrix,
+              alpha              = 0.5
             )
             
             rv$resolved_integrated <- result

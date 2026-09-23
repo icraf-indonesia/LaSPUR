@@ -33,7 +33,17 @@ source("R/helpers.R")
 
 # ── validation helpers  ──────────────────────────
 .validate_alt_table <- function(alt_table, matriks_serasi) {
-  required_cols <- c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")
+  has_id  <- "id" %in% names(alt_table)
+  has_ids <- all(c("id_rtrw", "id_rzwp3k") %in% names(alt_table))
+  
+  if (!has_id && !has_ids) {
+    return(list(ok = FALSE, msg = paste0(
+      "Kolom 'id' atau pasangan 'id_rtrw'/'id_rzwp3k' tidak ditemukan ",
+      "pada file yang diunggah."
+    )))
+  }
+  
+  required_cols <- c("id_pu", "alt_RTRW", "alt_RZWP3K")
   missing_cols <- setdiff(required_cols, names(alt_table))
   if (length(missing_cols) > 0) {
     return(list(ok = FALSE, msg = sprintf(
@@ -54,8 +64,10 @@ source("R/helpers.R")
   
   if (length(bad_rtrw) > 0 || length(bad_rz) > 0) {
     msg <- "Ditemukan nilai zona alternatif yang tidak dikenali pada Matriks SERASI."
-    if (length(bad_rtrw) > 0) msg <- paste0(msg, sprintf("\n- alt_RTRW tidak valid: %s", paste(bad_rtrw, collapse = ", ")))
-    if (length(bad_rz)   > 0) msg <- paste0(msg, sprintf("\n- alt_RZWP3K tidak valid: %s", paste(bad_rz, collapse = ", ")))
+    if (length(bad_rtrw) > 0)
+      msg <- paste0(msg, sprintf("\n- alt_RTRW tidak valid: %s", paste(bad_rtrw, collapse = ", ")))
+    if (length(bad_rz) > 0)
+      msg <- paste0(msg, sprintf("\n- alt_RZWP3K tidak valid: %s", paste(bad_rz, collapse = ", ")))
     return(list(ok = FALSE, msg = msg))
   }
   
@@ -475,13 +487,35 @@ recommendation_adjacent_server <- function(id, output_dir) {
           return()
         }
         
+        is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% names(alt_table)) &&
+          !"id" %in% names(alt_table)
+        
+        if (is_dissolved) {
+          alt_table <- undissolve_adjacent_pairs(alt_table)
+        }
+        
+        needed <- c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")
+        missing_needed <- setdiff(needed, names(alt_table))
+        if (length(missing_needed) > 0) {
+          rv$idx_padan_map_alt <- NULL
+          rv$alt_status <- list(
+            ok = FALSE,
+            msg = paste("Kolom tidak ditemukan setelah un-dissolve:",
+                        paste(missing_needed, collapse = ", ")),
+            preview = NULL
+          )
+          return()
+        }
+        
+        alt_table_feature <- alt_table[, needed]
+        
         idx_padan_map_alt <- dplyr::left_join(
           rv$idx_padan_map_filter,
-          alt_table[, c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")],
+          alt_table_feature,
           by = c("id", "id_pu")
         )
         
-        new_snapshot <- alt_table[, c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")]
+        new_snapshot <- alt_table_feature
         changed <- is.null(rv$alt_table_snapshot) || !identical(new_snapshot, rv$alt_table_snapshot)
         if (changed) reset_from_step3()
         rv$alt_table_snapshot <- new_snapshot
