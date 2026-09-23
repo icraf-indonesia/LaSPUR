@@ -2,7 +2,8 @@
 # ============================================================
 #  MODULE: Recommendation (Overlaps)
 #  Wizard flow (accordion in left panel)
-#  Outputs (map, table accordion, log) in right panel.
+#  Outputs (map, table accordion, log) in right panel — uses the
+#  standardized create_result_ui()/render_result_server() helpers.
 # ============================================================
 
 source("R/functions.R")
@@ -145,28 +146,8 @@ recommendation_overlaps_ui <- function(id) {
           uiOutput(ns("status_box")),
           
           hr(),
-
-          navset_tab(
-            nav_panel(
-              "Visualisasi Hasil",
-              leafletOutput(ns("recommendation_map"), height = "450px"),
-              hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
-              DT::DTOutput(ns("final_table"))
-            ),
-            nav_panel(
-              "Log",
-              div(
-                style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
-                verbatimTextOutput(ns("validation_log"))
-              )
-            )
-          ),
           
-          div(
-            style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
-            downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
-            downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
-          )
+          create_result_ui(ns)
         )
       )
     )
@@ -197,7 +178,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
       
       # step 3
       final_result          = NULL,
-      final_log             = NULL
+      final_log             = NULL,
+      
+      analysis_result = NULL,
+      gpkg_path       = NULL,
+      xlsx_path       = NULL,
+      log_messages    = ""
     )
     
     go_to_panel <- function(value) accordion_panel_set(id = "wizard", values = value, session = session)
@@ -321,10 +307,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
     
     # Step 1 -> Step 2
     observeEvent(input$btn_next_1, {
-      # if (is.null(rv$idx_padan_map_filter)) {
-      #   showNotification("Terapkan filter terlebih dahulu.", type = "warning")
-      #   return()
-      # }
       rv$filter_snapshot <- list(
         apply_area = input$apply_area,
         area_filter = input$area_filter,
@@ -337,12 +319,10 @@ recommendation_overlaps_server <- function(id, output_dir) {
     
     # ── Step 2 UI ──────────────────────────────────────────────
     output$step2_ui <- renderUI({
-      # if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         numericInput(ns("n_alt"), "Jumlah Opsi Alternatif per Kasus", value = 5, min = 1, max = 10, step = 1),
         
-        # Check output directory
         if (is.null(output_dir()) || !nzchar(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
@@ -375,11 +355,10 @@ recommendation_overlaps_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat Matriks Serasi:", e$message), type = "error", duration = 8)
       })
     })
-
+    
     # ── Make template using step = "step1" ─────────────────────
     observeEvent(input$btn_make_template, {
       
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification(
           "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
@@ -391,7 +370,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
       
       req(rv$idx_padan_map_filter, input$matrix_file)
       
-      # Clear previous status
       rv$alt_template_path <- NULL
       
       withProgress(message = "Membuat Template Opsi Alternatif", value = 0, {
@@ -448,7 +426,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
     observe({
       req(input$alt_upload)
       
-      # Dependencies not yet ready — show a pending hint and wait.
       if (is.null(rv$matriks_serasi) || is.null(rv$idx_padan_map_filter)) {
         missing <- c(
           if (is.null(rv$matriks_serasi))       "Matriks Serasi (.xlsx)",
@@ -475,14 +452,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
           return()
         }
         
-        # Join alternative zones to the filtered map
         idx_padan_map_alt <- dplyr::left_join(
           rv$idx_padan_map_filter,
           alt_table[, c("id_pu", "id_rtrw", "id_rzwp3k", "alt_RTRW", "alt_RZWP3K")],
           by = c("id_pu", "id_rtrw", "id_rzwp3k")
         )
         
-        # Compute alternative serasi indices
         idx_padan_map_alt <- idx_padan_map_alt %>%
           dplyr::rowwise() %>%
           dplyr::mutate(
@@ -527,17 +502,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
     observeEvent(input$btn_next_2, {
-      # if (is.null(rv$idx_padan_map_alt)) {
-      #   showNotification("Unggah dan validasi template alternatif terlebih dahulu.", type = "warning")
-      #   return()
-      # }
       rv$unlocked <- max(rv$unlocked, 3)
       go_to_panel("step3")
     })
     
     # ── Step 3 UI (final recommendation) ──────────────────────
     output$step3_ui <- renderUI({
-      # if (rv$unlocked < 3) return(.locked_panel())
       tagList(
         layout_column_wrap(
           width = 1/2,
@@ -553,7 +523,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
         sliderInput(ns("alpha_val"), "Proporsi Alpha (\u03B1)", min = 0, max = 1, value = 0.5, step = 0.1),
         hr(),
         
-        # Check output directory
         if (is.null(output_dir()) || !nzchar(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
@@ -573,7 +542,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
     # ── Final calculation ──────────────────────────────────────
     observeEvent(input$btn_run_final, {
       
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification(
           "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
@@ -607,14 +575,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
           incProgress(0.4, detail = "Menghitung indeks padan alternatif...")
           df <- rv$idx_padan_map_alt
           
-          # Compute alternative padan indices
           df <- df %>%
             dplyr::mutate(
               idx_padan_rtrw_alt = alpha * idx_serasi_rtrw_alt + (1 - alpha) * idx_padu_final,
               idx_padan_rzwp3k_alt = alpha * idx_serasi_rzwp3k_alt + (1 - alpha) * idx_padu_final
             )
           
-          # First-pass recommendation
           df <- df %>%
             dplyr::mutate(
               recommendation = dplyr::case_when(
@@ -628,7 +594,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
             )
           
           incProgress(0.6, detail = "Membuat keputusan akhir...")
-          # Final decision
           df <- df %>%
             dplyr::mutate(
               decision = dplyr::case_when(
@@ -644,7 +609,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
               )
             )
           
-          # Final padan index
           df <- df %>%
             dplyr::mutate(
               idx_padan_final = dplyr::case_when(
@@ -687,7 +651,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
             xlsx_path = out_xlsx
           )
           rv$final_log <- paste(log_lines, collapse = "\n")
-
+          
           # ── Store result for report generation ──
           out <- list(
             inputs = list(
@@ -727,7 +691,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
             legend   = "Opsi Alternatif",
             filepath = file.path(log_dir, "peta_opsi_alternatif_tumpang_tindih.png")
           )
-
+          
           showNotification("Berhasil! Hasil analisis alternatif telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           
@@ -758,116 +722,6 @@ recommendation_overlaps_server <- function(id, output_dir) {
       }
     })
     
-    # Table render
-    output$final_table <- DT::renderDT({
-      req(rv$final_result)
-      df_final <- rv$final_result$table
-      df_final_subset <- df_final[, c("id_pu", "RTRW", "RZWP3K", "area_ha", "admin", "idx_serasi", "idx_padu_final", "alt_RTRW", "alt_RZWP3K", "idx_serasi_rtrw_alt", "idx_serasi_rzwp3k_alt", "idx_padan_rtrw_alt", "idx_padan_rzwp3k_alt", "recommendation", "decision", "idx_padan_final")]
-      colnames(df_final_subset) <- c("ID PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "RTRW Alternatif", "RZWP3K Alternatif", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Opsi Alternatif", "Keputusan Alternatif", "Indeks PADAN Akhir")
-      
-      DT::datatable(
-        df_final_subset,
-        extensions = c('FixedColumns', 'FixedHeader'),
-        selection = "single",
-        options = list(
-          pageLength = 10,
-          scrollX = TRUE,
-          scrollY = "400px",
-          dom = 'Bfrtip',
-          fixedColumns = list(
-            leftColumns = 3
-          ),
-          fixedHeader = TRUE
-        ),
-        rownames = FALSE,
-        class = "display compact stripe hover"
-      ) %>%
-        DT::formatRound(
-          columns = c("Luas (ha)", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Indeks PADAN Akhir"),  
-          digits = 2
-        )
-    })
-    
-    
-    # ── Interactive map ────────────────────────────────────────
-    output$recommendation_map <- renderLeaflet({
-      req(rv$final_result)
-      map_sf <- rv$final_result$map
-      
-      if (nrow(map_sf) == 0) {
-        return(leaflet::leaflet() %>% 
-                 leaflet::addControl("Tidak ada data untuk ditampilkan.", position = "topright"))
-      }
-      
-      if (!sf::st_is_longlat(map_sf)) {
-        map_sf <- sf::st_transform(map_sf, crs = 4326)
-      }
-      
-      required_cols <- c("recommendation", "decision", "idx_padan", "idx_padan_final",
-                         "RTRW", "RZWP3K", "alt_RTRW", "alt_RZWP3K", "id_pu")
-      missing <- setdiff(required_cols, names(map_sf))
-      if (length(missing) > 0) {
-        rv$final_log <- paste0("Map error: missing columns: ", paste(missing, collapse = ", "))
-        return(leaflet::leaflet() %>% 
-                 leaflet::addControl("Kolom yang diperlukan tidak ditemukan. Periksa Log.", position = "topright"))
-      }
-      
-      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Alternatif: ", map_sf$recommendation)
-      
-      
-      pal <- leaflet::colorFactor(
-        palette = c("blue", "green", "orange", "red", "purple"),
-        domain = unique(map_sf$recommendation),
-        na.color = "grey"
-      )
-      
-      leaflet::leaflet(map_sf) %>%
-        leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
-        leaflet::addPolygons(
-          group = "recommendation_layer",
-          fillColor = ~pal(recommendation),
-          fillOpacity = 0.7,
-          weight = 1,
-          color = "black",
-          stroke = FALSE,
-          label = ~search_label,
-          popup = ~paste(
-            "<b>ID PU:</b>", id_pu, "<br>",
-            "<b>RTRW asal:</b>", RTRW, "<br>",
-            "<b>RZWP3K asal:</b>", RZWP3K, "<br>",
-            "<b>RTRW alternatif:</b>", alt_RTRW, "<br>",
-            "<b>RZWP3K alternatif:</b>", alt_RZWP3K, "<br>",
-            "<b>Keputusan:</b>", decision, "<br>",
-            "<b>Indeks PADAN asal:</b>", round(idx_padan, 3), "<br>",
-            "<b>Indeks PADAN akhir:</b>", round(idx_padan_final, 3)
-          ) %>% lapply(htmltools::HTML),
-          highlightOptions = leaflet::highlightOptions(
-            weight = 3,
-            color = "red",
-            fillOpacity = 0.9,
-            bringToFront = TRUE
-          )
-        ) %>%
-        leaflet.extras::addSearchFeatures(
-          targetGroups = "recommendation_layer",
-          options = leaflet.extras::searchFeaturesOptions(
-            propertyName = "label",    
-            zoom = 15,                 
-            openPopup = TRUE,           
-            firstTipSubmit = TRUE,
-            autoCollapse = FALSE,
-            hideMarkerOnCollapse = TRUE
-          )
-        ) %>% leaflet.extras::addResetMapButton() %>% 
-        leaflet::addLegend(
-          position = "bottomright",
-          pal = pal,
-          values = ~recommendation,
-          title = "Alternatif Awal",
-          opacity = 0.7
-        )
-    })
-    
     # ── Sync rv$final_result → standard rv fields for render_result_server ──
     observe({
       if (!is.null(rv$final_result)) {
@@ -886,85 +740,44 @@ recommendation_overlaps_server <- function(id, output_dir) {
       }
     })
     
-    # ── Row-click: zoom & highlight on recommendation_map ───
-    observeEvent(input$final_table_rows_selected, {
-      req(rv$final_result)
-      
-      selected_idx <- input$final_table_rows_selected
-      df_table <- rv$final_result$table
-      
-      if (!"id_pu" %in% colnames(df_table)) return()
-      selected_id_pu <- df_table$id_pu[selected_idx]
-      
-      map_sf <- rv$final_result$map
-      if (!sf::st_is_longlat(map_sf)) {
-        map_sf <- sf::st_transform(map_sf, crs = 4326)
-      }
-      
-      selected_polygon <- map_sf[map_sf$id_pu == selected_id_pu, ]
-      req(nrow(selected_polygon) > 0)
-      
-      centroid_coord <- sf::st_coordinates(sf::st_centroid(selected_polygon))
-      
-      popup_text <- paste0(
-        "<b>ID PU:</b> ", selected_polygon$id_pu[1], "<br>",
-        "<b>RTRW asal:</b> ", selected_polygon$RTRW[1], "<br>",
-        "<b>RZWP3K asal:</b> ", selected_polygon$RZWP3K[1], "<br>",
-        "<b>Alternatif:</b> ", selected_polygon$recommendation[1], "<br>",
-        "<b>Keputusan:</b> ", selected_polygon$decision[1]
-      )
-      
-      leaflet::leafletProxy("recommendation_map", session = session) %>%
-        leaflet::clearGroup("row_highlight") %>%
-        leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
-        leaflet::addPolygons(
-          data        = selected_polygon,
-          color       = "#FF4136",
-          weight      = 5,
-          fillColor   = "#FFDC00",
-          fillOpacity = 0.5,
-          stroke      = TRUE,
-          group       = "row_highlight",
-          popup       = htmltools::HTML(popup_text)
-        )
-    })
-    
-    # Clear highlight when no row selected
-    observe({
-      if (is.null(input$final_table_rows_selected)) {
-        leaflet::leafletProxy("recommendation_map", session = session) %>%
-          leaflet::clearGroup("row_highlight")
-      }
-    })
-    
-    # ── Shared result server: wires validation_log, dl_gpkg, dl_xlsx ──
+    # ── Shared result server: wires result_map, result_table, log, downloads ──
     recom_overlaps_config <- list(
       map_color_col  = "recommendation",
       map_title      = "Alternatif Awal",
       map_palette    = c("blue", "green", "orange", "red", "purple", "grey"),
       map_label_cols = list(
-        "ID PU"        = "id_pu",
-        "RTRW"         = "RTRW",
-        "RZWP3K"       = "RZWP3K",
-        "Alternatif"  = "recommendation",
-        "Keputusan"    = "decision"
+        "ID PU"      = "id_pu",
+        "RTRW"       = "RTRW",
+        "RZWP3K"     = "RZWP3K",
+        "Alternatif" = "recommendation",
+        "Keputusan"  = "decision"
       ),
-      table_cols     = c(
-        "id_pu"             = "ID PU",
-        "RTRW"              = "RTRW",
-        "RZWP3K"            = "RZWP3K",
-        "area_ha"           = "Luas (ha)",
-        "admin"             = "Administrasi",
-        "idx_serasi"        = "Indeks SERASI Awal",
-        "idx_padu_final"    = "Indeks PADU Kombinasi",
-        "alt_RTRW"          = "RTRW Alternatif",
-        "alt_RZWP3K"        = "RZWP3K Alternatif",
-        "recommendation"    = "Opsi Alternatif",
-        "decision"          = "Keputusan Alternatif",
-        "idx_padan_final"   = "Indeks PADAN Akhir"
+      table_cols = c(
+        "id_pu"                 = "ID PU",
+        "RTRW"                  = "RTRW",
+        "RZWP3K"                = "RZWP3K",
+        "area_ha"               = "Luas (ha)",
+        "admin"                 = "Administrasi",
+        "idx_serasi"            = "Indeks SERASI Awal",
+        "idx_padu_final"        = "Indeks PADU Kombinasi",
+        "alt_RTRW"              = "RTRW Alternatif",
+        "alt_RZWP3K"            = "RZWP3K Alternatif",
+        "idx_serasi_rtrw_alt"   = "Indeks SERASI RTRW Alternatif",
+        "idx_serasi_rzwp3k_alt" = "Indeks SERASI RZWP3K Alternatif",
+        "idx_padan_rtrw_alt"    = "Indeks PADAN RTRW Alternatif",
+        "idx_padan_rzwp3k_alt"  = "Indeks PADAN RZWP3K Alternatif",
+        "recommendation"        = "Opsi Alternatif",
+        "decision"              = "Keputusan Alternatif",
+        "idx_padan_final"       = "Indeks PADAN Akhir"
       ),
       table_round_cols = c(
-        "Luas (ha)", "Indeks SERASI Awal", "Indeks PADU Kombinasi",
+        "Luas (ha)",
+        "Indeks SERASI Awal",
+        "Indeks PADU Kombinasi",
+        "Indeks SERASI RTRW Alternatif",
+        "Indeks SERASI RZWP3K Alternatif",
+        "Indeks PADAN RTRW Alternatif",
+        "Indeks PADAN RZWP3K Alternatif",
         "Indeks PADAN Akhir"
       )
     )

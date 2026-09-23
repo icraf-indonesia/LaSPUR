@@ -595,12 +595,18 @@ create_result_ui <- function(ns, extra_tab = NULL) {
 #'     \item{map_title}{Title for the map legend.}
 #'     \item{map_label_cols}{Named list or vector of columns used for
 #'       labels/popups. Example: `c("ID PU: " = "id_pu", "Indeks: " = "idx_padu_se")`.}
-#'     \item{map_palette}{Palette name (e.g., `"RdYlGn"`). Default `"RdYlGn"`.}
+#'     \item{map_palette}{Palette name (e.g., `"RdYlGn"`) or a vector of colors
+#'       (passed to `leaflet::colorFactor` for categorical columns).
+#'       Default `"RdYlGn"`.}
 #'     \item{map_simplify_tolerance}{Simplification tolerance (map units) used
 #'       only for the Leaflet display copy of the geometry. Default `5`.}
 #'     \item{table_cols}{Named vector for subsetting/renaming table columns.}
 #'     \item{table_round_cols}{Character vector of display column names to round
 #'       to 2 digits.}
+#'     \item{table_optional_cols}{Character vector of *source* column names
+#'       (i.e., keys of `table_cols`) that should be dropped from the rendered
+#'       table when every value in that column is `NA`. Useful for conditional
+#'       columns such as economic/NPV outputs.}
 #'   }
 #'
 #' @return Invisibly `NULL`. Called for its side effects of registering
@@ -626,6 +632,7 @@ render_result_server <- function(input, output, session, rv, config) {
   map_palette <- if(!is.null(config$map_palette)) config$map_palette else "RdYlGn"
   table_cols <- config$table_cols
   table_round_cols <- config$table_round_cols
+  table_optional_cols <- config$table_optional_cols   # NEW
   
   # Simplification tolerance (map units, typically meters for UTM data) used only for the Leaflet display copy of the geometry.
   map_simplify_tolerance <- if (!is.null(config$map_simplify_tolerance)) {
@@ -767,9 +774,24 @@ render_result_server <- function(input, output, session, rv, config) {
     
     df <- rv$analysis_result$table
     
-    # Subset and rename columns
+    # Subset by available columns
     valid_cols <- names(table_cols)[names(table_cols) %in% colnames(df)]
     df_subset <- df[, valid_cols, drop = FALSE]
+    
+    if (!is.null(table_optional_cols) && length(table_optional_cols) > 0) {
+      drop_cols <- character(0)
+      for (cn in valid_cols) {
+        if (cn %in% table_optional_cols && all(is.na(df_subset[[cn]]))) {
+          drop_cols <- c(drop_cols, cn)
+        }
+      }
+      if (length(drop_cols) > 0) {
+        df_subset <- df_subset[, setdiff(colnames(df_subset), drop_cols), drop = FALSE]
+        valid_cols <- setdiff(valid_cols, drop_cols)
+      }
+    }
+    
+    # Rename to display names
     colnames(df_subset) <- table_cols[valid_cols]
     
     dt <- DT::datatable(
