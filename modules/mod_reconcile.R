@@ -109,7 +109,6 @@ reconcile_ui <- function(id) {
                           accept = ".gpkg"),
                 uiOutput(ns("loaded_file_bar"))
               ),
-              hr(),
               div(style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;",
                   actionButton(ns("btn_make_template"),
                                tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"),

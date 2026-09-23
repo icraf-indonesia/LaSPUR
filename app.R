@@ -752,6 +752,65 @@ ui <- page_sidebar(
     .laspur-loaded-bar {
       animation: laspur-loaded-bar-fade 0.4s ease-out;
     }
+    
+    /* ========================================================
+     FULL-WIDTH INPUTS INSIDE MODULE PANELS
+    ======================================================== */
+    .module-panel-wrapper .shiny-input-container,
+    .module-panel-wrapper .form-group,
+    .module-panel-wrapper .selectize-control {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .module-panel-wrapper input.form-control,
+    .module-panel-wrapper textarea.form-control,
+    .module-panel-wrapper select.form-control {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .module-panel-wrapper .input-group {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .module-panel-wrapper .input-group > .form-control,
+    .module-panel-wrapper .input-group > input.form-control {
+      flex: 1 1 auto !important;
+      width: 1% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
+
+    .module-panel-wrapper .input-group > .input-group-prepend,
+    .module-panel-wrapper .input-group > .input-group-append,
+    .module-panel-wrapper .input-group > .input-group-text,
+    .module-panel-wrapper .input-group > .btn,
+    .module-panel-wrapper .input-group > .btn-file,
+    .module-panel-wrapper .input-group > label.btn-file {
+      flex: 0 0 auto !important;
+      width: auto !important;
+      max-width: none !important;
+      white-space: nowrap !important;
+    }
+
+    .module-panel-wrapper .shiny-input-container .irs,
+    .module-panel-wrapper .shiny-input-container .irs-with-grid,
+    .module-panel-wrapper .shiny-input-container .irs-line,
+    .module-panel-wrapper .shiny-input-container .irs-bar {
+      width: 100% !important;
+    }
+
+    .module-panel-wrapper .shiny-input-container .checkbox,
+    .module-panel-wrapper .shiny-input-container .radio {
+      width: auto !important;
+    }
 
     /* ========================================================
        ANALYSIS BUTTON LOADING STATE (frozen while running)
