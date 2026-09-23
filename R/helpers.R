@@ -1477,8 +1477,6 @@ module_file_config <- list(
   ),
   reconcile = list(
     folder  = "Analisis Rekonsiliasi",
-    gpkg    = "idx_reconcile.gpkg",
-    xlsx    = "idx_reconcile.xlsx",
     rda     = "log/idx_reconcile_log.rda",
     png_dir = "log"
   )
@@ -1599,6 +1597,76 @@ load_serasi_from_files <- function(base_dir, cfg) {
   })
 }
 
+#' Special Loading for Reconcile Module (Overlaps/Adjacent)
+#'
+#' @description
+#' Reconcile output filenames depend on the reconciliation step:
+#' `rtrwp_terintegrasi_overlaps.*` for step 1 (overlaps) or
+#' `rtrwp_terintegrasi_adjacent.*` for step 2 (adjacent). This helper
+#' inspects the module folder, picks the most recent matching GPKG/XLSX
+#' pair, and loads the accompanying log RDA.
+#'
+#' @param base_dir Character. Base output directory for the Reconcile module.
+#' @param cfg List. The module's file configuration
+#'   (as stored in `module_file_config$reconcile`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'   Returns `list(ready = FALSE, data = NULL)` when the required files are
+#'   missing or loading fails.
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+load_reconcile_from_files <- function(base_dir, cfg) {
+  rda_path <- file.path(base_dir, cfg$rda)
+  if (!file.exists(rda_path)) return(list(ready = FALSE, data = NULL))
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) ||
+      length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  gpkg_candidates <- list.files(
+    base_dir, pattern = "^rtrwp_terintegrasi_.*\\.gpkg$",
+    full.names = TRUE, ignore.case = TRUE
+  )
+  xlsx_candidates <- list.files(
+    base_dir, pattern = "^rtrwp_terintegrasi_.*\\.xlsx$",
+    full.names = TRUE, ignore.case = TRUE
+  )
+  
+  if (length(gpkg_candidates) == 0 || length(xlsx_candidates) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  # Prefer the most recent file
+  gpkg_path <- gpkg_candidates[order(file.info(gpkg_candidates)$mtime, decreasing = TRUE)][1]
+  xlsx_path <- xlsx_candidates[order(file.info(xlsx_candidates)$mtime, decreasing = TRUE)][1]
+  
+  tryCatch({
+    env <- new.env()
+    load(rda_path, envir = env)
+    inputs <- env$inputs
+    
+    map_obj   <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    names_list <- module_result_names[["reconcile"]]
+    result <- list()
+    result[[names_list$map]]   <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load Reconcile from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
 #' Check Module Readiness and Load Data
 #'
 #' @description
@@ -1661,6 +1729,10 @@ module_ready_and_data <- function(module_id, output_dir, session) {
   
   if (mod_key == "serasi") {
     return(load_serasi_from_files(base_dir, cfg))
+  }
+  
+  if (mod_key == "reconcile") {
+    return(load_reconcile_from_files(base_dir, cfg))
   }
   
   gpkg_path <- file.path(base_dir, cfg$gpkg)

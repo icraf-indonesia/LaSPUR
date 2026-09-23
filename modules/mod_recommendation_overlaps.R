@@ -744,7 +744,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
     recom_overlaps_config <- list(
       map_color_col  = "recommendation",
       map_title      = "Alternatif Awal",
-      map_palette    = c("blue", "green", "orange", "red", "purple", "grey"),
+      map_palette    = c("blue", "green", "orange", "red", "purple"),
       map_label_cols = list(
         "ID PU"      = "id_pu",
         "RTRW"       = "RTRW",
