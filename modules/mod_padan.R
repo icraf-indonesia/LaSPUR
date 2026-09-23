@@ -6,11 +6,14 @@
 source("R/functions.R")
 source("R/helpers.R")
 
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(a, b) if (is.null(a)) b else a
+}
+
 # ── UI ──────────────────────────────────────────────────────────
 padan_ui <- function(id) {
   ns <- NS(id)
   
-  # Define the Query Tab UI
   query_tab <- nav_panel(
     "Telusuri Unit Perencanaan",
     div(
@@ -25,12 +28,8 @@ padan_ui <- function(id) {
         .query-tab-wrapper .selectize-dropdown {
           overflow: visible !important;
         }
-        .query-tab-wrapper .selectize-dropdown {
-          z-index: 10000 !important;
-        }
+        .query-tab-wrapper .selectize-dropdown { z-index: 10000 !important; }
         .query-tab-wrapper .panel-toggle-btn { display: none !important; }
-
-        /* Attribute table: near-normal font, moderate padding */
         .query-tab-wrapper .dataTables_wrapper,
         .query-tab-wrapper .dataTables_wrapper table.dataTable,
         .query-tab-wrapper .dataTables_wrapper table.dataTable thead th,
@@ -45,18 +44,17 @@ padan_ui <- function(id) {
         }
       ")),
       
-      # Control Bar 
       card(
         card_header("Filter Pencarian"),
         fluidRow(
           column(4, uiOutput(ns("query_id_type_ui"))),
-          column(4, 
+          column(4,
                  numericInput(ns("query_id_val"), "Masukkan ID Numerik", value = 1, min = 1),
-                 uiOutput(ns("query_id_hint_ui")) 
+                 uiOutput(ns("query_id_hint_ui"))
           ),
-          column(4, 
+          column(4,
                  div(style = "margin-top: 25px;",
-                     actionButton(ns("btn_query"), "Cari Data", 
+                     actionButton(ns("btn_query"), "Cari Data",
                                   class = "btn-primary btn-sm w-100",
                                   icon = icon("search"))
                  )
@@ -64,19 +62,17 @@ padan_ui <- function(id) {
         )
       ),
       
-      # Dynamic Headers 
       uiOutput(ns("query_header_and_cards_ui")),
       
-      # Main Content
       bslib::layout_columns(
-        col_widths = c(8, 4), 
+        col_widths = c(8, 4),
         card(
           card_header("Visualisasi Peta"),
           leafletOutput(ns("query_map"), height = "500px")
         ),
         card(
           card_header("Detail Atribut"),
-          uiOutput(ns("group_member_selector_ui")), 
+          uiOutput(ns("group_member_selector_ui")),
           div(style = "max-height: 450px; overflow-y: auto;",
               DT::DTOutput(ns("query_result_table"))
           )
@@ -98,25 +94,23 @@ padan_ui <- function(id) {
     fluidRow(
       class = "g-3",
       
-      # ── Left column: Input & Parameter (1/3) ─────────────────
       column(
         width = 4,
         card(
           card_header("Input & Parameter"),
           
-          fileInput(ns("idx_padu_file"), "Pilih Peta Hasil Analisis PADU (.gpkg)",
-                    accept = ".gpkg"),
-          tags$div(
-            class = "form-text text-muted",
-            style = "margin-top: -8px; margin-bottom: 12px; font-size: 0.8rem;",
-            "Gunakan file 'idx_padu.gpkg' dari modul 2.8"
+          div(
+            class = "laspur-fileinput-with-bar",
+            fileInput(ns("idx_padu_file"), "Peta PADU Kombinasi (.gpkg)",
+                      accept = ".gpkg"),
+            uiOutput(ns("loaded_file_bar"))
           ),
           
           hr(),
           
-          sliderInput(ns("alpha_val"), 
-                      label = tags$span("Proporsi Alpha (\u03B1)", 
-                                        tags$i(class = "bi bi-info-circle ms-1", 
+          sliderInput(ns("alpha_val"),
+                      label = tags$span("Proporsi Alpha (\u03B1)",
+                                        tags$i(class = "bi bi-info-circle ms-1",
                                                title = "Alpha: Bobot untuk SERASI. (1-Alpha): Bobot untuk PADU Final")),
                       min = 0, max = 1, value = 0.5, step = 0.1),
           
@@ -138,16 +132,12 @@ padan_ui <- function(id) {
         )
       ),
       
-      # ── Right column: Output & Hasil (2/3) ───────────────────
       column(
         width = 8,
         card(
           card_header("Output & Hasil"),
-          
           uiOutput(ns("status_box")),
-          
           hr(),
-          
           create_result_ui(ns, extra_tab = query_tab)
         )
       )
@@ -160,39 +150,111 @@ padan_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # ── Reactive values ──────────────────────────────────────────────────────
     rv <- reactiveValues(
-      analysis_result = NULL,
-      gpkg_path = NULL,
-      xlsx_path = NULL,
-      log_messages = "",
-      raw_map = NULL,
-      has_id_group = FALSE,
-      query_geom = NULL,
-      query_result = NULL
+      idx_padu_source  = NULL, 
+      analysis_result  = NULL,
+      gpkg_path        = NULL,
+      xlsx_path        = NULL,
+      log_messages     = "",
+      raw_map          = NULL,
+      has_id_group     = FALSE,
+      query_geom       = NULL,
+      query_result     = NULL
     )
     
-    # ── Log helper ───────────────────────────────────────────────────────────
     append_log <- function(msg) {
       rv$log_messages <- paste0(rv$log_messages, format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
     }
     
-    # ── Run analysis ─────────────────────────────────────────────────────────
+    # ── Auto-discovery: idx_padu_combine ─────────────────────
+    discovered_padu_key <- reactive({
+      padu_res <- tryCatch(session$userData$module_results$padu_combine,
+                           error = function(e) NULL)
+      if (!is.null(padu_res) &&
+          !is.null(padu_res$result$idx_padu_map) &&
+          inherits(padu_res$result$idx_padu_map, "sf")) {
+        return("session")
+      }
+      if (!is.null(output_dir()) && nzchar(output_dir())) {
+        f <- file.path(output_dir(), "Analisis PADU-Kombinasi", "idx_padu_combine.gpkg")
+        if (file.exists(f)) return(paste0("file|", as.numeric(file.mtime(f))))
+      }
+      "none"
+    })
+    
+    .load_padu_from_discovery <- function() {
+      key <- discovered_padu_key()
+      if (identical(key, "none")) {
+        rv$idx_padu_source <- NULL
+      } else if (identical(key, "session")) {
+        rv$idx_padu_source <- "session"
+      } else {
+        rv$idx_padu_source <- "file"
+      }
+      invisible(NULL)
+    }
+    
+    observeEvent(discovered_padu_key(), {
+      if (identical(rv$idx_padu_source, "manual")) return()
+      .load_padu_from_discovery()
+    }, ignoreNULL = FALSE, ignoreInit = FALSE)
+    
+    output$loaded_file_bar <- renderUI({
+      render_loaded_file_bar(
+        state    = rv$idx_padu_source,
+        input_id = ns("idx_padu_file"),
+        filename = "idx_padu_combine.gpkg"
+      )
+    })
+    
+    observeEvent(input$idx_padu_file, {
+      req(input$idx_padu_file)
+      rv$idx_padu_source <- "manual"
+      fname <- input$idx_padu_file$name
+      fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+      session$sendCustomMessage("set_fileinput_text", list(
+        input_id = ns("idx_padu_file"),
+        filename = fname
+      ))
+    })
+    
+    loaded_padu_map <- reactive({
+      src <- rv$idx_padu_source
+      if (identical(src, "manual")) {
+        req(input$idx_padu_file)
+        tryCatch(sf::st_read(input$idx_padu_file$datapath, quiet = TRUE),
+                 error = function(e) NULL)
+      } else if (identical(src, "session")) {
+        session$userData$module_results$padu_combine$result$idx_padu_map
+      } else if (identical(src, "file")) {
+        f <- file.path(output_dir(), "Analisis PADU-Kombinasi", "idx_padu_combine.gpkg")
+        if (file.exists(f)) {
+          tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
+        } else NULL
+      } else {
+        NULL
+      }
+    })
+    
+    # ── Run analysis ─────────────────────────────────────────
     observeEvent(input$btn_run, {
-      
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification(
           "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
+          type = "error", duration = 5
         )
         return()
       }
       
-      req(input$idx_padu_file)
+      idx_padu_map <- loaded_padu_map()
+      if (is.null(idx_padu_map)) {
+        showNotification(
+          "Peta PADU Kombinasi belum tersedia. Jalankan modul 2.8 terlebih dahulu atau unggah berkas secara manual.",
+          type = "warning", duration = 6
+        )
+        return()
+      }
       
-      # Reset previous results
       rv$analysis_result <- NULL
       rv$gpkg_path <- NULL
       rv$xlsx_path <- NULL
@@ -203,16 +265,13 @@ padan_server <- function(id, output_dir) {
       rv$query_result <- NULL
       
       append_log("Memulai analisis PADAN...")
+      append_log(sprintf("Sumber peta PADU: %s", rv$idx_padu_source %||% "unknown"))
       
       withProgress(message = "Menjalankan Analisis PADAN", value = 0, {
-        
         tryCatch({
-          # Step 1: Load data (progress 20%)
           incProgress(0.2, detail = "Memuat file PADU...")
-          idx_padu_map <- sf::st_read(input$idx_padu_file$datapath, quiet = TRUE)
-          append_log("File PADU berhasil dimuat.")
+          append_log("Peta PADU berhasil dimuat.")
           
-          # Validate required columns
           required_cols <- c("idx_serasi", "idx_padu_final")
           missing_cols <- setdiff(required_cols, names(idx_padu_map))
           if (length(missing_cols) > 0) {
@@ -220,7 +279,6 @@ padan_server <- function(id, output_dir) {
           }
           append_log("Kolom yang diperlukan ditemukan.")
           
-          # Step 2: Calculate PADAN (progress 60%)
           incProgress(0.4, detail = "Menghitung indeks PADAN...")
           alpha <- input$alpha_val
           append_log(paste("Menggunakan alpha =", alpha))
@@ -231,60 +289,65 @@ padan_server <- function(id, output_dir) {
             )
           append_log("Perhitungan indeks PADAN selesai.")
           
-          # Conditional Dissolve 
           idx_padan_map_viz <- tryCatch({
             df_for_dissolve <- idx_padan_map
             if (!"geometry" %in% names(df_for_dissolve)) {
-              sf::st_geometry(df_for_dissolve) <- "geometry"   
+              sf::st_geometry(df_for_dissolve) <- "geometry"
             }
             dissolve_id_pu(df_for_dissolve)
           }, error = function(e) {
             append_log(paste("ERROR DISSOLVE:", conditionMessage(e)))
             idx_padan_map
           })
-
+          
           rv$raw_map <- idx_padan_map_viz
           rv$has_id_group <- "id_group" %in% names(idx_padan_map_viz)
           
-          # Step 3: Save results (progress 90%)
           incProgress(0.3, detail = "Menyimpan hasil...")
           
           padan_dir <- file.path(output_dir(), "Analisis PADAN")
           if (!dir.exists(padan_dir)) {
             dir.create(padan_dir, recursive = TRUE, showWarnings = FALSE)
           }
-          
           if (!dir.exists(padan_dir)) {
             stop("Tidak dapat membuat atau mengakses direktori: ", padan_dir)
           }
           
           gpkg_path <- file.path(padan_dir, "idx_padan.gpkg")
           xlsx_path <- file.path(padan_dir, "idx_padan.xlsx")
-
+          
           sf::st_write(idx_padan_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- sf::st_drop_geometry(idx_padan_map)
           openxlsx::write.xlsx(res_table, xlsx_path)
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
-          
           rv$analysis_result <- list(map = idx_padan_map_viz, table = sf::st_drop_geometry(idx_padan_map_viz))
           
-          # Store result for report generation ──
+          idx_padu_path_used <- if (identical(rv$idx_padu_source, "manual")) {
+            input$idx_padu_file$datapath
+          } else if (identical(rv$idx_padu_source, "session")) {
+            "<auto: sesi>"
+          } else if (identical(rv$idx_padu_source, "file")) {
+            file.path(output_dir(), "Analisis PADU-Kombinasi", "idx_padu_combine.gpkg")
+          } else {
+            NULL
+          }
+          
           out <- list(
             inputs = list(
-              start_time = Sys.time(),
-              idx_padu_path = input$idx_padu_file,
-              alpha = input$alpha_val,
-              output_dir = output_dir()
+              start_time    = Sys.time(),
+              idx_padu_path = idx_padu_path_used,
+              idx_padu_source = rv$idx_padu_source,
+              alpha         = input$alpha_val,
+              output_dir    = output_dir()
             ),
             result = list(
-              idx_padan_map = idx_padan_map, 
+              idx_padan_map   = idx_padan_map,
               idx_padan_table = res_table
             )
           )
           
-          # Export log
           log_dir <- file.path(padan_dir, "log")
           if (!dir.exists(log_dir)) {
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
@@ -294,20 +357,14 @@ padan_server <- function(id, output_dir) {
             tryCatch({
               inputs <- out$inputs
               save(inputs, file = log_path)
-            }, error = function(e) {
-              warning("Gagal menulis file log: ", e$message)
-            })
-          } else {
-            warning("Direktori log tidak tersedia, lewati penulisan log.")
+            }, error = function(e) warning("Gagal menulis file log: ", e$message))
           }
           
-          # Store in shared environment
           session$userData$module_results$padan <- out
           
-          # Export static maps
-          idx_padan_viz <- plot_continuous_map(
+          plot_continuous_map(
             map      = idx_padan_map_viz,
-            column   = "idx_padan",         
+            column   = "idx_padan",
             title    = "Peta Indeks PADAN",
             legend   = "Indeks PADAN",
             low      = "red",
@@ -315,8 +372,8 @@ padan_server <- function(id, output_dir) {
             filepath = file.path(log_dir, "idx_padan.png")
           )
           
-          append_log(paste("Peta disimpan →", gpkg_path))
-          append_log(paste("Tabel disimpan →", xlsx_path))
+          append_log(paste("Peta disimpan ->", gpkg_path))
+          append_log(paste("Tabel disimpan ->", xlsx_path))
           append_log("Analisis PADAN berhasil diselesaikan.")
           
           incProgress(0.1, detail = "Selesai!")
@@ -329,17 +386,16 @@ padan_server <- function(id, output_dir) {
           append_log(paste("ERROR:", msg))
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
-        
-      }) 
+      })
     })
     
-    # ── Status box ───────────────────────────────────────────────────────────
+    # ── Status box ───────────────────────────────────────────
     output$status_box <- renderUI({
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
             "Analisis selesai.")
-      } else if (!is.null(input$idx_padu_file)) {
+      } else if (!is.null(rv$idx_padu_source)) {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
             "Siap menjalankan analisis.")
@@ -350,7 +406,7 @@ padan_server <- function(id, output_dir) {
       }
     })
     
-    # ── Query Tab Logic ──────────────────────────────────────────────────────
+    # ── Query Tab Logic ──────────────────────────────────────
     output$query_id_type_ui <- renderUI({
       if (is.null(rv$raw_map)) return(NULL)
       choices <- c("id_pu")
@@ -358,17 +414,13 @@ padan_server <- function(id, output_dir) {
       selectInput(ns("query_id_type"), "Pilih Tipe ID", choices = choices)
     })
     
-    # ── Hint Text for Available IDs ─────────────────────────────
     output$query_id_hint_ui <- renderUI({
       req(rv$raw_map, input$query_id_type)
       id_type <- input$query_id_type
-      
       available_all <- unique(as.numeric(rv$raw_map[[id_type]]))
       n_avail <- length(available_all)
       max_avail <- suppressWarnings(max(available_all, na.rm = TRUE))
-      
       if (!is.finite(max_avail)) max_avail <- "—"
-      
       tags$small(
         sprintf("Tersedia: %d %s, dengan nilai maksimum %s.", n_avail, id_type, max_avail),
         style = "color: #6c757d; display: block; margin-top: 4px; font-size: 0.75em;"
@@ -377,16 +429,11 @@ padan_server <- function(id, output_dir) {
     
     observeEvent(input$btn_query, {
       req(rv$raw_map, input$query_id_val, input$query_id_type)
-      
       df <- rv$raw_map
       id_val <- input$query_id_val
       id_type <- input$query_id_type
       
-      if (id_type == "id_pu") {
-        filtered <- df[df$id_pu == id_val, ]
-      } else {
-        filtered <- df[df$id_group == id_val, ]
-      }
+      filtered <- if (id_type == "id_pu") df[df$id_pu == id_val, ] else df[df$id_group == id_val, ]
       
       if (nrow(filtered) == 0) {
         showNotification("ID tidak ditemukan dalam data.", type = "warning")
@@ -394,19 +441,15 @@ padan_server <- function(id, output_dir) {
         rv$query_result <- NULL
         return()
       }
-      
       rv$query_geom <- filtered
       rv$query_result <- NULL
     })
     
-    # ── Dashboard Headers & Cards UI ─────────────────────────────────────────
     output$query_header_and_cards_ui <- renderUI({
       req(rv$query_geom)
-      
       id_type <- input$query_id_type
       id_val <- input$query_id_val
       
-      # Extract values
       if (id_type == "id_pu") {
         val_padan  <- rv$query_geom$idx_padan[1]
         val_serasi <- rv$query_geom$idx_serasi[1]
@@ -414,7 +457,6 @@ padan_server <- function(id, output_dir) {
       } else {
         numeric_df <- rv$query_geom %>% sf::st_drop_geometry() %>% dplyr::select(where(is.numeric))
         n_members <- nrow(rv$query_geom)
-        
         get_group_val <- function(col_name) {
           if (!col_name %in% names(numeric_df)) return(NA_real_)
           vals <- numeric_df[[col_name]]
@@ -423,7 +465,6 @@ padan_server <- function(id, output_dir) {
           if (n_members == 1 || length(vals) == 1) return(vals[1])
           c(min(vals), max(vals))
         }
-        
         val_padan  <- get_group_val("idx_padan")
         val_serasi <- get_group_val("idx_serasi")
         val_padu   <- get_group_val("idx_padu_final")
@@ -437,7 +478,7 @@ padan_server <- function(id, output_dir) {
           if (is.na(mn) || is.na(mx)) return("N/A")
           if (mn == mx) return(format(round(mn, 2), nsmall = 2))
           return(paste0(format(round(mn, 2), nsmall = 2),
-                        " \u2013 ",  # en-dash
+                        " \u2013 ",
                         format(round(mx, 2), nsmall = 2)))
         }
         val <- x[1]
@@ -445,37 +486,30 @@ padan_server <- function(id, output_dir) {
         format(round(as.numeric(val), 3), nsmall = 3)
       }
       
-      # Dynamic Headers
       if (id_type == "id_pu") {
         is_adjacent <- "id_group" %in% names(rv$query_geom)
-        case <- if(is_adjacent) "Bertetangga" else "Tumpang Tindih"
-        h1 <- sprintf("Unit Perencanaan %s - Kasus %s %s dan %s", 
+        case <- if (is_adjacent) "Bertetangga" else "Tumpang Tindih"
+        h1 <- sprintf("Unit Perencanaan %s - Kasus %s %s dan %s",
                       id_val, case, rv$query_geom$RTRW[1], rv$query_geom$RZWP3K[1])
-        
         if (is_adjacent) {
-          h2 <- sprintf("Lokasi: %s - Unit Grup: %s", 
+          h2 <- sprintf("Lokasi: %s - Unit Grup: %s",
                         rv$query_geom$admin[1], rv$query_geom$id_group[1])
         } else {
           h2 <- sprintf("Lokasi: %s", rv$query_geom$admin[1])
         }
       } else {
-        # Hub detection logic 
         tbl_rtrw <- table(rv$query_geom$RTRW)
         tbl_rzwp <- table(rv$query_geom$RZWP3K)
-        max_rtrw <- max(tbl_rtrw)
-        max_rzwp <- max(tbl_rzwp)
+        max_rtrw <- max(tbl_rtrw); max_rzwp <- max(tbl_rzwp)
         hub_class <- if (max_rtrw >= max_rzwp) names(tbl_rtrw)[which.max(tbl_rtrw)] else names(tbl_rzwp)[which.max(tbl_rzwp)]
-        
         n_pairs <- nrow(rv$query_geom)
-        h1 <- sprintf("Unit Grup %s - Kasus Bertetangga %s dengan %d pasangan", 
+        h1 <- sprintf("Unit Grup %s - Kasus Bertetangga %s dengan %d pasangan",
                       id_val, hub_class, n_pairs)
-        
         admins <- paste(unique(rv$query_geom$admin), collapse = ", ")
         id_pus <- paste(rv$query_geom$id_pu, collapse = ", ")
         h2 <- sprintf("Lokasi: %s - Unit Perencanaan: %s", admins, id_pus)
       }
       
-      # Render Headers and Cards
       tagList(
         div(
           style = "margin-bottom: 16px;",
@@ -484,88 +518,54 @@ padan_server <- function(id, output_dir) {
         ),
         bslib::layout_columns(
           col_widths = c(4, 4, 4),
-          # Card 1: SERASI (Blue)
-          card(
-            class = "p-3",
-            style = "border-left: 5px solid #1e88e5; background-color: #e3f2fd;",
-            div(
-              style = "display: flex; justify-content: space-between; align-items: center;",
-              div(
-                h6("Indeks SERASI", style = "color: #1e88e5; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
-                h3(fmt_val(val_serasi), style = "font-weight: 700; color: #0d47a1; margin: 0;")
-              ),
-              icon("handshake", style = "font-size: 2rem; color: #bbdefb;")
-            )
-          ),
-          # Card 2: PADU Kombinasi (Green)
-          card(
-            class = "p-3",
-            style = "border-left: 5px solid #43a047; background-color: #e8f5e9;",
-            div(
-              style = "display: flex; justify-content: space-between; align-items: center;",
-              div(
-                h6("Indeks PADU", style = "color: #43a047; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
-                h3(fmt_val(val_padu), style = "font-weight: 700; color: #1b5e20; margin: 0;")
-              ),
-              icon("layer-group", style = "font-size: 2rem; color: #c8e6c9;")
-            )
-          ),
-          # Card 3: PADAN (Yellow)
-          card(
-            class = "p-3",
-            style = "border-left: 5px solid #fbc02d; background-color: #fff8e1;",
-            div(
-              style = "display: flex; justify-content: space-between; align-items: center;",
-              div(
-                h6("Indeks PADAN", style = "color: #fbc02d; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
-                h3(fmt_val(val_padan), style = "font-weight: 700; color: #f57f17; margin: 0;")
-              ),
-              icon("calculator", style = "font-size: 2rem; color: #fff176;")
-            )
-          )
+          card(class = "p-3",
+               style = "border-left: 5px solid #1e88e5; background-color: #e3f2fd;",
+               div(style = "display: flex; justify-content: space-between; align-items: center;",
+                   div(h6("Indeks SERASI", style = "color: #1e88e5; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
+                       h3(fmt_val(val_serasi), style = "font-weight: 700; color: #0d47a1; margin: 0;")),
+                   icon("handshake", style = "font-size: 2rem; color: #bbdefb;"))),
+          card(class = "p-3",
+               style = "border-left: 5px solid #43a047; background-color: #e8f5e9;",
+               div(style = "display: flex; justify-content: space-between; align-items: center;",
+                   div(h6("Indeks PADU", style = "color: #43a047; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
+                       h3(fmt_val(val_padu), style = "font-weight: 700; color: #1b5e20; margin: 0;")),
+                   icon("layer-group", style = "font-size: 2rem; color: #c8e6c9;"))),
+          card(class = "p-3",
+               style = "border-left: 5px solid #fbc02d; background-color: #fff8e1;",
+               div(style = "display: flex; justify-content: space-between; align-items: center;",
+                   div(h6("Indeks PADAN", style = "color: #fbc02d; font-size: 0.75rem; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;"),
+                       h3(fmt_val(val_padan), style = "font-weight: 700; color: #f57f17; margin: 0;")),
+                   icon("calculator", style = "font-size: 2rem; color: #fff176;")))
         )
       )
     })
     
-    # ── Group Member Selector Dropdown ───────────────────────────
     output$group_member_selector_ui <- renderUI({
       req(rv$query_geom)
       if (input$query_id_type == "id_group") {
-        selectInput(
-          ns("selected_group_member"), 
-          "Pilih ID PU untuk melihat detail:", 
-          choices = rv$query_geom$id_pu, 
-          selected = rv$query_geom$id_pu[1]
-        )
-      } else {
-        return(NULL)
-      }
+        selectInput(ns("selected_group_member"),
+                    "Pilih ID PU untuk melihat detail:",
+                    choices = rv$query_geom$id_pu,
+                    selected = rv$query_geom$id_pu[1])
+      } else NULL
     })
     
-    # ── Reactive Data for Attribute Table ────────────────────────
     query_table_data <- reactive({
       req(rv$query_geom)
-      
       if (input$query_id_type == "id_pu") {
         df <- rv$query_geom
       } else {
         req(input$selected_group_member)
         df <- rv$query_geom[rv$query_geom$id_pu == as.numeric(input$selected_group_member), ]
       }
-      
-      # Remove specified columns
       cols_to_remove <- c("id_pu", "id_group", "RTRW", "RZWP3K", "admin")
       df_clean <- df[, !names(df) %in% cols_to_remove, drop = FALSE]
-      
-      # Transpose for display
       row_data <- sf::st_drop_geometry(df_clean)[1, , drop = FALSE]
       res <- data.frame(
         Parameter = names(row_data),
-        Nilai = as.character(row_data[1, ]),
+        Nilai     = as.character(row_data[1, ]),
         stringsAsFactors = FALSE
       )
-      
-      # Format decimals to 2 digits for numeric values
       res$Nilai <- sapply(res$Nilai, function(x) {
         if (grepl("^-?[0-9.]+$", x)) {
           num <- suppressWarnings(as.numeric(x))
@@ -573,25 +573,16 @@ padan_server <- function(id, output_dir) {
         }
         return(x)
       })
-      
-      return(res)
+      res
     })
     
     output$query_result_table <- DT::renderDT({
       req(query_table_data())
-      DT::datatable(
-        query_table_data(), 
-        options = list(
-          paging = FALSE, 
-          dom = 't',      
-          scrollX = TRUE,
-          scrollY = "400px"
-        ), 
-        rownames = FALSE
-      )
+      DT::datatable(query_table_data(),
+                    options = list(paging = FALSE, dom = 't', scrollX = TRUE, scrollY = "400px"),
+                    rownames = FALSE)
     })
     
-    # Popup builder for query map 
     build_query_popup <- function(df) {
       sapply(seq_len(nrow(df)), function(i) {
         r <- df[i, ]
@@ -604,57 +595,31 @@ padan_server <- function(id, output_dir) {
       })
     }
     
-    # ── Base Map Rendering ────────────────────────────────────────────────────
     output$query_map <- renderLeaflet({
       req(rv$query_geom)
       map_data <- rv$query_geom
-      if (!sf::st_is_longlat(map_data)) {
-        map_data <- sf::st_transform(map_data, 4326)
-      }
-      
+      if (!sf::st_is_longlat(map_data)) map_data <- sf::st_transform(map_data, 4326)
       popup_html <- build_query_popup(map_data)
-      
       leaflet() %>%
         addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
-        addPolygons(
-          data = map_data,
-          fillColor = "red",
-          fillOpacity = 0.4,
-          stroke = FALSE,
-          label = ~paste("ID PU:", id_pu),
-          popup = popup_html
-        )
+        addPolygons(data = map_data, fillColor = "red", fillOpacity = 0.4,
+                    stroke = FALSE, label = ~paste("ID PU:", id_pu), popup = popup_html)
     })
     
-    # ── Highlight Logic for Group Members ─────────────────────────────────────
     observeEvent(input$selected_group_member, {
       req(rv$query_geom, input$selected_group_member)
       if (input$query_id_type != "id_group") return()
-      
       selected_id <- as.numeric(input$selected_group_member)
       highlight_data <- rv$query_geom[rv$query_geom$id_pu == selected_id, ]
-      
-      if (!sf::st_is_longlat(highlight_data)) {
-        highlight_data <- sf::st_transform(highlight_data, 4326)
-      }
-      
+      if (!sf::st_is_longlat(highlight_data)) highlight_data <- sf::st_transform(highlight_data, 4326)
       popup_html <- build_query_popup(highlight_data)
-      
       leafletProxy(ns("query_map")) %>%
         clearGroup("highlight") %>%
-        addPolygons(
-          data = highlight_data,
-          fillColor = "yellow",
-          fillOpacity = 0.8,
-          color = "black",
-          weight = 3,
-          group = "highlight",
-          label = ~paste("ID PU:", id_pu),
-          popup = popup_html
-        )
+        addPolygons(data = highlight_data, fillColor = "yellow", fillOpacity = 0.8,
+                    color = "black", weight = 3, group = "highlight",
+                    label = ~paste("ID PU:", id_pu), popup = popup_html)
     })
     
-    # ── Result Visualization (Main Tab) ───────────────────────────────────────
     padan_config <- list(
       map_color_col = "idx_padan",
       map_title = "Indeks PADAN",
@@ -679,6 +644,5 @@ padan_server <- function(id, output_dir) {
     )
     
     render_result_server(input, output, session, rv, padan_config)
-    
   })
 }
