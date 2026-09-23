@@ -49,11 +49,11 @@ if (!exists("%||%", mode = "function")) {
 .resolve_alpha_from_recommendation <- function(step, output_dir, session,
                                                default_alpha = 0.5) {
   if (identical(as.integer(step), 1L)) {
-    mem_key  <- "recommendation_overlaps"
-    log_file <- "idx_padan_overlaps_recommendation.rda"
+    mem_key  <- "recommendation"
+    log_file <- "idx_alternatives_overlaps.rda"
   } else if (identical(as.integer(step), 2L)) {
-    mem_key  <- "recommendation_adjacent"
-    log_file <- "idx_padan_adjacent_recommendation.rda"
+    mem_key  <- "recommendation"
+    log_file <- "idx_alternatives_adjacent.rda"
   } else {
     return(list(alpha = default_alpha, source = "default (step unknown)"))
   }
@@ -193,31 +193,33 @@ reconcile_server <- function(id, output_dir) {
     
     discovered_recon_key <- reactive({
       step <- expected_step()
-      rec_key <- switch(as.character(step %||% ""),
-                        "1" = "recommendation_overlaps",
-                        "2" = "recommendation_adjacent",
-                        NULL)
-      if (!is.null(rec_key)) {
-        rec_res <- tryCatch(session$userData$module_results[[rec_key]],
-                            error = function(e) NULL)
-        if (!is.null(rec_res) && !is.null(rec_res$result)) {
-          m <- rec_res$result$idx_alternative_overlaps_map %||%
-            rec_res$result$idx_alternative_adjacent_map
+      if (is.null(step)) return("none")
+      
+      expected_case <- if (identical(step, 1L)) "overlaps" else "adjacent"
+      
+      rec_res <- tryCatch(session$userData$module_results$recommendation,
+                          error = function(e) NULL)
+      if (!is.null(rec_res) && !is.null(rec_res$result)) {
+        case_in_session <- rec_res$inputs$case %||% ""
+        if (!nzchar(case_in_session) || identical(case_in_session, expected_case)) {
+          m <- rec_res$result[[if (identical(step, 1L))
+            "idx_alternative_overlaps_map" else "idx_alternative_adjacent_map"]]
           if (!is.null(m) && inherits(m, "sf")) {
-            return(paste0("session|", rec_key))
+            return("session")
           }
         }
       }
+      
       if (!is.null(output_dir()) && nzchar(output_dir())) {
         folder <- file.path(output_dir(), "Penyusunan Alternatif")
-        expected_file <- switch(as.character(step %||% ""),
-                                "1" = "idx_padan_overlaps_recommendation.gpkg",
-                                "2" = "idx_padan_adjacent_recommendation.gpkg",
-                                NULL)
-        if (!is.null(expected_file)) {
-          f <- file.path(folder, expected_file)
-          if (file.exists(f)) return(paste0("file|", expected_file, "|",
-                                            as.numeric(file.mtime(f))))
+        expected_file <- if (identical(step, 1L))
+          "idx_alternatives_overlaps.gpkg"
+        else
+          "idx_alternatives_adjacent.gpkg"
+        f <- file.path(folder, expected_file)
+        if (file.exists(f)) {
+          return(paste0("file|", expected_file, "|",
+                        as.numeric(file.mtime(f))))
         }
       }
       "none"
@@ -242,10 +244,12 @@ reconcile_server <- function(id, output_dir) {
       }
       map_data <- NULL
       source   <- NULL
-      if (startsWith(key, "session|")) {
-        rec_key <- sub("^session\\|", "", key)
-        rec_res <- session$userData$module_results[[rec_key]]
-        map_data <- rec_res$result$idx_alternative_overlaps_map %||%
+      if (identical(key, "session")) {
+        rec_res <- session$userData$module_results$recommendation
+        step    <- expected_step()
+        map_data <- if (identical(step, 1L))
+          rec_res$result$idx_alternative_overlaps_map
+        else
           rec_res$result$idx_alternative_adjacent_map
         source <- "session"
       } else {
@@ -283,11 +287,11 @@ reconcile_server <- function(id, output_dir) {
     
     output$loaded_file_bar <- renderUI({
       detected_name <- if (identical(rv$detected_step, 1L)) {
-        "idx_padan_overlaps_recommendation.gpkg"
+        "idx_alternatives_overlaps.gpkg"
       } else if (identical(rv$detected_step, 2L)) {
-        "idx_padan_adjacent_recommendation.gpkg"
+        "idx_alternatives_adjacent.gpkg"
       } else {
-        "idx_padan_recommendation.gpkg"
+        "idx_alternatives.gpkg"
       }
       render_loaded_file_bar(
         state    = rv$recon_map_source,   

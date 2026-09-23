@@ -1465,22 +1465,12 @@ module_file_config <- list(
     rda     = "log/idx_padan_log.rda",
     png_dir = "log"
   ),
-  recommendation_overlaps = list(
-    folder  = "Analisis Alternatif",
-    gpkg    = "idx_alternative_overlaps.gpkg",
-    xlsx    = "idx_alternative_overlaps.xlsx",
-    rda     = "log/idx_alternative_overlaps_log.rda",
-    png_dir = "log"
-  ),
-  recommendation_adjacent = list(
-    folder  = "Analisis Alternatif",
-    gpkg    = "idx_alternative_adjacent.gpkg",
-    xlsx    = "idx_alternative_adjacent.xlsx",
-    rda     = "log/idx_alternative_adjacent_log.rda",
+  recommendation = list(
+    folder  = "Penyusunan Alternatif",
     png_dir = "log"
   ),
   reconcile = list(
-    folder  = "Analisis Rekonsiliasi",
+    folder  = "Rekonsiliasi",
     rda     = "log/idx_reconcile_log.rda",
     png_dir = "log"
   )
@@ -1505,8 +1495,6 @@ module_result_names <- list(
   padu_ki             = list(map = "idx_padu_ki_map",   table = "idx_padu_ki_table"),
   padu_combine        = list(map = "idx_padu_map",      table = "idx_padu_table"),
   padan               = list(map = "idx_padan_map",     table = "idx_padan_table"),
-  recommendation_overlaps = list(map = "idx_alternative_overlaps_map", table = "idx_alternative_overlaps_table"),
-  recommendation_adjacent = list(map = "idx_alternative_adjacent_map", table = "idx_alternative_adjacent_table"),
   reconcile           = list(map = "idx_reconcile_map", table = "idx_reconcile_table")
 )
 
@@ -1597,6 +1585,92 @@ load_serasi_from_files <- function(base_dir, cfg) {
     return(list(ready = TRUE, data = out, source = "files"))
   }, error = function(e) {
     warning("Failed to load SERASI from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+#' Special Loading for Recommendation Module (Overlaps/Adjacent)
+#'
+#' @description
+#' The two "Penyusunan Alternatif" modules (Tumpang Tindih / Bertetangga)
+#' write to the same output folder with a case-dependent filename and a
+#' case-dependent RDA log:
+#'   - overlaps: idx_padan_overlaps_recommendation.{gpkg,xlsx,rda}
+#'   - adjacent: idx_padan_adjacent_recommendation.{gpkg,xlsx,rda}
+#' This helper inspects the log RDA's `inputs$case` to determine which
+#' GPKG/XLSX pair to load, and returns a result list whose variable names
+#' match `module_result_names[["recommendation_*"]]`.
+#'
+#' @param base_dir Character. Base output directory for the module.
+#' @param cfg List. The module's file configuration
+#'   (as stored in `module_file_config$recommendation`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+load_recommendation_from_files <- function(base_dir, cfg) {
+  rda_candidates <- c(
+    file.path(base_dir, "log", "idx_alternatives_overlaps.rda"),
+    file.path(base_dir, "log", "idx_alternatives_adjacent.rda")
+  )
+  rda_existing <- rda_candidates[file.exists(rda_candidates)]
+  if (length(rda_existing) == 0) return(list(ready = FALSE, data = NULL))
+  
+  # Prefer the most recently written log
+  rda_path <- rda_existing[order(file.info(rda_existing)$mtime, decreasing = TRUE)][1]
+  
+  env <- new.env()
+  load(rda_path, envir = env)
+  inputs <- env$inputs
+  case <- inputs$case %||% NA_character_
+  
+  # Fall back to filename detection if `case` was not recorded
+  if (is.na(case) || !nzchar(case)) {
+    case <- if (grepl("overlaps", basename(rda_path), fixed = TRUE)) "overlaps"
+    else if (grepl("adjacent", basename(rda_path), fixed = TRUE)) "adjacent"
+    else NA_character_
+  }
+  if (is.na(case)) return(list(ready = FALSE, data = NULL))
+  
+  gpkg_name <- sprintf("idx_alternatives_%s.gpkg", case)
+  xlsx_name <- sprintf("idx_alternatives_%s.xlsx", case)
+  gpkg_path <- file.path(base_dir, gpkg_name)
+  xlsx_path <- file.path(base_dir, xlsx_name)
+  
+  if (!file.exists(gpkg_path) || !file.exists(xlsx_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) ||
+      length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    map_obj   <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    result <- if (identical(case, "overlaps")) {
+      list(
+        idx_alternative_overlaps_map   = map_obj,
+        idx_alternative_overlaps_table = table_obj
+      )
+    } else {
+      list(
+        idx_alternative_adjacent_map   = map_obj,
+        idx_alternative_adjacent_table = table_obj
+      )
+    }
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load Recommendation from files: ", e$message)
     return(list(ready = FALSE, data = NULL))
   })
 }
@@ -1737,6 +1811,10 @@ module_ready_and_data <- function(module_id, output_dir, session) {
   
   if (mod_key == "reconcile") {
     return(load_reconcile_from_files(base_dir, cfg))
+  }
+  
+  if (mod_key == "recommendation") {
+    return(load_recommendation_from_files(base_dir, cfg))
   }
   
   gpkg_path <- file.path(base_dir, cfg$gpkg)

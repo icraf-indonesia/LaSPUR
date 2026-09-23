@@ -692,8 +692,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
           incProgress(0.8, detail = "Menyimpan hasil ke disk...")
           recom_adjacent_dir <- file.path(output_dir(), "Penyusunan Alternatif")
           if (!dir.exists(recom_adjacent_dir)) dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
-          out_gpkg <- file.path(recom_adjacent_dir, "idx_padan_adjacent_recommendation.gpkg")
-          out_xlsx <- file.path(recom_adjacent_dir, "idx_padan_adjacent_recommendation.xlsx")
+          out_gpkg <- file.path(recom_adjacent_dir, "idx_alternatives_adjacent.gpkg")
+          out_xlsx <- file.path(recom_adjacent_dir, "idx_alternatives_adjacent.xlsx")
           sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
           log_lines <- c(
@@ -721,25 +721,31 @@ recommendation_adjacent_server <- function(id, output_dir) {
           rv$final_log <- paste(log_lines, collapse = "\n")
           out <- list(
             inputs = list(
-              start_time = Sys.time(),
-              idx_padan_file = input$idx_padan_file$name,
-              idx_padan_source = rv$idx_padan_source,
-              rtrw_priority_file = input$rtrw_priority_file$name,
+              start_time           = Sys.time(),
+              case                 = "adjacent",       
+              idx_padan_file       = input$idx_padan_file$name,
+              idx_padan_source     = rv$idx_padan_source,
+              rtrw_priority_file   = input$rtrw_priority_file$name,
               rzwp3k_priority_file = input$rzwp3k_priority_file$name,
-              alpha = input$alpha_val,
-              th_high = input$th_high, th_med = input$th_med, th_low = input$th_low,
-              npv_enabled = isTRUE(input$npv_enable),
-              output_dir = output_dir()),
+              alpha                = input$alpha_val,
+              th_high              = input$th_high,
+              th_med               = input$th_med,
+              th_low               = input$th_low,
+              npv_enabled          = isTRUE(input$npv_enable),
+              output_dir           = output_dir()
+            ),
             result = list(
-              idx_alternative_adjacent_map = adjacent_recom_map,
-              idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)))
+              idx_alternative_adjacent_map   = adjacent_recom_map,
+              idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)
+            )
+          )
           log_dir <- file.path(recom_adjacent_dir, "log")
           if (!dir.exists(log_dir)) dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           tryCatch({
             inputs <- out$inputs
-            save(inputs, file = file.path(log_dir, "idx_padan_adjacent_recommendation.rda"))
+            save(inputs, file = file.path(log_dir, "idx_alternatives_adjacent.rda"))
           }, error = function(e) warning("Gagal menulis file log: ", e$message))
-          session$userData$module_results$recommendation_adjacent <- out
+          session$userData$module_results$recommendation <- out
           plot_categorical_map(
             map = adjacent_recom_map,
             title = "Peta Opsi Alternatif Kasus Bertetangga",

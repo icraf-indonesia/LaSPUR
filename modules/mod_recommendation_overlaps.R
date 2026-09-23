@@ -575,8 +575,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
           incProgress(0.8, detail = "Menyimpan hasil ke disk...")
           recom_overlaps_dir <- file.path(output_dir(), "Penyusunan Alternatif")
           if (!dir.exists(recom_overlaps_dir)) dir.create(recom_overlaps_dir, recursive = TRUE, showWarnings = FALSE)
-          out_gpkg <- file.path(recom_overlaps_dir, "idx_padan_overlaps_recommendation.gpkg")
-          out_xlsx <- file.path(recom_overlaps_dir, "idx_padan_overlaps_recommendation.xlsx")
+          out_gpkg <- file.path(recom_overlaps_dir, "idx_alternatives_overlaps.gpkg")
+          out_xlsx <- file.path(recom_overlaps_dir, "idx_alternatives_overlaps.xlsx")
           sf::st_write(df, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(sf::st_drop_geometry(df), out_xlsx)
           log_lines <- c(
@@ -592,18 +592,19 @@ recommendation_overlaps_server <- function(id, output_dir) {
           rv$final_log <- paste(log_lines, collapse = "\n")
           out <- list(
             inputs = list(
-              start_time = Sys.time(),
-              idx_padan_file = input$idx_padan_file$name,
-              idx_padan_source = rv$idx_padan_source,
-              rtrw_priority_file = input$rtrw_priority_file$name,
+              start_time           = Sys.time(),
+              case                 = "overlaps",         
+              idx_padan_file       = input$idx_padan_file$name,
+              idx_padan_source     = rv$idx_padan_source,
+              rtrw_priority_file   = input$rtrw_priority_file$name,
               rzwp3k_priority_file = input$rzwp3k_priority_file$name,
-              alpha = input$alpha_val,
-              threshold_serasi = input$threshold_serasi,
-              threshold_padu = input$threshold_padu,
-              output_dir = output_dir()
+              alpha                = input$alpha_val,
+              threshold_serasi     = input$threshold_serasi,
+              threshold_padu       = input$threshold_padu,
+              output_dir           = output_dir()
             ),
             result = list(
-              idx_alternative_overlaps_map = df,
+              idx_alternative_overlaps_map   = df,
               idx_alternative_overlaps_table = sf::st_drop_geometry(df)
             )
           )
@@ -611,9 +612,9 @@ recommendation_overlaps_server <- function(id, output_dir) {
           if (!dir.exists(log_dir)) dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           tryCatch({
             inputs <- out$inputs
-            save(inputs, file = file.path(log_dir, "idx_padan_overlaps_recommendation.rda"))
+            save(inputs, file = file.path(log_dir, "idx_alternatives_overlaps.rda"))
           }, error = function(e) warning("Gagal menulis file log: ", e$message))
-          session$userData$module_results$recommendation_overlaps <- out
+          session$userData$module_results$recommendation <- out
           plot_categorical_map(
             map = df, title = "Peta Opsi Alternatif Kasus Tumpang Tindih",
             column = "recommendation", legend = "Opsi Alternatif",

@@ -171,14 +171,8 @@ report_module_config <- list(
     template = "report/LaSPUR_PADAN_report_template.Rmd"
   ),
   recommendation = list(
-    recommendation_overlaps = list(
-      label    = "Alternatif Tumpang Tindih",
-      template = "report/LaSPUR_Alternative_report_template.Rmd"
-    ),
-    recommendation_adjacent = list(
-      label    = "Alternatif Bertetangga",
-      template = "report/LaSPUR_Alternative_report_template.Rmd"
-    )
+    label    = "Penyusunan Alternatif",
+    template = "report/LaSPUR_Alternative_report_template.Rmd"
   ),
   reconcile = list(
     label    = "Rekonsiliasi",
@@ -1419,12 +1413,25 @@ server <- function(input, output, session) {
         });
         Shiny.setInputValue('report_modules_selected', selected);
       }
+    
+      function syncParentStates() {
+        $('.parent-mod-cb').each(function() {
+          var targetClass = $(this).attr('data-target-class');
+          if (!targetClass) return;
+          var $children = $('.' + targetClass).not(':disabled');
+          if ($children.length === 0) return;
+          var allChecked = ($children.filter(':checked').length === $children.length);
+          $(this).prop('checked', allChecked);
+        });
+      }
+    
       $(document).off('change', '.parent-mod-cb').on('change', '.parent-mod-cb', function() {
         var isChecked = $(this).is(':checked');
         var targetClass = $(this).attr('data-target-class');
         $('.' + targetClass).not(':disabled').prop('checked', isChecked);
         updateSelectedModules();
       });
+    
       $(document).off('change', '.report-mod-cb').on('change', '.report-mod-cb', function() {
         var classes = $(this).attr('class').split(' ');
         var parentClass = null;
@@ -1441,7 +1448,11 @@ server <- function(input, output, session) {
         }
         updateSelectedModules();
       });
-      setTimeout(updateSelectedModules, 100);
+    
+      setTimeout(function() {
+        syncParentStates();
+        updateSelectedModules();
+      }, 100);
     "))
     
     showModal(
@@ -1489,8 +1500,6 @@ server <- function(input, output, session) {
     any_ready     <- FALSE
     padu_combined <- list(inputs = list(), result = list())
     padu_selected <- FALSE
-    rec_overlaps  <- NULL
-    rec_adjacent  <- NULL
     
     for (sel in selected) {
       if (sel == "serasi") {
@@ -1527,42 +1536,42 @@ server <- function(input, output, session) {
         } else {
           showNotification("Modul PADAN tidak siap. Dilewati.", type = "warning")
         }
-      } else if (sel == "recommendation_overlaps") {
-        info <- module_ready_and_data("recommendation_overlaps", output_dir(), session)
+      } else if (sel == "recommendation") {
+        info <- module_ready_and_data("recommendation", output_dir(), session)
         if (info$ready) {
-          rec_overlaps <- info$data
-          any_ready <- TRUE
+          case <- tryCatch(info$data$inputs$case, error = function(e) NA_character_)
+          if (is.na(case) || !nzchar(case)) {
+            if (!is.null(info$data$result$idx_alternative_overlaps_map)) {
+              case <- "overlaps"
+            } else if (!is.null(info$data$result$idx_alternative_adjacent_map)) {
+              case <- "adjacent"
+            }
+          }
+          
+          if (is.null(master_params$recommendation)) {
+            master_params$recommendation <- list()
+          }
+          if (identical(case, "overlaps")) {
+            master_params$recommendation$overlaps <- info$data
+            any_ready <- TRUE
+          } else if (identical(case, "adjacent")) {
+            master_params$recommendation$adjacent <- info$data
+            any_ready <- TRUE
+          } else {
+            showNotification(
+              "Modul Penyusunan Alternatif tidak dapat menentukan kasus (overlaps/adjacent). Dilewati.",
+              type = "warning"
+            )
+          }
         } else {
-          showNotification("Modul Alternatif Tumpang Tindih tidak siap. Dilewati.",
+          showNotification("Modul Penyusunan Alternatif tidak siap. Dilewati.",
                            type = "warning")
-        }
-      } else if (sel == "recommendation_adjacent") {
-        info <- module_ready_and_data("recommendation_adjacent", output_dir(), session)
-        if (info$ready) {
-          rec_adjacent <- info$data
-          any_ready <- TRUE
-        } else {
-          showNotification("Modul Alternatif Bertetangga tidak siap. Dilewati.",
-                           type = "warning")
-        }
-      } else if (sel == "reconcile") {
-        info <- module_ready_and_data("reconcile", output_dir(), session)
-        if (info$ready) {
-          master_params$reconcile <- info$data
-          any_ready <- TRUE
-        } else {
-          showNotification("Modul Rekonsiliasi tidak siap. Dilewati.", type = "warning")
         }
       }
     }
     
     if (padu_selected && length(padu_combined$result) > 0) {
       master_params$padu <- padu_combined
-    }
-    if (!is.null(rec_overlaps) || !is.null(rec_adjacent)) {
-      master_params$recommendation <- list()
-      if (!is.null(rec_overlaps)) master_params$recommendation$overlaps <- rec_overlaps
-      if (!is.null(rec_adjacent)) master_params$recommendation$adjacent <- rec_adjacent
     }
     
     if (!any_ready) {
