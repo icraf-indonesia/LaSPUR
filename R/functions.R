@@ -3313,8 +3313,8 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   
   # Required columns and base export columns differ by step
   if (step == "step2") {
-    required_cols <- c("id", "id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
-    base_cols     <- c("id", "id_pu", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
+    required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
+    base_cols     <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K", "admin", "area_ha", "length", "idx_serasi")
   } else {
     required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")
     base_cols     <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K", "admin", "area_ha", "idx_serasi")

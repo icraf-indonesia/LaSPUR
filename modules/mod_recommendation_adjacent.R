@@ -1,6 +1,6 @@
 # ui/modules/mod_recommendation_adjacent.R
 # ============================================================
-#  MODULE: Recommendation (4. Analisis Rekomendasi)
+#  MODULE: Recommendation (4. Analisis Alternatif)
 #  Wizard flow (accordion in left panel)
 #  Outputs (map, table accordion, log) in right panel.
 # ============================================================
@@ -116,7 +116,7 @@ recommendation_adjacent_ui <- function(id) {
             ),
             
             accordion_panel(
-              title = "Langkah 2 — Menentukan Kawasan Alternatif",
+              title = "Langkah 2 — Menentukan Opsi Alternatif",
               value = "step2",
               icon = tags$i(class = "bi bi-signpost-split-fill"),
               uiOutput(ns("step2_ui"))
@@ -130,7 +130,7 @@ recommendation_adjacent_ui <- function(id) {
             ),
             
             accordion_panel(
-              title = "Langkah 4 — Menentukan Rekomendasi",
+              title = "Langkah 4 — Menentukan Keputusan Alternatif",
               value = "step4",
               icon = tags$i(class = "bi bi-check2-circle"),
               uiOutput(ns("step4_ui"))
@@ -148,16 +148,13 @@ recommendation_adjacent_ui <- function(id) {
           uiOutput(ns("status_box")),
           
           hr(),
-          
+
           navset_tab(
             nav_panel(
               "Visualisasi Hasil",
               leafletOutput(ns("recommendation_map"), height = "450px"),
               hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
-              div(
-                style = "max-height: 500px; overflow: auto;",
-                uiOutput(ns("table_accordion"))
-              )
+              DT::DTOutput(ns("final_table"))
             ),
             nav_panel(
               "Log",
@@ -272,7 +269,21 @@ recommendation_adjacent_server <- function(id, output_dir) {
       req(input$idx_padan_file)
       showNotification("Memuat peta PADAN...", type = "message", duration = 2)
       tryCatch({
-        rv$idx_padan_map <- sf::st_read(input$idx_padan_file$datapath, quiet = TRUE)
+        loaded_map <- sf::st_read(input$idx_padan_file$datapath, quiet = TRUE)
+        
+        if ("id_group.x" %in% names(loaded_map) || "id_group.y" %in% names(loaded_map)) {
+          gx <- if ("id_group.x" %in% names(loaded_map)) loaded_map$id_group.x else NA
+          gy <- if ("id_group.y" %in% names(loaded_map)) loaded_map$id_group.y else NA
+          loaded_map$id_group <- dplyr::coalesce(gx, gy)
+          loaded_map$id_group.x <- NULL
+          loaded_map$id_group.y <- NULL
+        }
+        
+        if (!"id_group" %in% names(loaded_map)) {
+          stop("Peta PADAN harus memiliki kolom 'id_group' untuk kasus bertetangga.")
+        }
+        
+        rv$idx_padan_map <- loaded_map
         rv$idx_padan_map_filter <- NULL
         rv$filter_snapshot <- NULL
         rv$count_before <- NULL
@@ -410,7 +421,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Memuat matriks serasi...")
           rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
           
-          out_dir_step2 <- file.path(output_dir())
+          out_dir_step2 <- file.path(output_dir(), "Penyusunan Alternatif")
           dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
           
           incProgress(0.5, detail = "Memproses opsi alternatif...")
@@ -423,11 +434,11 @@ recommendation_adjacent_server <- function(id, output_dir) {
           )
           
           incProgress(0.8, detail = "Menyimpan file template...")
-          generated <- list.files(out_dir_step2, pattern = "\\.xlsx$", full.names = TRUE)
-          if (length(generated) == 0) {
+          generated <- file.path(out_dir_step2, "adjacent_alternative_zones_selections.xlsx")
+          if (!file.exists(generated)) {
             stop("Template dibuat tetapi file .xlsx tidak ditemukan di folder output.")
           }
-          rv$alt_template_path <- generated[order(file.info(generated)$mtime, decreasing = TRUE)][1]
+          rv$alt_template_path <- generated
           
           showNotification("Template alternatif zona berhasil dibuat.", type = "message")
           incProgress(1.0, detail = "Selesai!")
@@ -633,7 +644,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run_final"),
-                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Buat Rekomendasi"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis Alternatif"),
                        class = "btn-success btn-sm")
         ),
         .step_nav(ns, back_id = "btn_back_4", next_id = NULL)
@@ -658,7 +669,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$final_result <- NULL
       log_lines <- character(0)
       
-      withProgress(message = "Membuat Rekomendasi Bertetangga", value = 0, {
+      withProgress(message = "Menyusun alternatif kasus bertetangga", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Memuat tabel acuan pola...")
           rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
@@ -692,7 +703,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           # Split RTRW / RZWP3K sides and re-join
           rtrw_rows <- adjacent_economy_map %>%
             dplyr::filter(!is.na(RTRW)) %>%
-            dplyr::select(id_pu, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
+            dplyr::select(id_pu, id_group, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
             sf::st_drop_geometry() %>%
             dplyr::as_tibble()
           
@@ -713,7 +724,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           
           stopifnot(all(!is.na(split_rtrw_rzwp3k$RTRW) & !is.na(split_rtrw_rzwp3k$RZWP3K)))
           
-          incProgress(0.6, detail = "Menghitung keputusan dan rekomendasi...")
+          incProgress(0.6, detail = "Menghitung keputusan alternatif")
           prep_recomendation <- split_rtrw_rzwp3k %>%
             dplyr::mutate(
               priority_class = dplyr::case_when(
@@ -779,18 +790,27 @@ recommendation_adjacent_server <- function(id, output_dir) {
             dplyr::left_join(recommendation_decision_filter, by = "id_pu")
           
           incProgress(0.8, detail = "Menyimpan hasil ke disk...")
-          out_gpkg <- file.path(output_dir(), "idx_padan_recommendation.gpkg")
-          out_xlsx <- file.path(output_dir(), "idx_padan_recommendation.xlsx")
+          
+          recom_adjacent_dir <- file.path(output_dir(), "Penyusunan Alternatif")
+          if (!dir.exists(recom_adjacent_dir)) {
+            dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          if (!dir.exists(recom_adjacent_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", recom_adjacent_dir)
+          }
+          
+          out_gpkg <- file.path(recom_adjacent_dir, "idx_padan_recommendation.gpkg")
+          out_xlsx <- file.path(recom_adjacent_dir, "idx_padan_recommendation.xlsx")
           
           sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
           
           log_lines <- c(
             log_lines,
-            "Ringkasan rekomendasi:",
+            "Ringkasan alternatif:",
             capture.output(print(table(adjacent_recom_map$recommendation))),
             "",
-            "Ringkasan integrasi (aktual vs rekomendasi):",
+            "Ringkasan integrasi (aktual vs alternatif):",
             capture.output(print(
               adjacent_recom_map %>%
                 sf::st_drop_geometry() %>%
@@ -799,9 +819,12 @@ recommendation_adjacent_server <- function(id, output_dir) {
             ))
           )
           
+          # Dissolve for visualization
+          adjacent_recom_map_viz <- dissolve_id_pu(adjacent_recom_map)
+          
           rv$final_result <- list(
-            map = adjacent_recom_map,
-            table = sf::st_drop_geometry(adjacent_recom_map),
+            map = adjacent_recom_map_viz,
+            table = sf::st_drop_geometry(adjacent_recom_map_viz),
             gpkg_path = out_gpkg,
             xlsx_path = out_xlsx
           )
@@ -826,9 +849,30 @@ recommendation_adjacent_server <- function(id, output_dir) {
               idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)
             )
           )
+          
+          log_dir <- file.path(recom_adjacent_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padan_adjacent_recommendation.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) warning("Gagal menulis file log: ", e$message))
+          }
+          
           session$userData$module_results$recommendation_adjacent <- out
+          
+          idx_padan_recom <- plot_categorical_map(
+            map      = adjacent_recom_map,
+            title    = "Peta Opsi Alternatif Kasus Bertetangga",
+            column   = "recommendation",         
+            legend   = "Opsi Alternatif",
+            filepath = file.path(log_dir, "peta_opsi_alternatif_bertetangga.png")
+          )
 
-          showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
+          showNotification("Berhasil! Analisis alternatif telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           
         }, error = function(e) {
@@ -859,101 +903,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
     })
     
-    # ── Table Accordion (collapsible panels) ─────────────────
-    output$table_accordion <- renderUI({
-      panels <- list()
-      
-      if (!is.null(rv$alt_status) && rv$alt_status$ok) {
-        panels <- c(panels, list(
-          accordion_panel(
-            title = "Alternatif Zona (Pratinjau)",
-            value = "preview",
-            icon = tags$i(class = "bi bi-eye"),
-            DT::DTOutput(ns("alt_preview_table"))  
-          )
-        ))
-      }
-      
-      if (!is.null(rv$final_result)) {
-        panels <- c(panels, list(
-          accordion_panel(
-            title = "Rekomendasi Akhir",
-            value = "final",
-            icon = tags$i(class = "bi bi-check2-circle"),
-            div(style = "max-height: 400px; overflow: auto;",
-                DT::DTOutput(ns("final_table")))   
-          )
-        ))
-      }
-      
-      if (length(panels) == 0) {
-        return(tags$p("Belum ada tabel untuk ditampilkan."))
-      }
-      
-      accordion(
-        id = ns("table_accordion_widget"),
-        multiple = TRUE,
-        !!!panels
-      )
-    })
-    
-    output$alt_preview_table <- DT::renderDT({
-      req(rv$alt_status, rv$alt_status$ok)
-      df_preview <- rv$alt_status$preview
-      
-      desired_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_serasi", "alt_RTRW", "alt_RZWP3K")
-      cols_present <- intersect(desired_cols, names(df_preview))
-      
-      if (length(cols_present) == 0) {
-        df_subset <- df_preview
-      } else {
-        df_subset <- df_preview[, cols_present, drop = FALSE]
-      }
-
-      label_map <- c(
-        "id_pu"       = "ID PU",
-        "RTRW"        = "RTRW",
-        "RZWP3K"      = "RZWP3K",
-        "area_ha"     = "Luas (ha)",
-        "length"      = "Panjang Segmen (meter)",
-        "idx_serasi"  = "Indeks SERASI",
-        "alt_RTRW"    = "RTRW Alternatif Terpilih",
-        "alt_RZWP3K"  = "RZWP3K Alternatif Terpilih"
-      )
-      
-      new_names <- label_map[names(df_subset)]
-      new_names[is.na(new_names)] <- names(df_subset)[is.na(new_names)]
-      names(new_names) <- names(df_subset)
-      colnames(df_subset) <- unname(new_names)
-      
-      # Round numeric columns
-      numeric_cols <- names(df_subset)[sapply(df_subset, is.numeric)]
-      exclude_round <- c("ID PU", "id_pu")
-      round_cols <- setdiff(numeric_cols, exclude_round)
-      
-      DT::datatable(
-        df_subset,
-        extensions = c('FixedColumns', 'FixedHeader'),
-        options = list(
-          pageLength = 10,
-          scrollX = TRUE,
-          scrollY = "400px",
-          dom = 'Bfrtip',
-          fixedColumns = list(leftColumns = 1),
-          fixedHeader = TRUE
-        ),
-        rownames = FALSE,
-        class = "display compact stripe hover"
-      ) %>%
-        DT::formatRound(columns = round_cols, digits = 2)
-    })
-    
+    # ── Table ─────────────────
     output$final_table <- DT::renderDT({
       req(rv$final_result)
       df_final <- rv$final_result$table
       
       base_cols <- c(
-        "id_pu", "RTRW", "RZWP3K", "area_ha", "length", "idx_padu_final",
+        "id_pu", "id_group", "RTRW", "RZWP3K", "area_ha", "length", "idx_padu_final",
         "alt_RTRW", "alt_RZWP3K", "recommendation", "RTRW_new", "RZWP3K_new",
         "idx_serasi", "idx_serasi_new", "idx_padan", "idx_padan_new", "idx_padan_delta",
         "actual_integration", "recom_integration"
@@ -976,6 +932,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
 
       label_map <- c(
         "id_pu"               = "ID PU",
+        "id_group"            = "ID Grup",
         "RTRW"                = "RTRW Awal",
         "RZWP3K"              = "RZWP3K Awal",
         "area_ha"             = "Luas (ha)",
@@ -983,7 +940,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         "idx_padu_final"      = "Indeks PADU Kombinasi",
         "alt_RTRW"            = "RTRW Alternatif",
         "alt_RZWP3K"          = "RZWP3K Alternatif",
-        "recommendation"      = "Rekomendasi",
+        "recommendation"      = "Alternatif",
         "RTRW_new"            = "RTRW Baru",
         "RZWP3K_new"          = "RZWP3K Baru",
         "idx_serasi"          = "Indeks SERASI Awal",
@@ -992,19 +949,19 @@ recommendation_adjacent_server <- function(id, output_dir) {
         "idx_padan_new"       = "Indeks PADAN Baru",
         "idx_padan_delta"     = "Selisih Indeks PADAN",
         "actual_integration"  = "Integrasi Aktual",
-        "recom_integration"   = "Integrasi Hasil Rekomendasi"
+        "recom_integration"   = "Integrasi Hasil Alternatif"
       )
       
       econ_label_map <- c(
-        "npv_ha_actual_rtrw"   = "NPV per ha (Aktual RTRW)",
-        "npv_ha_actual_rzwp3k" = "NPV per ha (Aktual RZWP3K)",
-        "npv_ha_recom_rtrw"    = "NPV per ha (Rekomendasi RTRW)",
-        "npv_ha_recom_rzwp3k"  = "NPV per ha (Rekomendasi RZWP3K)",
+        "npv_ha_actual_rtrw"   = "NPV per ha (RTRW Aktual)",
+        "npv_ha_actual_rzwp3k" = "NPV per ha (RZWP3K Aktual)",
+        "npv_ha_recom_rtrw"    = "NPV per ha (RTRW Alternatif)",
+        "npv_ha_recom_rzwp3k"  = "NPV per ha (RZWP3K Alternatif)",
         "econ_rtrw_actual"     = "Nilai Ekonomi RTRW (Aktual)",
-        "econ_rtrw_recom"      = "Nilai Ekonomi RTRW (Rekomendasi)",
+        "econ_rtrw_recom"      = "Nilai Ekonomi RTRW (Alternatif)",
         "econ_rtrw_delta"      = "Selisih Nilai Ekonomi RTRW",
         "econ_rzwp3k_actual"   = "Nilai Ekonomi RZWP3K (Aktual)",
-        "econ_rzwp3k_recom"    = "Nilai Ekonomi RZWP3K (Rekomendasi)",
+        "econ_rzwp3k_recom"    = "Nilai Ekonomi RZWP3K (Alternatif)",
         "econ_rzwp3k_delta"    = "Selisih Nilai Ekonomi RZWP3K",
         "econ_delta"           = "Selisih Nilai Ekonomi Akhir"
       )
@@ -1017,7 +974,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       
       # Round numeric columns 
       numeric_cols <- names(df_subset)[sapply(df_subset, is.numeric)]
-      exclude_round <- c("ID_PU", "id_pu")
+      exclude_round <- c("ID_PU", "id_pu", "ID Grup", "id_group")
       round_cols <- setdiff(numeric_cols, exclude_round)
       
       DT::datatable(
@@ -1053,7 +1010,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
       
       required_cols <- c("recommendation", "actual_integration", "recom_integration",
-                         "idx_padan", "idx_padan_new", "RTRW_new", "RZWP3K_new", "id_pu",
+                         "idx_padan", "idx_padan_new", "RTRW_new", "RZWP3K_new", "id_pu", "id_group",
                          "RTRW", "RZWP3K")
       missing <- setdiff(required_cols, names(map_sf))
       if (length(missing) > 0) {
@@ -1062,7 +1019,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom yang diperlukan tidak ditemukan. Periksa Log.", position = "topright"))
       }
       
-      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Rekomendasi: ", map_sf$recommendation)
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", "ID Grup: ", map_sf$id_group, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Alternatif: ", map_sf$recommendation)
       
       pal <- leaflet::colorFactor(
         palette = c("blue", "green", "orange", "red", "purple"),
@@ -1082,9 +1039,10 @@ recommendation_adjacent_server <- function(id, output_dir) {
           label = ~search_label,
           popup = ~paste(
             "<b>ID PU:</b>", id_pu, "<br>",
+            "<b>ID Grup:</b>", id_group, "<br>",
             "<b>RTRW asal:</b>", RTRW, "<br>",
             "<b>RZWP3K asal:</b>", RZWP3K, "<br>",
-            "<b>Rekomendasi:</b>", recommendation, "<br>",
+            "<b>Alternatif:</b>", recommendation, "<br>",
             "<b>RTRW baru:</b>", RTRW_new, "<br>",
             "<b>RZWP3K baru:</b>", RZWP3K_new, "<br>",
             "<b>Indeks integrasi aktual:</b>", round(idx_padan, 3), "<br>",
@@ -1112,7 +1070,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           position = "bottomright",
           pal = pal,
           values = ~recommendation,
-          title = "Rekomendasi",
+          title = "Alternatif",
           opacity = 0.7
         )
     })
@@ -1131,7 +1089,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         rv$analysis_result <- NULL
         rv$gpkg_path       <- NULL
         rv$xlsx_path       <- NULL
-        rv$log_messages    <- if (!is.null(rv$final_log)) rv$final_log else "Siap untuk analisis rekomendasi."
+        rv$log_messages    <- if (!is.null(rv$final_log)) rv$final_log else "Siap untuk penyusunan alternatif."
       }
     })
     
@@ -1157,7 +1115,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
       
       popup_text <- paste0(
         "<b>ID PU:</b> ", selected_polygon$id_pu[1], "<br>",
-        "<b>Rekomendasi:</b> ", selected_polygon$recommendation[1], "<br>",
+        "<b>ID Grup:</b> ", selected_polygon$id_group[1], "<br>",
+        "<b>Alternatif:</b> ", selected_polygon$recommendation[1], "<br>",
         "<b>RTRW baru:</b> ", selected_polygon$RTRW_new[1], "<br>",
         "<b>RZWP3K baru:</b> ", selected_polygon$RZWP3K_new[1]
       )
@@ -1188,28 +1147,30 @@ recommendation_adjacent_server <- function(id, output_dir) {
     # ── Shared result server: wires validation_log, dl_gpkg, dl_xlsx ──
     recom_adjacent_config <- list(
       map_color_col    = "recommendation",
-      map_title        = "Rekomendasi",
+      map_title        = "Alternatif",
       map_palette      = c("blue", "green", "orange", "red", "purple"),
       map_label_cols   = list(
         "ID PU"        = "id_pu",
+        "ID Grup"      = "id_group",
         "RTRW"         = "RTRW",
         "RZWP3K"       = "RZWP3K",
-        "Rekomendasi"  = "recommendation",
+        "Alternatif"  = "recommendation",
         "RTRW Baru"    = "RTRW_new",
         "RZWP3K Baru"  = "RZWP3K_new"
       ),
       table_cols       = c(
         "id_pu"              = "ID PU",
+        "id_group"           = "ID Grup",
         "RTRW"               = "RTRW Awal",
         "RZWP3K"             = "RZWP3K Awal",
-        "recommendation"     = "Rekomendasi",
+        "recommendation"     = "Alternatif",
         "RTRW_new"           = "RTRW Baru",
         "RZWP3K_new"         = "RZWP3K Baru",
         "idx_padan"          = "Indeks PADAN Awal",
         "idx_padan_new"      = "Indeks PADAN Baru",
         "idx_padan_delta"    = "Selisih Indeks PADAN",
         "actual_integration" = "Integrasi Aktual",
-        "recom_integration"  = "Integrasi Hasil Rekomendasi"
+        "recom_integration"  = "Integrasi Hasil Alternatif"
       ),
       table_round_cols = c(
         "Indeks PADAN Awal", "Indeks PADAN Baru", "Selisih Indeks PADAN"

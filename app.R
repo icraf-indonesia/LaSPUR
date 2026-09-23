@@ -121,9 +121,9 @@ module_dir_map <- list(
   padu_ki                 = "Analisis PADU-KI",
   padu_combine            = "Analisis PADU-Kombinasi",
   padan                   = "Analisis PADAN",
-  recommendation_overlaps = "Analisis Penyusunan Alternatif",
-  recommendation_adjacent = "Analisis Penyusunan Alternatif",
-  reconcile               = "Analisis Rekonsiliasi"
+  recommendation_overlaps = "Penyusunan Alternatif",
+  recommendation_adjacent = "Penyusunan Alternatif",
+  reconcile               = "Rekonsiliasi"
 )
 
 report_module_config <- list(

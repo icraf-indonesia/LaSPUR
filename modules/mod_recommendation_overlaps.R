@@ -120,14 +120,14 @@ recommendation_overlaps_ui <- function(id) {
             ),
             
             accordion_panel(
-              title = "Langkah 2 — Menentukan Kawasan Alternatif",
+              title = "Langkah 2 — Menentukan Opsi Alternatif",
               value = "step2",
               icon = tags$i(class = "bi bi-signpost-split-fill"),
               uiOutput(ns("step2_ui"))
             ),
             
             accordion_panel(
-              title = "Langkah 3 — Menentukan Rekomendasi",
+              title = "Langkah 3 — Menentukan Alternatif",
               value = "step3",
               icon = tags$i(class = "bi bi-check2-circle"),
               uiOutput(ns("step3_ui"))
@@ -145,16 +145,13 @@ recommendation_overlaps_ui <- function(id) {
           uiOutput(ns("status_box")),
           
           hr(),
-          
+
           navset_tab(
             nav_panel(
               "Visualisasi Hasil",
               leafletOutput(ns("recommendation_map"), height = "450px"),
               hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
-              div(
-                style = "max-height: 500px; overflow: auto;",
-                uiOutput(ns("table_accordion"))
-              )
+              DT::DTOutput(ns("final_table"))
             ),
             nav_panel(
               "Log",
@@ -402,7 +399,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Memuat matriks serasi...")
           rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
           
-          out_dir_step2 <- file.path(output_dir())
+          out_dir_step2 <- file.path(output_dir(), "Penyusunan Alternatif")
           dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
           
           incProgress(0.4, detail = "Memproses opsi alternatif...")
@@ -419,8 +416,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
           if (!file.exists(output_path)) {
             stop("File template tidak ditemukan setelah pembuatan.")
           }
-          
           rv$alt_template_path <- output_path
+          
           showNotification("Template alternatif zona berhasil dibuat.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           
@@ -566,7 +563,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
         div(
           style = "display: flex; gap: 8px; flex-wrap: wrap;",
           actionButton(ns("btn_run_final"),
-                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Buat Rekomendasi"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis Alternatif"),
                        class = "btn-success btn-sm")
         ),
         .step_nav(ns, back_id = "btn_back_3", next_id = NULL)
@@ -589,7 +586,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
       req(rv$idx_padan_map_alt, input$rtrw_priority_file, input$rzwp3k_priority_file)
       
       rv$final_result <- NULL
-      withProgress(message = "Membuat Rekomendasi Tumpang Tindih", value = 0, {
+      withProgress(message = "Membuat Alternatif Tumpang Tindih", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Memuat tabel acuan pola...")
           rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
@@ -622,11 +619,11 @@ recommendation_overlaps_server <- function(id, output_dir) {
             dplyr::mutate(
               recommendation = dplyr::case_when(
                 is.na(RTRW) | is.na(RZWP3K) | is.na(idx_serasi) | is.na(idx_padu_final) ~ NA_character_,
-                RTRW %in% priority_rtrw ~ "",
-                RZWP3K %in% priority_rzwp3k ~ "Ubah_RTRW",
+                RTRW %in% priority_rtrw ~ "Tetap/Koordinasi",
+                RZWP3K %in% priority_rzwp3k ~ "Ubah RTRW",
                 idx_serasi >= threshold_serasi ~ "Koordinasi",
-                idx_padu_final >= threshold_padu ~ "Ubah_RZWP3K",
-                idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah_RTRW"
+                idx_padu_final >= threshold_padu ~ "Ubah RZWP3K",
+                idx_serasi < threshold_serasi & idx_padu_final < threshold_padu ~ "Ubah RTRW"
               )
             )
           
@@ -637,12 +634,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
               decision = dplyr::case_when(
                 is.na(recommendation) | is.na(idx_padan_rzwp3k_alt) | is.na(idx_padan) | 
                   is.na(alt_RZWP3K) | is.na(idx_padan_rtrw_alt) | is.na(alt_RTRW) ~ NA_character_,
-                recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
+                recommendation == "Ubah RZWP3K" & idx_padan_rzwp3k_alt > idx_padan ~ 
                   paste("Ubah RZWP3K ke", alt_RZWP3K),
-                recommendation == "Ubah_RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
-                recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
+                recommendation == "Ubah RZWP3K" & idx_padan_rzwp3k_alt <= idx_padan ~ "Tetap/Koordinasi",
+                recommendation == "Ubah RTRW" & idx_padan_rtrw_alt > idx_padan ~ 
                   paste("Ubah RTRW ke", alt_RTRW),
-                recommendation == "Ubah_RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
+                recommendation == "Ubah RTRW" & idx_padan_rtrw_alt <= idx_padan ~ "Tetap/Koordinasi",
                 TRUE ~ "Tetap/Koordinasi"
               )
             )
@@ -659,15 +656,24 @@ recommendation_overlaps_server <- function(id, output_dir) {
             )
           
           incProgress(0.8, detail = "Menyimpan hasil ke disk...")
-          out_gpkg <- file.path(output_dir(), "idx_padan_overlaps_recommendation.gpkg")
-          out_xlsx <- file.path(output_dir(), "idx_padan_overlaps_recommendation.xlsx")
+          
+          recom_overlaps_dir <- file.path(output_dir(), "Penyusunan Alternatif")
+          if (!dir.exists(recom_overlaps_dir)) {
+            dir.create(recom_overlaps_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          if (!dir.exists(recom_overlaps_dir)) {
+            stop("Tidak dapat membuat atau mengakses direktori: ", recom_overlaps_dir)
+          }
+          
+          out_gpkg <- file.path(recom_overlaps_dir, "idx_padan_overlaps_recommendation.gpkg")
+          out_xlsx <- file.path(recom_overlaps_dir, "idx_padan_overlaps_recommendation.xlsx")
           
           sf::st_write(df, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(sf::st_drop_geometry(df), out_xlsx)
           
           log_lines <- c(
             character(0),
-            "Ringkasan rekomendasi (langkah pertama):",
+            "Ringkasan alternatif (langkah pertama):",
             capture.output(print(table(df$recommendation, useNA = "ifany"))),
             "",
             "Ringkasan keputusan akhir:",
@@ -699,9 +705,30 @@ recommendation_overlaps_server <- function(id, output_dir) {
               idx_alternative_overlaps_table = sf::st_drop_geometry(df)
             )
           )
+          
+          log_dir <- file.path(recom_overlaps_dir, "log")
+          if (!dir.exists(log_dir)) {
+            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          }
+          log_path <- file.path(log_dir, "idx_padan_overlaps_recommendation.rda")
+          if (dir.exists(log_dir)) {
+            tryCatch({
+              inputs <- out$inputs
+              save(inputs, file = log_path)
+            }, error = function(e) warning("Gagal menulis file log: ", e$message))
+          }
+          
           session$userData$module_results$recommendation_overlaps <- out
+          
+          idx_padan_recom <- plot_categorical_map(
+            map      = df,
+            title    = "Peta Opsi Alternatif Kasus Tumpang Tindih",
+            column   = "recommendation",         
+            legend   = "Opsi Alternatif",
+            filepath = file.path(log_dir, "peta_opsi_alternatif_tumpang_tindih.png")
+          )
 
-          showNotification("Berhasil! File rekomendasi telah disimpan.", type = "message")
+          showNotification("Berhasil! Hasil analisis alternatif telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
           
         }, error = function(e) {
@@ -731,73 +758,12 @@ recommendation_overlaps_server <- function(id, output_dir) {
       }
     })
     
-    # Table accordion
-    output$table_accordion <- renderUI({
-      panels <- list()
-      
-      if (!is.null(rv$alt_status) && rv$alt_status$ok) {
-        panels <- c(panels, list(
-          accordion_panel(
-            title = "Alternatif Zona (Pratinjau)",
-            value = "preview",
-            icon = tags$i(class = "bi bi-eye"),
-            DT::DTOutput(ns("alt_preview_table"))
-          )
-        ))
-      }
-      
-      if (!is.null(rv$final_result)) {
-        panels <- c(panels, list(
-          accordion_panel(
-            title = "Rekomendasi Akhir",
-            value = "final",
-            icon = tags$i(class = "bi bi-check2-circle"),
-            div(style = "max-height: 400px; overflow: auto;",
-                DT::DTOutput(ns("final_table")))  
-          )
-        ))
-      }
-      
-      if (length(panels) == 0) {
-        return(tags$p("Belum ada tabel untuk ditampilkan."))
-      }
-      
-      accordion(
-        id = ns("table_accordion_widget"),
-        multiple = TRUE,
-        !!!panels
-      )
-    })
-    
-    output$alt_preview_table <- DT::renderDT({
-      req(rv$alt_status, rv$alt_status$ok)
-      df_zone_alt <- rv$alt_status$preview
-      
-      df_zone_alt_subset <- df_zone_alt[, c("id_pu", "RTRW", "RZWP3K", "area_ha", "admin", "idx_serasi", "alt_RTRW", "alt_RZWP3K")]
-      colnames(df_zone_alt_subset) <- c("ID_PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI", "RTRW Alternatif Terpilih", "RZWP3K Alternatif Terpilih")
-      
-      DT::datatable(
-        df_zone_alt_subset,
-        options = list(
-          pageLength = 10,
-          scrollX = TRUE,
-          scrollY = "400px",
-          dom = 'Bfrtip'
-        ),
-        rownames = FALSE,
-        class = "display compact stripe hover"
-      ) %>%
-        DT::formatRound(
-          columns = c("Luas (ha)", "Indeks SERASI"),  
-          digits = 2
-        )
-    })
-    
+    # Table render
     output$final_table <- DT::renderDT({
       req(rv$final_result)
       df_final <- rv$final_result$table
       df_final_subset <- df_final[, c("id_pu", "RTRW", "RZWP3K", "area_ha", "admin", "idx_serasi", "idx_padu_final", "alt_RTRW", "alt_RZWP3K", "idx_serasi_rtrw_alt", "idx_serasi_rzwp3k_alt", "idx_padan_rtrw_alt", "idx_padan_rzwp3k_alt", "recommendation", "decision", "idx_padan_final")]
-      colnames(df_final_subset) <- c("ID_PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "RTRW Alternatif", "RZWP3K Alternatif", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Opsi Rekomendasi", "Rekomendasi Keputusan", "Indeks PADAN Akhir")
+      colnames(df_final_subset) <- c("ID PU", "RTRW", "RZWP3K", "Luas (ha)", "Administrasi", "Indeks SERASI Awal", "Indeks PADU Kombinasi", "RTRW Alternatif", "RZWP3K Alternatif", "Indeks SERASI RTRW Alternatif", "Indeks SERASI RZWP3K Alternatif", "Indeks PADAN RTRW Alternatif", "Indeks PADAN RZWP3K Alternatif", "Opsi Alternatif", "Keputusan Alternatif", "Indeks PADAN Akhir")
       
       DT::datatable(
         df_final_subset,
@@ -846,11 +812,11 @@ recommendation_overlaps_server <- function(id, output_dir) {
                  leaflet::addControl("Kolom yang diperlukan tidak ditemukan. Periksa Log.", position = "topright"))
       }
       
-      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Rekomendasi: ", map_sf$recommendation)
+      map_sf$search_label <- paste0("ID PU: ", map_sf$id_pu, " | ", map_sf$RTRW, " | ", map_sf$RZWP3K, " | Alternatif: ", map_sf$recommendation)
       
       
       pal <- leaflet::colorFactor(
-        palette = c("blue", "green", "orange", "red", "purple", "grey"),
+        palette = c("blue", "green", "orange", "red", "purple"),
         domain = unique(map_sf$recommendation),
         na.color = "grey"
       )
@@ -869,8 +835,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
             "<b>ID PU:</b>", id_pu, "<br>",
             "<b>RTRW asal:</b>", RTRW, "<br>",
             "<b>RZWP3K asal:</b>", RZWP3K, "<br>",
-            "<b>Alt RTRW:</b>", alt_RTRW, "<br>",
-            "<b>Alt RZWP3K:</b>", alt_RZWP3K, "<br>",
+            "<b>RTRW alternatif:</b>", alt_RTRW, "<br>",
+            "<b>RZWP3K alternatif:</b>", alt_RZWP3K, "<br>",
             "<b>Keputusan:</b>", decision, "<br>",
             "<b>Indeks PADAN asal:</b>", round(idx_padan, 3), "<br>",
             "<b>Indeks PADAN akhir:</b>", round(idx_padan_final, 3)
@@ -897,7 +863,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
           position = "bottomright",
           pal = pal,
           values = ~recommendation,
-          title = "Rekomendasi Awal",
+          title = "Alternatif Awal",
           opacity = 0.7
         )
     })
@@ -916,7 +882,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
         rv$analysis_result <- NULL
         rv$gpkg_path       <- NULL
         rv$xlsx_path       <- NULL
-        rv$log_messages    <- if (!is.null(rv$final_log)) rv$final_log else "Siap untuk analisis rekomendasi."
+        rv$log_messages    <- if (!is.null(rv$final_log)) rv$final_log else "Siap untuk penyusunan alternatif."
       }
     })
     
@@ -944,7 +910,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
         "<b>ID PU:</b> ", selected_polygon$id_pu[1], "<br>",
         "<b>RTRW asal:</b> ", selected_polygon$RTRW[1], "<br>",
         "<b>RZWP3K asal:</b> ", selected_polygon$RZWP3K[1], "<br>",
-        "<b>Rekomendasi:</b> ", selected_polygon$recommendation[1], "<br>",
+        "<b>Alternatif:</b> ", selected_polygon$recommendation[1], "<br>",
         "<b>Keputusan:</b> ", selected_polygon$decision[1]
       )
       
@@ -974,13 +940,13 @@ recommendation_overlaps_server <- function(id, output_dir) {
     # ── Shared result server: wires validation_log, dl_gpkg, dl_xlsx ──
     recom_overlaps_config <- list(
       map_color_col  = "recommendation",
-      map_title      = "Rekomendasi Awal",
+      map_title      = "Alternatif Awal",
       map_palette    = c("blue", "green", "orange", "red", "purple", "grey"),
       map_label_cols = list(
         "ID PU"        = "id_pu",
         "RTRW"         = "RTRW",
         "RZWP3K"       = "RZWP3K",
-        "Rekomendasi"  = "recommendation",
+        "Alternatif"  = "recommendation",
         "Keputusan"    = "decision"
       ),
       table_cols     = c(
@@ -993,8 +959,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
         "idx_padu_final"    = "Indeks PADU Kombinasi",
         "alt_RTRW"          = "RTRW Alternatif",
         "alt_RZWP3K"        = "RZWP3K Alternatif",
-        "recommendation"    = "Opsi Rekomendasi",
-        "decision"          = "Rekomendasi Keputusan",
+        "recommendation"    = "Opsi Alternatif",
+        "decision"          = "Keputusan Alternatif",
         "idx_padan_final"   = "Indeks PADAN Akhir"
       ),
       table_round_cols = c(
