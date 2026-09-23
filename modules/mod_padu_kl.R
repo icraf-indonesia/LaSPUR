@@ -5,90 +5,50 @@
 
 source("R/functions.R")
 source("R/helpers.R")
+source("R/shared_inputs.R")
 
-# ── UI ──────────────────────────────────────────────────────────
 padu_kl_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(
       style = "margin-bottom: 20px;",
       h4("2.3 PADU-KL (Kawasan Lindung)", style = "margin: 0; font-weight: 700;"),
-      tags$p(
-        "Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung pada bentang darat dan laut untuk menghasilkan nilai indeks PADU-KL.",
-        style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
-      )
+      tags$p("Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung pada bentang darat dan laut untuk menghasilkan nilai indeks PADU-KL.",
+             style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;")
     ),
-    
     fluidRow(
       class = "g-3",
-      
-      # ── Left column: Input & Parameter (1/3) ────────────────
       column(
         width = 4,
         card(
           card_header("Input & Parameter"),
-          
-          tags$p(tags$i(class = "bi bi-info-circle me-1"),
-                 "Peta Indeks SERASI (.gpkg atau .shp)",
-                 style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Output dari modul 'Identifikasi Konflik Spasial' (idx_serasi.gpkg). Menerima .gpkg atau .shp."
-          ),
-          fileInput(ns("idx_serasi_file"),
-                    label    = NULL,
-                    accept   = c(".gpkg", ".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                    multiple = TRUE),
-          
-          hr(),
-          
+          uiOutput(ns("serasi_ui_container")),
           tags$p(tags$i(class = "bi bi-shield-check me-1"),
                  "Peta Kawasan Lindung (.shp)",
                  style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Layer vektor kawasan lindung/konservasi yang akan ditumpangtindihkan dengan unit perencanaan."
-          ),
-          fileInput(ns("protected_area_file"),
-                    label    = NULL,
-                    accept   = c(".shp", ".dbf", ".prj", ".shx", ".cpg"),
-                    multiple = TRUE),
-          
+          tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                     "Layer vektor kawasan lindung/konservasi yang akan ditumpangtindihkan dengan unit perencanaan."),
+          fileInput(ns("protected_area_file"), label = NULL,
+                    accept = c(".shp", ".dbf", ".prj", ".shx", ".cpg"), multiple = TRUE),
           hr(),
-          
-          # ── Pengaturan lanjutan (collapsible) ──────────────
-          accordion(
-            accordion_panel(
-              title = "Pengaturan lanjutan",
-              icon = icon("gear"),
-              open = FALSE,
-              checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
-              numericInput(ns("workers"), "Jumlah kanal komputasi (cores)", value = 2, min = 1, step = 1)
-            )
-          ),
-          
+          accordion(accordion_panel("Pengaturan lanjutan", icon = icon("gear"), open = FALSE,
+                                    checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
+                                    numericInput(ns("workers"), "Jumlah kanal komputasi (cores)",
+                                                 value = 2, min = 1, step = 1))),
           hr(),
-          
-          div(
-            style = "display: flex; gap: 8px; flex-wrap: wrap;",
-            actionButton(ns("btn_run"),
-                         tagList(tags$i(class = "bi bi-play-fill me-1"),
-                                 "Lakukan Analisis PADU-KL"),
-                         class = "btn-success btn-sm")
-          )
+          div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              actionButton(ns("btn_run"),
+                           tagList(tags$i(class = "bi bi-play-fill me-1"),
+                                   "Lakukan Analisis PADU-KL"),
+                           class = "btn-success btn-sm"))
         )
       ),
-      
-      # ── Right column: Output & Hasil (2/3) ──────────────────
       column(
         width = 8,
         card(
           card_header("Output & Hasil"),
-          
           uiOutput(ns("status_box")),
-          
           hr(),
-          
           create_result_ui(ns)
         )
       )
@@ -97,11 +57,14 @@ padu_kl_ui <- function(id) {
 }
 
 # ── Server ──────────────────────────────────────────────────────
+serasi_in_placeholder <- function() NULL
+
 padu_kl_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # ── Reactive values ──────────────────────────────────────────
+    serasi_in <- serasi_input(input, output, session, output_dir)
+    
     rv <- reactiveValues(
       analysis_result = NULL,
       gpkg_path = NULL,
@@ -109,13 +72,10 @@ padu_kl_server <- function(id, output_dir) {
       log_messages = ""
     )
     
-    # ── Robust helper to extract shapefile path ────────────────
     extract_shp_path <- function(file_input) {
       shp_row <- file_input[grepl("\\.shp$", file_input$name, ignore.case = TRUE), ]
-      validate(need(
-        nrow(shp_row) == 1,
-        "Harap unggah semua komponen shapefile (.shp, .dbf, .prj, .shx)"
-      ))
+      validate(need(nrow(shp_row) == 1,
+                    "Harap unggah semua komponen shapefile (.shp, .dbf, .prj, .shx)"))
       base_name <- tools::file_path_sans_ext(shp_row$name)
       temp_dir <- file.path(tempdir(), paste0("shp_", sample(1e9, 1)))
       dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
@@ -127,34 +87,23 @@ padu_kl_server <- function(id, output_dir) {
       file.path(temp_dir, paste0(base_name, ".shp"))
     }
     
-    # ── Helper to extract vector path (gpkg or shp) ─────────────
-    extract_vector_path <- function(file_input) {
-      gpkg_row <- file_input[grepl("\\.gpkg$", file_input$name, ignore.case = TRUE), ]
-      if (nrow(gpkg_row) == 1) return(gpkg_row$datapath)
-      extract_shp_path(file_input)
-    }
-    
-    # ── Log helper ──────────────────────────────────────────────
     append_log <- function(msg) {
       rv$log_messages <- paste0(rv$log_messages, format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
     }
     
-    # ── Run analysis ──────────────────────────────────────────
+    output$serasi_ui_container <- renderUI({ serasi_in$ui_block() })
+    outputOptions(output, "serasi_ui_container", suspendWhenHidden = FALSE)
+    
     observeEvent(input$btn_run, {
-      
-      # Check output directory 
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+                         type = "error", duration = 5)
         return()
       }
       
-      req(input$idx_serasi_file, input$protected_area_file)
+      pu_raw <- serasi_in$idx_serasi_map()
+      req(pu_raw, input$protected_area_file)
       
-      # Reset previous results
       rv$analysis_result <- NULL
       rv$gpkg_path <- NULL
       rv$xlsx_path <- NULL
@@ -163,29 +112,20 @@ padu_kl_server <- function(id, output_dir) {
       append_log("Memulai analisis PADU-KL...")
       
       withProgress(message = "Menjalankan Analisis PADU-KL", value = 0, {
-        
         tryCatch({
-          # Step 1: Load data (progress 10%)
           incProgress(0.1, detail = "Memuat data...")
-          pu_raw <- load_and_validate_shapefile(extract_vector_path(input$idx_serasi_file))
-          pu_raw <- ensure_geometry_name(pu_raw)  
           
-          # Conditional dissolve idx_serasi_map
           if ("length" %in% colnames(pu_raw)) {
             pu <- dissolve_id_pu(pu_raw)
           } else {
-            pu <- pu_raw  
+            pu <- pu_raw
           }
           
           overlay <- load_and_validate_shapefile(extract_shp_path(input$protected_area_file))
-          overlay <- ensure_geometry_name(overlay)  
-          
+          overlay <- ensure_geometry_name(overlay)
           append_log("Data berhasil dimuat.")
           
-          # Step 2: Calculate overlay percentage (progress 20% → 80%)
           incProgress(0.1, detail = "Menghitung tumpang tindih kawasan lindung...")
-          append_log("Menghitung persentase tumpang tindih dengan Kawasan Lindung...")
-          
           idx_padu_kl_map <- calculate_overlay_pct(
             pu           = pu,
             overlay_area = overlay,
@@ -198,21 +138,13 @@ padu_kl_server <- function(id, output_dir) {
           incProgress(0.6, detail = "Pemrosesan selesai...")
           append_log("Perhitungan persentase selesai.")
           
-          # Step 3: Save results (progress 90%)
           incProgress(0.1, detail = "Menyimpan hasil...")
-          
           padu_kl_dir <- file.path(output_dir(), "Analisis PADU-KL")
-          if (!dir.exists(padu_kl_dir)) {
+          if (!dir.exists(padu_kl_dir))
             dir.create(padu_kl_dir, recursive = TRUE, showWarnings = FALSE)
-          }
-          
-          if (!dir.exists(padu_kl_dir)) {
-            stop("Tidak dapat membuat atau mengakses direktori: ", padu_kl_dir)
-          }
           
           gpkg_path <- file.path(padu_kl_dir, "idx_padu_kl.gpkg")
           xlsx_path <- file.path(padu_kl_dir, "idx_padu_kl.xlsx")
-          
           sf::st_write(idx_padu_kl_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
           openxlsx::write.xlsx(res_table, xlsx_path)
@@ -221,123 +153,84 @@ padu_kl_server <- function(id, output_dir) {
           rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_kl_map, table = res_table)
           
-          # ─── Store result for report generation ───
           out <- list(
             inputs = list(
-              start_time = Sys.time(),
-              idx_serasi_path = input$idx_serasi_file,
-              protected_area_path = input$protected_area_file, 
-              output_dir = output_dir()
+              start_time             = Sys.time(),
+              idx_serasi_path        = serasi_in$filename(),
+              idx_serasi_source      = serasi_in$source(),
+              serasi_source_name     = serasi_in$filename(),
+              serasi_source_hash     = serasi_in$hash(),
+              protected_area_path    = input$protected_area_file,
+              output_dir             = output_dir()
             ),
             result = list(
-              idx_serasi_map = pu,
-              protected_area = overlay,
-              idx_padu_kl_map = idx_padu_kl_map,
-              idx_padu_kl_table = res_table
+              idx_serasi_map     = pu,
+              protected_area     = overlay,
+              idx_padu_kl_map    = idx_padu_kl_map,
+              idx_padu_kl_table  = res_table
             )
           )
           
-          # Export log
           log_dir <- file.path(padu_kl_dir, "log")
-          if (!dir.exists(log_dir)) {
+          if (!dir.exists(log_dir))
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
-          }
-          log_path <- file.path(log_dir, "idx_padu_kl_log.rda")
-          if (dir.exists(log_dir)) {
-            tryCatch({
-              inputs <- out$inputs
-              save(inputs, file = log_path)
-            }, error = function(e) {
-              warning("Gagal menulis file log: ", e$message)
-            })
-          } else {
-            warning("Direktori log tidak tersedia, lewati penulisan log.")
-          }
+          tryCatch({
+            inputs <- out$inputs
+            save(inputs, file = file.path(log_dir, "idx_padu_kl_log.rda"))
+          }, error = function(e) warning("Gagal menulis log: ", e$message))
           
-          # Store in shared environment
           session$userData$module_results$padu_kl <- out
           
-          # Export static maps 
-          idx_padu_kl_viz <- plot_continuous_map(
-            map      = idx_padu_kl_map,
-            column   = "idx_padu_kl",         
-            title    = "Peta Indeks PADU-KL",
-            legend   = "Indeks PADU-KL",
-            low      = "red",
-            high     = "lightgreen",
-            filepath = file.path(log_dir, "idx_padu_kl.png")
-          )
+          plot_continuous_map(map = idx_padu_kl_map, column = "idx_padu_kl",
+                              title = "Peta Indeks PADU-KL", legend = "Indeks PADU-KL",
+                              low = "red", high = "lightgreen",
+                              filepath = file.path(log_dir, "idx_padu_kl.png"))
+          plot_categorical_map(map = overlay, title = "Peta Kawasan Lindung", column = NA,
+                               filepath = file.path(log_dir, "penutup_lahan.png"))
           
-          protected_viz <- plot_categorical_map(
-            map      = overlay,
-            title    = "Peta Kawasan Lindung",
-            column   = NA,  
-            filepath = file.path(log_dir, "penutup_lahan.png")
-          )
-          
-          append_log(paste("Peta disimpan →", gpkg_path))
-          append_log(paste("Tabel disimpan →", xlsx_path))
+          append_log(paste("Peta disimpan \u2192", gpkg_path))
+          append_log(paste("Tabel disimpan \u2192", xlsx_path))
           append_log("Analisis PADU-KL berhasil diselesaikan.")
           
           incProgress(0.1, detail = "Selesai!")
           showNotification(paste("Analisis selesai. Hasil disimpan ke", gpkg_path),
                            type = "message", duration = 5)
-          
         }, error = function(e) {
           msg <- conditionMessage(e)
-          if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
+          if (is.null(msg) || msg == "") msg <- "Error tidak diketahui"
           append_log(paste("ERROR:", msg))
           showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
         })
-        
-      }) 
+      })
     })
     
-    # ── Status box ─────────────────────────────────────────────
     output$status_box <- renderUI({
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
-            tags$i(class = "bi bi-check-circle me-2"),
-            "Analisis selesai.")
-      } else if (!is.null(input$idx_serasi_file) && !is.null(input$protected_area_file)) {
+            tags$i(class = "bi bi-check-circle me-2"), "Analisis selesai.")
+      } else if (!is.null(serasi_in$idx_serasi_map()) && !is.null(input$protected_area_file)) {
         div(class = "alert alert-secondary mb-0",
-            tags$i(class = "bi bi-circle me-2"),
-            "Siap menjalankan analisis.")
+            tags$i(class = "bi bi-circle me-2"), "Siap menjalankan analisis.")
       } else {
         div(class = "alert alert-secondary mb-0",
-            tags$i(class = "bi bi-circle me-2"),
-            "Unggah file dan klik Jalankan Analisis.")
+            tags$i(class = "bi bi-circle me-2"), "Unggah file dan klik Jalankan Analisis.")
       }
     })
     
-    # ── Result Visualization ───────────────────────────────────
     padu_kl_config <- list(
       map_color_col = "idx_padu_kl",
-      map_title = "Indeks PADU-KL",
-      map_palette = "RdYlGn",
-      map_label_cols = c(
-        "ID PU" = "id_pu",
-        "RTRW" = "RTRW",
-        "RZWP3K" = "RZWP3K",
-        "Indeks PADU-KL" = "idx_padu_kl"
-      ),
+      map_title     = "Indeks PADU-KL",
+      map_palette   = "RdYlGn",
+      map_label_cols = c("ID PU" = "id_pu", "RTRW" = "RTRW",
+                         "RZWP3K" = "RZWP3K", "Indeks PADU-KL" = "idx_padu_kl"),
       table_cols = c(
-        "id_pu" = "ID PU",
-        "RTRW" = "RTRW",
-        "RZWP3K" = "RZWP3K",
-        "admin" = "Administrasi",
-        "area_ha" = "Luas (ha)",
+        "id_pu" = "ID PU", "RTRW" = "RTRW", "RZWP3K" = "RZWP3K",
+        "admin" = "Administrasi", "area_ha" = "Luas (ha)",
         "protected_ha" = "Kawasan Lindung (ha)",
-        "idx_padu_kl" = "Indeks PADU-KL"
-      ),
-      table_round_cols = c(
-        "Luas (ha)",
-        "Kawasan Lindung (ha)",
-        "Indeks PADU-KL"
-      )
+        "idx_padu_kl" = "Indeks PADU-KL"),
+      table_round_cols = c("Luas (ha)", "Kawasan Lindung (ha)", "Indeks PADU-KL")
     )
     
     render_result_server(input, output, session, rv, padu_kl_config)
-    
   })
 }

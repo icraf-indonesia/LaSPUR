@@ -4,6 +4,7 @@
 # ============================================================
 
 source("R/helpers.R")
+source("R/shared_inputs.R")
 
 plan(multisession)
 options(shiny.maxRequestSize = 2000 * 1024^2)
@@ -963,6 +964,7 @@ server <- function(input, output, session) {
   report_path    <- reactiveVal(NULL)
   
   session$userData$active_path <- active_path
+  session$userData$selected_serasi <- reactiveVal(NULL)
   
   output$active_path_indicator <- renderUI({
     path <- active_path()

@@ -5,6 +5,7 @@
 
 source("R/functions.R")
 source("R/helpers.R")
+source("R/shared_inputs.R")
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -20,10 +21,19 @@ PADU_MODULE_DIRS <- c(
   ki  = "Analisis PADU-KI"
 )
 
+PADU_LABELS <- c(
+  ke  = "PADU-KE",
+  hs  = "PADU-HS",
+  kl  = "PADU-KL",
+  kh  = "PADU-KH",
+  rtp = "PADU-RTp",
+  se  = "PADU-SE",
+  ki  = "PADU-KI"
+)
+
 discover_padu_files <- function(base_dir) {
   if (is.null(base_dir) || !nzchar(base_dir) || !dir.exists(base_dir)) {
-    return(list(found = character(0),
-                found_keys = character(0),
+    return(list(found = character(0), found_keys = character(0),
                 missing = names(PADU_MODULE_DIRS)))
   }
   found <- character(0); found_keys <- character(0); missing <- character(0)
@@ -61,13 +71,11 @@ padu_combine_ui <- function(id) {
         card(
           card_header("Input & parameter"),
           
-          div(
-            class = "laspur-fileinput-with-bar",
-            fileInput(ns("idx_serasi_file"),
-                      label  = "Peta indeks SERASI (.gpkg)",
-                      accept = ".gpkg"),
-            uiOutput(ns("loaded_file_bar"))
-          ),
+          tags$p(tags$i(class = "bi bi-info-circle me-1"),
+                 "Peta indeks SERASI (.gpkg)",
+                 style = "font-weight: 600; margin-bottom: 4px;"),
+          div(class = "laspur-fileinput-with-bar",
+              uiOutput(ns("serasi_ui_container"))),
           
           hr(),
           
@@ -83,43 +91,34 @@ padu_combine_ui <- function(id) {
               "Pilih folder yang berisi file idx_padu_*.gpkg",
               icon  = icon("folder-open"),
               class = "btn-light w-100",
-              style = paste(
-                "background-color: #FFFFFF;",
-                "border: 1px solid #E2E8F0;",
-                "color: #475569;",
-                "font-weight: 600;",
-                "border-radius: 8px;",
-                "text-align: left;",
-                "box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
-              )
+              style = paste("background-color: #FFFFFF;",
+                            "border: 1px solid #E2E8F0;",
+                            "color: #475569;", "font-weight: 600;",
+                            "border-radius: 8px;", "text-align: left;",
+                            "box-shadow: 0 1px 2px rgba(0,0,0,0.05);")
             ),
             uiOutput(ns("padu_source_bar"))
           ),
-          
           uiOutput(ns("padu_discovery_feedback")),
+          uiOutput(ns("serasi_consistency_banner")),
           
           hr(),
           
           tags$p(tags$i(class = "bi bi-table me-1"),
                  "Tabel bobot PADU (.xlsx) (opsional)",
                  style = "font-weight: 600; margin-bottom: 4px;"),
-          tags$small(
-            style = "color: #6c757d; display: block; margin-bottom: 8px;",
-            "Jika tidak diunggah, bobot seragam (1/n) akan digunakan secara otomatis."
-          ),
+          tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                     "Jika tidak diunggah, bobot seragam (1/n) akan digunakan secara otomatis."),
           fileInput(ns("weight_table_file"), label = NULL, accept = ".xlsx"),
           
           hr(),
-          
           uiOutput(ns("output_dir_warning")),
           
-          div(
-            style = "display: flex; gap: 8px; flex-wrap: wrap;",
-            actionButton(ns("btn_run"),
-                         tagList(tags$i(class = "bi bi-play-fill me-1"),
-                                 "Lakukan penggabungan analisis PADU"),
-                         class = "btn-success btn-sm")
-          )
+          div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              actionButton(ns("btn_run"),
+                           tagList(tags$i(class = "bi bi-play-fill me-1"),
+                                   "Lakukan penggabungan analisis PADU"),
+                           class = "btn-success btn-sm"))
         )
       ),
       
@@ -142,98 +141,72 @@ padu_combine_server <- function(id, output_dir) {
     ns <- session$ns
     
     rv <- reactiveValues(
-      idx_serasi_source  = NULL,   
-      analysis_result    = NULL,
-      gpkg_path          = NULL,
-      xlsx_path          = NULL,
-      log_messages       = ""
+      analysis_result = NULL,
+      gpkg_path       = NULL,
+      xlsx_path       = NULL,
+      log_messages    = "",
+      excluded_padus  = character(0)
     )
     
-    # ── Folder picker for PADU source ────────────────────────
-    roots <- c(
-      Home    = path.expand("~"),
-      Project = normalizePath(".."),
-      shinyFiles::getVolumes()()
-    )
+    serasi_in <- serasi_input(input, output, session, output_dir,
+                              input_id = "idx_serasi_file",
+                              label    = "Peta indeks SERASI (.gpkg)")
     
+    output$serasi_ui_container <- renderUI({ serasi_in$ui_block() })
+    
+    # ── PADU folder discovery ───────────────────────────────
+    roots <- c(Home = path.expand("~"),
+               Project = normalizePath(".."),
+               shinyFiles::getVolumes()())
     manual_padu_dir <- reactiveVal(NULL)
-    
     shinyDirChoose(input, "btn_browse_padu", roots = roots, session = session)
-    
     observeEvent(input$btn_browse_padu, {
       path <- parseDirPath(roots, input$btn_browse_padu)
       if (length(path) > 0 && nzchar(path)) manual_padu_dir(as.character(path))
     }, ignoreInit = TRUE)
     
-    # ── PADU discovery ───────────────────────────────────────
     padu_discovery <- reactive({
       if (!is.null(manual_padu_dir())) {
         folder <- manual_padu_dir()
         files  <- if (dir.exists(folder)) {
           list.files(folder, pattern = "^idx_padu_.*\\.gpkg$", full.names = TRUE)
         } else character(0)
-        return(list(
-          files        = files,
-          source       = "manual",
-          source_label = folder,
-          missing      = character(0),
-          found_keys   = character(0)
-        ))
+        return(list(files = files, source = "manual",
+                    source_label = folder, missing = character(0),
+                    found_keys = character(0)))
       }
       disc <- discover_padu_files(output_dir())
-      list(
-        files        = disc$found,
-        source       = "auto",
-        source_label = "",
-        missing      = disc$missing,
-        found_keys   = disc$found_keys
-      )
+      list(files = disc$found, source = "auto", source_label = "",
+           missing = disc$missing, found_keys = disc$found_keys)
     })
     
-    # ── PADU source bar ──────────────────────
     output$padu_source_bar <- renderUI({
       disc <- padu_discovery()
       if (length(disc$files) == 0) return(NULL)
-      
       folder_display <- if (disc$source == "manual") {
         disc$source_label
       } else {
         out <- output_dir()
-        if (is.null(out) || !nzchar(out)) "" else normalizePath(out, winslash = "/", mustWork = FALSE)
+        if (is.null(out) || !nzchar(out)) "" else
+          normalizePath(out, winslash = "/", mustWork = FALSE)
       }
       if (!nzchar(folder_display)) return(NULL)
-      
-      txt <- folder_display
-      
       tags$div(
         class = "laspur-loaded-bar",
-        style = paste(
-          "height: 20px;",
-          "border-radius: 4px;",
-          "overflow: hidden;",
-          "background-color: #eef2f6;",
-          "width: 100%;",
-          "box-sizing: border-box;"
-        ),
+        style = paste("height: 20px;", "border-radius: 4px;",
+                      "overflow: hidden;", "background-color: #eef2f6;",
+                      "width: 100%;", "box-sizing: border-box;"),
         tags$div(
           class = "laspur-loaded-bar-fill",
           style = paste(
-            "width: 100%;",
-            "height: 20px;",
+            "width: 100%;", "height: 20px;",
             "background: linear-gradient(90deg, #1b75ba 0%, #3b92d1 100%);",
-            "color: #ffffff;",
-            "font-size: 0.72rem;",
-            "font-weight: 600;",
-            "letter-spacing: 0.2px;",
-            "line-height: 20px;",
-            "text-align: center;",
-            "white-space: nowrap;",
-            "overflow: hidden;",
-            "text-overflow: ellipsis;",
-            "padding: 0 8px;",
-            "box-sizing: border-box;"
-          ),
-          txt
+            "color: #ffffff;", "font-size: 0.72rem;", "font-weight: 600;",
+            "letter-spacing: 0.2px;", "line-height: 20px;",
+            "text-align: center;", "white-space: nowrap;",
+            "overflow: hidden;", "text-overflow: ellipsis;",
+            "padding: 0 8px;", "box-sizing: border-box;"),
+          folder_display
         )
       )
     })
@@ -243,32 +216,26 @@ padu_combine_server <- function(id, output_dir) {
       if (length(disc$files) == 0 && length(disc$missing) == 0) return(NULL)
       
       found_items <- if (length(disc$files) > 0) {
-        tags$ul(
-          style = "margin: 2px 0 2px 0; padding-left: 16px; font-size: 0.78rem;",
-          lapply(disc$files, function(f) {
-            tags$li(style = "color: #106665; line-height: 1.5;",
-                    icon("circle-check", style = "margin-right: 4px;"),
-                    paste0(basename(dirname(f)), " \u2192 ", basename(f)))
-          })
-        )
+        tags$ul(style = "margin: 2px 0 2px 0; padding-left: 16px; font-size: 0.78rem;",
+                lapply(disc$files, function(f) {
+                  tags$li(style = "color: #106665; line-height: 1.5;",
+                          icon("circle-check", style = "margin-right: 4px;"),
+                          paste0(basename(dirname(f)), " \u2192 ", basename(f)))
+                }))
       } else NULL
       
       missing_items <- if (length(disc$missing) > 0) {
-        tags$ul(
-          style = "margin: 2px 0 0 0; padding-left: 16px; font-size: 0.78rem;",
-          lapply(disc$missing, function(k) {
-            tags$li(style = "color: #b45309; line-height: 1.5;",
-                    icon("triangle-exclamation", style = "margin-right: 4px;"),
-                    paste0("PADU-", toupper(k), " belum tersedia"))
-          })
-        )
+        tags$ul(style = "margin: 2px 0 0 0; padding-left: 16px; font-size: 0.78rem;",
+                lapply(disc$missing, function(k) {
+                  tags$li(style = "color: #b45309; line-height: 1.5;",
+                          icon("triangle-exclamation", style = "margin-right: 4px;"),
+                          paste0("PADU-", toupper(k), " belum tersedia"))
+                }))
       } else NULL
       
       header_label <- if (nzchar(disc$source_label)) {
         paste0("Modul PADU terdeteksi (", disc$source_label, ")")
-      } else {
-        "Modul PADU terdeteksi"
-      }
+      } else "Modul PADU terdeteksi"
       
       tags$div(
         style = paste("background-color: #F8FAFC; border: 1px solid #E2E8F0;",
@@ -276,215 +243,201 @@ padu_combine_server <- function(id, output_dir) {
         tags$div(style = paste("font-size: 0.72rem; font-weight: 700; color: #475569;",
                                "letter-spacing: 0.3px; margin-bottom: 2px;"),
                  header_label),
-        found_items,
-        missing_items
+        found_items, missing_items
       )
     })
     
-    # ── Auto-discovery: idx_serasi ───────────────────────────
-    active_path_val <- reactive({
-      ap <- tryCatch(session$userData$active_path, error = function(e) NULL)
-      if (is.null(ap)) return("")
-      if (is.function(ap)) return(tryCatch(ap(), error = function(e) ""))
-      as.character(ap)
-    })
-    
-    .detect_serasi_case <- function(map_data) {
-      cols <- names(map_data)
-      if ("stat_pu" %in% cols) return("overlap")
-      if ("length" %in% cols && "id_group" %in% cols) return("adjacent")
-      NA_character_
-    }
-    
-    discovered_serasi_key <- reactive({
-      ap <- active_path_val()
+    # ── Consistency checker ─────────────────────────────────
+    fingerprint_padu <- function(key) {
+      dir_name <- PADU_MODULE_DIRS[[key]]
+      gpkg <- file.path(output_dir(), dir_name, sprintf("idx_padu_%s.gpkg", key))
+      log_path <- file.path(output_dir(), dir_name, "log",
+                            sprintf("idx_padu_%s_log.rda", key))
       
-      serasi_res <- tryCatch(session$userData$module_results$serasi,
-                             error = function(e) NULL)
-      if (!is.null(serasi_res) &&
-          !is.null(serasi_res$result$idx_serasi_map) &&
-          inherits(serasi_res$result$idx_serasi_map, "sf")) {
-        case_in_session <- serasi_res$inputs$case %||% ""
-        if (!nzchar(ap) || identical(case_in_session, ap)) {
-          return(paste0("session|", case_in_session))
-        }
+      res <- tryCatch(
+        session$userData$module_results[[paste0("padu_", key)]],
+        error = function(e) NULL)
+      
+      src_name <- NULL; src_hash <- NULL
+      
+      if (!is.null(res) && !is.null(res$inputs)) {
+        src_name <- res$inputs$serasi_source_name
+        src_hash <- res$inputs$serasi_source_hash
       }
       
-      if (!is.null(output_dir()) && nzchar(output_dir())) {
-        target_files <- switch(ap,
-                               "overlap"  = c("idx_serasi_overlaps.gpkg"),
-                               "adjacent" = c("idx_serasi_adjacent.gpkg"),
-                               c("idx_serasi_overlaps.gpkg", "idx_serasi_adjacent.gpkg")
-        )
-        for (f in target_files) {
-          fp <- file.path(output_dir(), "Analisis SERASI", f)
-          if (file.exists(fp)) {
-            return(paste0("file|", f, "|", as.numeric(file.mtime(fp))))
+      if ((is.null(src_hash) || is.na(src_hash)) && file.exists(log_path)) {
+        tryCatch({
+          env <- new.env(parent = emptyenv())
+          load(log_path, envir = env)
+          if (exists("inputs", envir = env, inherits = FALSE)) {
+            inp <- get("inputs", envir = env, inherits = FALSE)
+            if (is.null(src_name) || is.na(src_name))
+              src_name <- inp$serasi_source_name
+            if (is.null(src_hash) || is.na(src_hash))
+              src_hash <- inp$serasi_source_hash
           }
-        }
-      }
-      "none"
-    })
-    
-    .load_serasi_from_discovery <- function() {
-      key <- discovered_serasi_key()
-      if (identical(key, "none")) {
-        rv$idx_serasi_source <- NULL
-      } else if (startsWith(key, "session|")) {
-        rv$idx_serasi_source <- "session"
-      } else {
-        rv$idx_serasi_source <- "file"
-      }
-      invisible(NULL)
-    }
-    
-    observeEvent(discovered_serasi_key(), {
-      if (identical(rv$idx_serasi_source, "manual")) return()
-      .load_serasi_from_discovery()
-    }, ignoreNULL = FALSE, ignoreInit = FALSE)
-    
-    output$loaded_file_bar <- renderUI({
-      key <- discovered_serasi_key()
-      fname <- "idx_serasi_overlaps.gpkg"
-      if (startsWith(key, "session|")) {
-        case <- sub("^session\\|", "", key)
-        fname <- if (identical(case, "adjacent")) "idx_serasi_adjacent.gpkg"
-        else                              "idx_serasi_overlaps.gpkg"
-      } else if (startsWith(key, "file|")) {
-        parts <- strsplit(key, "\\|")[[1]]
-        fname <- parts[2]
-      } else {
-        ap <- active_path_val()
-        fname <- if (identical(ap, "adjacent")) "idx_serasi_adjacent.gpkg"
-        else if (identical(ap, "overlap")) "idx_serasi_overlaps.gpkg"
-        else "idx_serasi.gpkg"
+        }, error = function(e) NULL)
       }
       
-      render_loaded_file_bar(
-        state    = rv$idx_serasi_source,
-        input_id = ns("idx_serasi_file"),
-        filename = fname
+      # Legacy fallback: hash the id_pu set from the PADU GPKG
+      if ((is.null(src_hash) || is.na(src_hash)) && file.exists(gpkg)) {
+        tryCatch({
+          m <- sf::st_read(gpkg, quiet = TRUE)
+          if ("id_pu" %in% names(m)) {
+            ids <- sort(unique(as.character(m$id_pu)))
+            src_hash <- digest::digest(paste(ids, collapse = "|"),
+                                       algo = "xxhash64")
+          }
+        }, error = function(e) NULL)
+      }
+      
+      if (is.null(src_hash) || is.na(src_hash)) return(NULL)
+      if (is.null(src_name) || is.na(src_name) || !nzchar(src_name))
+        src_name <- "(hash-only)"
+      
+      list(key = key, name = src_name, hash = src_hash)
+    }
+    
+    padu_fingerprints <- reactive({
+      out <- list()
+      for (k in names(PADU_MODULE_DIRS)) {
+        fp <- fingerprint_padu(k)
+        if (!is.null(fp)) out[[k]] <- fp
+      }
+      combine_hash <- serasi_in$hash()
+      if (!is.null(combine_hash) &&
+          length(combine_hash) == 1 &&
+          !is.na(combine_hash)) {
+        out[["combine"]] <- list(
+          key  = "combine",
+          name = serasi_in$filename(),
+          hash = combine_hash
+        )
+      }
+      out
+    })
+    
+    consistency <- reactive({
+      fps <- padu_fingerprints()
+      if (length(fps) <= 1) {
+        return(list(mismatch = FALSE, n_versions = length(fps),
+                    majority_hash = NULL, rows = fps))
+      }
+      hashes <- sapply(fps, function(x) x$hash)
+      tbl <- sort(table(hashes), decreasing = TRUE)
+      majority <- names(tbl)[1]
+      list(
+        mismatch       = length(tbl) > 1,
+        n_versions     = length(tbl),
+        majority_hash  = majority,
+        rows           = fps
       )
     })
     
-    observeEvent(input$idx_serasi_file, {
-      req(input$idx_serasi_file)
-      tryCatch({
-        map_data <- sf::st_read(input$idx_serasi_file$datapath, quiet = TRUE)
-        case <- .detect_serasi_case(map_data)
-        if (is.na(case)) {
-          stop("Kolom penanda struktural tidak ditemukan. Berkas bukan output dari modul SERASI.")
-        }
-        
-        ap <- active_path_val()
-        expected_case <- switch(ap,
-                                "overlap"  = "overlap",
-                                "adjacent" = "adjacent",
-                                NULL
-        )
-        
-        if (!is.null(expected_case) && !identical(case, expected_case)) {
-          rv$idx_serasi_source <- NULL
-          showNotification(
-            sprintf(
-              "Berkas yang Anda unggah adalah kasus %s, tetapi jalur aktif saat ini adalah %s. Silakan unggah berkas yang sesuai.",
-              if (identical(case, "overlap")) "Tumpang Tindih" else "Bertetangga",
-              if (identical(expected_case, "overlap")) "Tumpang Tindih" else "Bertetangga"
-            ),
-            type = "error", duration = 10
-          )
-          return()
-        }
-        
-        rv$idx_serasi_source <- "manual"
-        
-        fname <- input$idx_serasi_file$name
-        fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
-        session$sendCustomMessage("set_fileinput_text", list(
-          input_id = ns("idx_serasi_file"),
-          filename = fname
-        ))
-      }, error = function(e) {
-        rv$idx_serasi_source <- NULL
-        showNotification(paste("Gagal Memvalidasi Berkas:", e$message),
-                         type = "error", duration = 10)
-      })
+    combine_mismatch <- reactive({
+      cs <- consistency()
+      if (is.null(cs$rows[["combine"]])) return(FALSE)
+      if (is.null(cs$majority_hash)) return(FALSE)
+      !identical(cs$rows[["combine"]]$hash, cs$majority_hash)
     })
     
-    loaded_serasi_map <- reactive({
-      src <- rv$idx_serasi_source
-      if (identical(src, "manual")) {
-        req(input$idx_serasi_file)
-        tryCatch(sf::st_read(input$idx_serasi_file$datapath, quiet = TRUE),
-                 error = function(e) NULL)
-      } else if (identical(src, "session")) {
-        session$userData$module_results$serasi$result$idx_serasi_map
-      } else if (identical(src, "file")) {
-        key <- discovered_serasi_key()
-        parts <- strsplit(key, "\\|")[[1]]
-        fname <- parts[2]
-        fp <- file.path(output_dir(), "Analisis SERASI", fname)
-        if (file.exists(fp)) {
-          tryCatch(sf::st_read(fp, quiet = TRUE), error = function(e) NULL)
-        } else NULL
-      } else {
-        NULL
-      }
-    })
-    
-    append_log <- function(msg) {
-      rv$log_messages <- paste0(rv$log_messages,
-                                format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
+    row_label <- function(k) {
+      if (identical(k, "combine")) "PADU-Kombinasi"
+      else (PADU_LABELS[[k]] %||% k)
     }
     
-    output$output_dir_warning <- renderUI({
-      if (is.null(output_dir()) || !nzchar(output_dir())) {
-        div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
-            tags$i(class = "bi bi-exclamation-triangle me-1"),
-            "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
-      }
-    })
-    
-    # ── Run analysis ─────────────────────────────────────────
-    observeEvent(input$btn_run, {
-      if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error", duration = 5
-        )
-        return()
+    output$serasi_consistency_banner <- renderUI({
+      cs <- consistency()
+      if (length(cs$rows) == 0) return(NULL)
+      
+      if (!cs$mismatch) {
+        return(tags$div(
+          style = paste("margin-top: 6px; padding: 8px 10px;",
+                        "background: #ecfdf5; border: 1px solid #bbf7d0;",
+                        "border-radius: 8px; font-size: 0.78rem; color: #106665;"),
+          tags$i(class = "bi bi-check-circle-fill me-1"),
+          "Semua modul konsisten menggunakan SERASI: ",
+          tags$strong(cs$rows[[1]]$name)
+        ))
       }
       
-      idx_serasi_map <- loaded_serasi_map()
+      items <- lapply(names(cs$rows), function(k) {
+        fp <- cs$rows[[k]]
+        is_minority <- !identical(fp$hash, cs$majority_hash)
+        is_combine  <- identical(k, "combine")
+        
+        tags$div(
+          style = sprintf(
+            paste("display: grid;",
+                  "grid-template-columns: 92px 1fr;",
+                  "column-gap: 8px;",
+                  "padding: 3px 0;",
+                  "align-items: start;",
+                  "color: %s;",
+                  "%s"),
+            if (is_minority) "#b45309" else "#475569",
+            if (is_combine)
+              "margin-top: 6px; padding-top: 6px; border-top: 1px dashed #F59E0B;"
+            else ""
+          ),
+          tags$span(
+            style = "font-weight: 700; font-size: 0.7rem; white-space: nowrap;",
+            row_label(k)
+          ),
+          tags$span(
+            style = paste("font-family: monospace;",
+                          "font-size: 0.66rem;",
+                          "text-align: right;",
+                          "word-break: break-all;",
+                          "line-height: 1.3;"),
+            fp$name,
+            if (is_minority) " \u26A0" else ""
+          )
+        )
+      })
+      
+      tags$div(
+        style = paste("margin-top: 6px; padding: 8px 10px;",
+                      "background: #FEF3C7; border: 1px solid #FDE68A;",
+                      "border-radius: 8px; font-size: 0.78rem; color: #92400E;"),
+        tags$div(style = "font-weight: 700; margin-bottom: 4px;",
+                 tags$i(class = "bi bi-exclamation-triangle-fill me-1"),
+                 sprintf("Ditemukan %d versi SERASI berbeda", cs$n_versions)),
+        tags$div(style = "color: #78350f;", items)
+      )
+    })
+    
+    # ── Run analysis ────────────────────────────────────────
+    do_run_combine <- function(selected_keys) {
+      disc <- tryCatch(padu_discovery(),
+                       error = function(e) list(
+                         files = character(0), source = "auto",
+                         source_label = "", missing = character(0),
+                         found_keys = character(0)))
+      
+      idx_serasi_map <- serasi_in$idx_serasi_map()
       if (is.null(idx_serasi_map)) {
         showNotification(
-          "Peta SERASI belum tersedia. Jalankan modul 1.1 atau 1.2 terlebih dahulu, atau unggah berkas secara manual.",
-          type = "warning", duration = 6
-        )
+          "Peta SERASI belum tersedia. Jalankan modul 1.1/1.2 terlebih dahulu atau unggah berkas.",
+          type = "warning", duration = 6)
         return()
       }
-      
-      disc <- tryCatch(
-        padu_discovery(),
-        error = function(e) {
-          list(files = character(0), source = "auto", source_label = "",
-               missing = character(0), found_keys = character(0))
-        }
-      )
-      
       if (length(disc$files) == 0) {
-        showNotification("File PADU tidak ditemukan. Harap siapkan folder berisi file idx_padu_*.gpkg.",
+        showNotification("File PADU tidak ditemukan.",
                          type = "warning", duration = 6)
         return()
       }
       
-      if (length(disc$missing) > 0) {
-        showNotification(
-          paste0("Modul PADU belum tersedia: ",
-                 paste(toupper(disc$missing), collapse = ", "),
-                 ". Analisis akan dilanjutkan tanpa modul tersebut."),
-          type = "warning", duration = 8
-        )
+      files_to_use <- disc$files
+      if (!is.null(selected_keys)) {
+        keep <- basename(dirname(files_to_use)) %in% PADU_MODULE_DIRS[selected_keys]
+        files_to_use <- files_to_use[keep]
+      }
+      
+      if (length(files_to_use) == 0) {
+        showNotification("Tidak ada PADU yang tersisa setelah pengecualian.",
+                         type = "warning", duration = 6)
+        return()
       }
       
       rv$analysis_result <- NULL
@@ -492,23 +445,28 @@ padu_combine_server <- function(id, output_dir) {
       rv$xlsx_path       <- NULL
       rv$log_messages    <- ""
       
+      append_log <- function(msg) {
+        rv$log_messages <- paste0(rv$log_messages,
+                                  format(Sys.time(), "[%H:%M:%S] "), msg, "\n")
+      }
       append_log("Memulai analisis kombinasi PADU...")
-      append_log(paste0("Sumber file PADU: ", disc$source_label))
-      if (length(disc$missing) > 0)
-        append_log(paste0("Modul tidak tersedia: ", paste(disc$missing, collapse = ", ")))
+      append_log(sprintf("Menggunakan %d file PADU.", length(files_to_use)))
+      if (!is.null(selected_keys) &&
+          length(selected_keys) < length(disc$found_keys)) {
+        excluded <- setdiff(disc$found_keys, selected_keys)
+        append_log(paste0("PADU dikecualikan: ",
+                          paste(toupper(excluded), collapse = ", ")))
+      }
       
       withProgress(message = "Menjalankan analisis kombinasi PADU", value = 0, {
         tryCatch({
           incProgress(0.1, detail = "Memuat peta SERASI...")
-          idx_serasi_map <- idx_serasi_map %>% dplyr::select(-dplyr::any_of("area_flag"))
+          idx_serasi_map <- idx_serasi_map %>%
+            dplyr::select(-dplyr::any_of("area_flag"))
           append_log("Peta SERASI berhasil dimuat.")
           
-          incProgress(0.2, detail = "Menyiapkan file PADU...")
-          padu_files <- disc$files
-          append_log(paste("Menggunakan", length(padu_files), "file PADU."))
-          
           incProgress(0.2, detail = "Membaca file PADU...")
-          padu_list <- lapply(padu_files, function(f) {
+          padu_list <- lapply(files_to_use, function(f) {
             sf::st_read(f, quiet = TRUE) %>% sf::st_drop_geometry()
           })
           append_log("Semua file PADU berhasil dibaca.")
@@ -521,18 +479,18 @@ padu_combine_server <- function(id, output_dir) {
             padu_idx_weight <- load_and_validate_table(input$weight_table_file$datapath)
             weight_sum <- sum(padu_idx_weight[[2]], na.rm = TRUE)
             if (abs(weight_sum - 1) > 1e-6) {
-              stop(paste("Jumlah bobot indeks PADU tidak sama dengan 1. Saat ini:", weight_sum))
+              stop(paste("Jumlah bobot indeks PADU tidak sama dengan 1. Saat ini:",
+                         weight_sum))
             }
             append_log("Tabel bobot berhasil dimuat.")
           } else {
             n <- length(padu_list)
-            append_log(paste0("Tabel bobot tidak diunggah. Menggunakan bobot seragam (1/", n,
-                              ") untuk setiap indeks."))
+            append_log(paste0("Tabel bobot tidak diunggah. ",
+                              "Menggunakan bobot seragam (1/", n, ")."))
             sample_df <- padu_list[[1]]
             idx_cols  <- grep("^idx_padu_", names(sample_df), value = TRUE)
             if (length(idx_cols) != length(padu_list)) {
-              file_names <- basename(padu_files)
-              labels     <- gsub("^idx_padu_|\\.gpkg$", "", file_names)
+              labels <- gsub("^idx_padu_|\\.gpkg$", "", basename(files_to_use))
             } else {
               labels <- idx_cols
             }
@@ -555,58 +513,48 @@ padu_combine_server <- function(id, output_dir) {
           }
           
           incProgress(0.15, detail = "Menyimpan hasil...")
-          
           padu_combine_dir <- file.path(output_dir(), "Analisis PADU-Kombinasi")
           if (!dir.exists(padu_combine_dir)) {
             dir.create(padu_combine_dir, recursive = TRUE, showWarnings = FALSE)
           }
-          if (!dir.exists(padu_combine_dir)) {
-            stop("Tidak dapat membuat atau mengakses direktori: ", padu_combine_dir)
-          }
-          
           gpkg_path <- file.path(padu_combine_dir, "idx_padu_combine.gpkg")
           xlsx_path <- file.path(padu_combine_dir, "idx_padu_combine.xlsx")
-          
           sf::st_write(idx_padu_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- sf::st_drop_geometry(idx_padu_map)
           openxlsx::write.xlsx(res_table, xlsx_path)
           
           rv$gpkg_path       <- gpkg_path
           rv$xlsx_path       <- xlsx_path
-          rv$analysis_result <- list(map = idx_padu_map_viz, table = sf::st_drop_geometry(idx_padu_map_viz))
-          
-          serasi_path_used <- if (identical(rv$idx_serasi_source, "manual")) {
-            input$idx_serasi_file$datapath
-          } else if (identical(rv$idx_serasi_source, "session")) {
-            "<auto: sesi>"
-          } else if (identical(rv$idx_serasi_source, "file")) {
-            file.path(output_dir(), "Analisis SERASI",
-                      basename(discovered_serasi_key()))
-          } else {
-            NULL
-          }
+          rv$analysis_result <- list(map = idx_padu_map_viz,
+                                     table = sf::st_drop_geometry(idx_padu_map_viz))
           
           out <- list(
             inputs = list(
-              start_time        = Sys.time(),
-              idx_serasi_path   = serasi_path_used,
-              idx_serasi_source = rv$idx_serasi_source,
-              padu_source       = disc$source,
-              padu_source_label = disc$source_label,
-              padu_folder_path  = if (disc$source == "manual") disc$source_label else output_dir(),
-              missing_modules   = disc$missing,
-              weight_table_path = if (!is.null(input$weight_table_file))
+              start_time             = Sys.time(),
+              idx_serasi_path        = serasi_in$filename(),
+              idx_serasi_source      = serasi_in$source(),
+              idx_serasi_hash        = serasi_in$hash(),
+              serasi_source_name     = serasi_in$filename(),
+              serasi_source_hash     = serasi_in$hash(),
+              padu_source            = disc$source,
+              padu_source_label      = disc$source_label,
+              padu_folder_path       = if (disc$source == "manual")
+                disc$source_label else output_dir(),
+              missing_modules        = disc$missing,
+              excluded_modules       = setdiff(disc$found_keys,
+                                               selected_keys %||% disc$found_keys),
+              weight_table_path      = if (!is.null(input$weight_table_file))
                 input$weight_table_file$datapath else NULL,
-              output_dir        = output_dir(),
-              n_files           = length(padu_files),
-              padu_files        = basename(padu_files)
+              output_dir             = output_dir(),
+              n_files                = length(files_to_use),
+              padu_files             = basename(files_to_use)
             ),
             result = list(
               idx_serasi_map = idx_serasi_map,
               idx_padu_map   = idx_padu_map,
               idx_padu_table = res_table,
               weight_table   = padu_idx_weight,
-              padu_files     = padu_files
+              padu_files     = files_to_use
             )
           )
           
@@ -614,13 +562,10 @@ padu_combine_server <- function(id, output_dir) {
           if (!dir.exists(log_dir)) {
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           }
-          log_path <- file.path(log_dir, "idx_padu_combine_log.rda")
-          if (dir.exists(log_dir)) {
-            tryCatch({
-              inputs <- out$inputs
-              save(inputs, file = log_path)
-            }, error = function(e) warning("Gagal menulis file log: ", e$message))
-          }
+          tryCatch({
+            inputs <- out$inputs
+            save(inputs, file = file.path(log_dir, "idx_padu_combine_log.rda"))
+          }, error = function(e) warning("Gagal menulis file log: ", e$message))
           
           session$userData$module_results$padu_combine <- out
           
@@ -634,8 +579,8 @@ padu_combine_server <- function(id, output_dir) {
             filepath = file.path(log_dir, "idx_padu_combine.png")
           )
           
-          append_log(paste("Peta disimpan ->", gpkg_path))
-          append_log(paste("Tabel disimpan ->", xlsx_path))
+          append_log(paste("Peta disimpan \u2192", gpkg_path))
+          append_log(paste("Tabel disimpan \u2192", xlsx_path))
           append_log("Analisis PADU-Kombinasi berhasil diselesaikan.")
           
           incProgress(0.05, detail = "Selesai!")
@@ -644,21 +589,180 @@ padu_combine_server <- function(id, output_dir) {
           
         }, error = function(e) {
           msg <- conditionMessage(e)
-          if (is.null(msg) || msg == "") msg <- "Error tidak diketahui (lihat konsol untuk detail)"
+          if (is.null(msg) || msg == "") msg <- "Error tidak diketahui"
           append_log(paste("ERROR:", msg))
-          showNotification(paste("Analisis gagal:", msg), type = "error", duration = 10)
+          showNotification(paste("Analisis gagal:", msg),
+                           type = "error", duration = 10)
         })
       })
+    }
+    
+    # ── Click handler with consistency gate ─────────────────
+    observeEvent(input$btn_run, {
+      if (is.null(output_dir()) || !nzchar(output_dir()) ||
+          !validate_output_dir(output_dir())) {
+        showNotification("Direktori output belum diatur.",
+                         type = "error", duration = 5)
+        return()
+      }
+      cs <- consistency()
+      if (isTRUE(cs$mismatch)) {
+        rows_ui <- lapply(names(cs$rows), function(k) {
+          fp <- cs$rows[[k]]
+          is_minority <- !identical(fp$hash, cs$majority_hash)
+          is_combine  <- identical(k, "combine")
+          
+          tags$tr(
+            style = if (is_combine)
+              "border-top: 1px dashed #F59E0B;"
+            else NULL,
+            tags$td(style = paste("padding: 6px 8px; font-weight: 700;",
+                                  "white-space: nowrap; vertical-align: top;",
+                                  "width: 100px; font-size: 0.72rem;"),
+                    row_label(k)),
+            tags$td(style = paste("padding: 6px 8px; font-family: monospace;",
+                                  "font-size: 0.68rem; word-break: break-all;",
+                                  "vertical-align: top; text-align: right;"),
+                    fp$name),
+            tags$td(style = sprintf(paste("padding: 6px 8px; text-align: right;",
+                                          "white-space: nowrap; vertical-align: top;",
+                                          "font-size: 0.7rem; font-weight: 600;",
+                                          "color: %s;"),
+                                    if (is_minority) "#b45309" else "#106665"),
+                    if (is_minority) "Berbeda" else "Seragam")
+          )
+        })
+        
+        blocked_by_combine <- isTRUE(combine_mismatch())
+        
+        disclaimer <- if (blocked_by_combine) {
+          tags$div(
+            style = paste("margin-top: 12px; padding: 8px 10px;",
+                          "background:#FEF3C7; border:1px solid #FDE68A;",
+                          "border-radius:8px; font-size:0.8rem; color:#92400E;"),
+            tags$div(
+              tags$i(class = "bi bi-lock-fill me-1"),
+              tags$strong("Peta indeks SERASI pada modul ini berbeda dari versi seragam.")
+            ),
+            tags$div(style = "margin-top: 4px;",
+                     "Ubah input Peta indeks SERASI agar sesuai dengan versi seragam, ",
+                     "lalu buka kembali dialog ini. Tombol Lanjutkan dinonaktifkan sampai konsisten.")
+          )
+        } else {
+          tags$div(
+            style = paste("margin-top: 12px; padding: 8px 10px;",
+                          "background:#FEF3C7; border:1px solid #FDE68A;",
+                          "border-radius:8px; font-size:0.8rem; color:#92400E;"),
+            tags$i(class = "bi bi-info-circle-fill me-1"),
+            tags$strong("PADU dengan versi SERASI berbeda akan otomatis dikecualikan"),
+            " dari proses penggabungan. PADU yang mengikuti versi seragam akan tetap digunakan."
+          )
+        }
+        
+        proceed_btn <- if (blocked_by_combine) {
+          tags$button(
+            type = "button",
+            class = "btn btn-warning",
+            style = paste("font-weight: 600; color: #1e293b;",
+                          "opacity: 0.55; cursor: not-allowed;"),
+            disabled = "disabled",
+            tags$i(class = "bi bi-play-fill me-1"),
+            "Lanjutkan"
+          )
+        } else {
+          actionButton(ns("btn_mismatch_proceed"),
+                       tagList(tags$i(class = "bi bi-play-fill me-1"),
+                               "Lanjutkan"),
+                       class = "btn-warning",
+                       style = "font-weight: 600; color: #1e293b;")
+        }
+        
+        showModal(modalDialog(
+          title = tagList(tags$i(class = "bi bi-exclamation-triangle-fill me-2",
+                                 style = "color:#b45309;"),
+                          "Konsistensi versi SERASI tidak terpenuhi"),
+          tags$p(style = "color:#475569; font-size:0.9rem; margin-bottom:12px;",
+                 "Modul yang akan digabungkan dibangun terhadap versi indeks SERASI yang berbeda. ",
+                 "Menggabungkan tanpa penyelarasan dapat menghasilkan indeks PADU yang tidak konsisten."),
+          
+          tags$div(
+            style = "max-height: 260px; overflow-y: auto;",
+            tags$table(
+              style = "width: 100%; border-collapse: collapse;",
+              tags$thead(
+                tags$tr(
+                  tags$th(style = paste("text-align: left; padding: 6px 8px;",
+                                        "border-bottom: 1px solid #E2E8F0;",
+                                        "font-weight: 700; color: #475569;",
+                                        "font-size: 0.78rem;"),
+                          "Modul"),
+                  tags$th(style = paste("text-align: right; padding: 6px 8px;",
+                                        "border-bottom: 1px solid #E2E8F0;",
+                                        "font-weight: 700; color: #475569;",
+                                        "font-size: 0.78rem;"),
+                          "Berkas SERASI"),
+                  tags$th(style = paste("text-align: right; padding: 6px 8px;",
+                                        "border-bottom: 1px solid #E2E8F0;",
+                                        "font-weight: 700; color: #475569;",
+                                        "font-size: 0.78rem; white-space: nowrap;"),
+                          "Status")
+                )
+              ),
+              tags$tbody(rows_ui)
+            )
+          ),
+          
+          disclaimer,
+          
+          tags$div(style = paste("margin-top: 8px; padding: 8px 10px;",
+                                 "background:#F8FAFC; border:1px solid #E2E8F0;",
+                                 "border-radius:8px; font-size:0.8rem; color:#475569;"),
+                   tags$i(class = "bi bi-check-circle me-1"),
+                   sprintf("Seragam menggunakan: %s (%d dari %d modul)",
+                           cs$rows[[which(sapply(cs$rows, function(x)
+                             identical(x$hash, cs$majority_hash)))[1]]]$name,
+                           sum(sapply(cs$rows, function(x)
+                             identical(x$hash, cs$majority_hash))),
+                           length(cs$rows))),
+          
+          easyClose = FALSE,
+          footer = div(
+            style = paste("display: flex; justify-content: flex-end;",
+                          "align-items: center; gap: 8px; width: 100%;"),
+            modalButton("Batalkan"),
+            proceed_btn
+          )
+        ))
+        return()
+      }
+      do_run_combine(NULL)
     })
     
-    # ── Status box ───────────────────────────────────────────
+    observeEvent(input$btn_mismatch_proceed, {
+      removeModal()
+      cs <- consistency()
+      majority_keys <- names(cs$rows)[
+        sapply(cs$rows, function(x) identical(x$hash, cs$majority_hash))]
+      majority_keys <- setdiff(majority_keys, "combine")
+      do_run_combine(majority_keys)
+    })
+    
+    output$output_dir_warning <- renderUI({
+      if (is.null(output_dir()) || !nzchar(output_dir())) {
+        div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
+            tags$i(class = "bi bi-exclamation-triangle me-1"),
+            "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
+      }
+    })
+    
+    # ── Status box ──────────────────────────────────────────
     output$status_box <- renderUI({
       disc <- padu_discovery()
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
             "Analisis selesai.")
-      } else if (!is.null(rv$idx_serasi_source) && length(disc$files) > 0) {
+      } else if (!is.null(serasi_in$idx_serasi_map()) && length(disc$files) > 0) {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
             "Siap menjalankan analisis.")
@@ -669,7 +773,7 @@ padu_combine_server <- function(id, output_dir) {
       }
     })
     
-    # ── Config & shared result rendering ─────────────────────
+    # ── Shared result rendering ─────────────────────────────
     padu_combine_config <- list(
       map_color_col  = "idx_padu_final",
       map_title      = "Indeks PADU",
@@ -696,7 +800,8 @@ padu_combine_server <- function(id, output_dir) {
       ),
       table_round_cols = c(
         "Indeks PADU-KE", "Indeks PADU-HS", "Indeks PADU-KL", "Indeks PADU-KH",
-        "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI", "Indeks PADU kombinasi"
+        "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI",
+        "Indeks PADU kombinasi"
       )
     )
     

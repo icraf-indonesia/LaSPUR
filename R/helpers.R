@@ -39,6 +39,10 @@ pacman::p_load(
   slickR
 )
 
+if (!exists("render_loaded_file_bar", mode = "function")) {
+  source("R/shared_inputs.R")
+}
+
 # Ensure Pandoc is configured for rmarkdown
 .ensure_pandoc_available <- function() {
   tryCatch({
@@ -574,109 +578,6 @@ create_result_ui <- function(ns, extra_tab = NULL) {
       downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
       downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
     )
-  )
-}
-
-#' Render a "loaded from session" bar under a fileInput
-#'
-#' @param state Character; one of `"session"`, `"file"`, `"manual"`, or
-#'   `NULL`.
-#'   - `"session"` / `"file"`: draw the loaded-bar and inject `filename`
-#'     into the readonly text field.
-#'   - `"manual"`: do nothing — the caller manages the field via the
-#'     `set_fileinput_text` custom message.
-#'   - `NULL` (or anything else): reset the fileInput back to its native
-#'     "No file selected" placeholder, but ONLY if we were the ones who
-#'     injected a name.
-#'
-#' @param input_id Character; the namespaced id of the fileInput.
-#' @param filename Character; the filename to inject. Ignored unless
-#'   `state` is `"session"` or `"file"`.
-#'
-#' @return A Shiny `tagList` (or `NULL`).
-#' @keywords internal
-render_loaded_file_bar <- function(state, input_id, filename = NULL) {
-  if (is.null(input_id) || !nzchar(input_id)) return(NULL)
-  
-  if (identical(state, "manual")) return(NULL)
-  
-  is_active <- isTRUE(length(state) == 1 && !is.na(state) &&
-                        state %in% c("session", "file"))
-  
-  if (!is_active) {
-    return(tags$script(HTML(sprintf(
-      "setTimeout(function(){
-         var input = document.getElementById('%s');
-         if (!input) return;
-         var group = input.closest('.input-group');
-         if (!group) return;
-         var txt = group.querySelector('.form-control');
-         if (!txt) return;
-         if (txt.dataset.laspurAutofilled === '1') {
-           txt.value = '';
-           txt.placeholder = 'No file selected';
-           txt.dataset.laspurAutofilled = '0';
-         }
-       }, 40);",
-      input_id
-    ))))
-  }
-  
-  msg <- switch(state,
-                "session" = "File tersedia dari sesi saat ini",
-                "file"    = "File tersedia dari sesi sebelumnya"
-  )
-  
-  if (is.null(filename) || !nzchar(filename)) filename <- ""
-  
-  tagList(
-    tags$div(
-      class = "laspur-loaded-bar",
-      style = paste(
-        "height: 20px;",
-        "border-radius: 4px;",
-        "overflow: hidden;",
-        "background-color: #eef2f6;",
-        "width: 100%;",
-        "box-sizing: border-box;"
-      ),
-      tags$div(
-        class = "laspur-loaded-bar-fill",
-        style = paste(
-          "width: 100%;",
-          "height: 20px;",
-          "background: linear-gradient(90deg, #1b75ba 0%, #3b92d1 100%);",
-          "color: #ffffff;",
-          "font-size: 0.72rem;",
-          "font-weight: 600;",
-          "letter-spacing: 0.2px;",
-          "line-height: 20px;",
-          "text-align: center;",
-          "white-space: nowrap;",
-          "overflow: hidden;",
-          "text-overflow: ellipsis;",
-          "padding: 0 8px;",
-          "box-sizing: border-box;"
-        ),
-        msg
-      )
-    ),
-    tags$script(HTML(sprintf(
-      "[30, 90, 200, 400, 700].forEach(function(d){
-         setTimeout(function(){
-           var input = document.getElementById('%s');
-           if (!input) return;
-           var group = input.closest('.input-group');
-           if (!group) return;
-           var txt = group.querySelector('.form-control');
-           if (!txt) return;
-           txt.value = '%s';
-           txt.placeholder = '%s';
-           txt.dataset.laspurAutofilled = '1';
-         }, d);
-       });",
-      input_id, filename, filename
-    )))
   )
 }
 
