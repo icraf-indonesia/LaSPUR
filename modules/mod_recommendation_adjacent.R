@@ -1,20 +1,16 @@
 # ui/modules/mod_recommendation_adjacent.R
 # ============================================================
-#  MODULE: Recommendation (4. Analisis Alternatif) — Adjacent
-#  Wizard flow (accordion in left panel)
-#  Outputs (map, table accordion, log) in right panel — uses the
-#  standardized create_result_ui()/render_result_server() helpers.
-# ============================================================
 
 source("R/functions.R")
 source("R/helpers.R")
 
-# ── small UI helpers ────────────────────────────────────────
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(a, b) if (is.null(a)) b else a
+}
+
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
-  div(
-    class = "alert alert-secondary mb-0",
-    tags$i(class = "bi bi-lock-fill me-2"), msg
-  )
+  div(class = "alert alert-secondary mb-0",
+      tags$i(class = "bi bi-lock-fill me-2"), msg)
 }
 
 .step_nav <- function(ns, back_id = NULL, next_id = NULL, next_label = "Lanjut") {
@@ -31,37 +27,27 @@ source("R/helpers.R")
   )
 }
 
-# ── validation helpers  ──────────────────────────
 .validate_alt_table <- function(alt_table, matriks_serasi) {
   has_id  <- "id" %in% names(alt_table)
   has_ids <- all(c("id_rtrw", "id_rzwp3k") %in% names(alt_table))
-  
   if (!has_id && !has_ids) {
     return(list(ok = FALSE, msg = paste0(
       "Kolom 'id' atau pasangan 'id_rtrw'/'id_rzwp3k' tidak ditemukan ",
-      "pada file yang diunggah."
-    )))
+      "pada file yang diunggah.")))
   }
-  
   required_cols <- c("id_pu", "alt_RTRW", "alt_RZWP3K")
   missing_cols <- setdiff(required_cols, names(alt_table))
   if (length(missing_cols) > 0) {
     return(list(ok = FALSE, msg = sprintf(
       "Kolom wajib tidak ditemukan pada file yang diunggah: %s",
-      paste(missing_cols, collapse = ", ")
-    )))
+      paste(missing_cols, collapse = ", "))))
   }
-  
   valid_rtrw <- unique(as.character(matriks_serasi$class1))
   valid_rz   <- unique(as.character(matriks_serasi$class2))
-  
   bad_rtrw <- unique(as.character(alt_table$alt_RTRW[
-    !is.na(alt_table$alt_RTRW) & !as.character(alt_table$alt_RTRW) %in% valid_rtrw
-  ]))
+    !is.na(alt_table$alt_RTRW) & !as.character(alt_table$alt_RTRW) %in% valid_rtrw]))
   bad_rz <- unique(as.character(alt_table$alt_RZWP3K[
-    !is.na(alt_table$alt_RZWP3K) & !as.character(alt_table$alt_RZWP3K) %in% valid_rz
-  ]))
-  
+    !is.na(alt_table$alt_RZWP3K) & !as.character(alt_table$alt_RZWP3K) %in% valid_rz]))
   if (length(bad_rtrw) > 0 || length(bad_rz) > 0) {
     msg <- "Ditemukan nilai zona alternatif yang tidak dikenali pada Matriks SERASI."
     if (length(bad_rtrw) > 0)
@@ -70,7 +56,6 @@ source("R/helpers.R")
       msg <- paste0(msg, sprintf("\n- alt_RZWP3K tidak valid: %s", paste(bad_rz, collapse = ", ")))
     return(list(ok = FALSE, msg = msg))
   }
-  
   list(ok = TRUE, msg = "Validasi berhasil.")
 }
 
@@ -80,8 +65,7 @@ source("R/helpers.R")
   if (length(missing_cols) > 0) {
     return(list(ok = FALSE, msg = sprintf(
       "Kolom wajib tidak ditemukan pada tabel acuan pola %s: %s",
-      zone_col, paste(missing_cols, collapse = ", ")
-    )))
+      zone_col, paste(missing_cols, collapse = ", "))))
   }
   list(ok = TRUE, msg = "Validasi berhasil.")
 }
@@ -95,7 +79,6 @@ source("R/helpers.R")
   )
 }
 
-# ── UI (two‑column layout) ──────────────────────────────────
 recommendation_adjacent_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -107,61 +90,45 @@ recommendation_adjacent_ui <- function(id) {
         style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
       )
     ),
-    
     fluidRow(
       class = "g-3",
-      
-      # ── Left column: Input & Parameter (1/3) ──────────────
       column(
         width = 4,
         card(
           card_header("Input & Parameter"),
           accordion(
-            id = ns("wizard"),
-            open = "step1",
-            multiple = FALSE,
-            
+            id = ns("wizard"), open = "step1", multiple = FALSE,
             accordion_panel(
-              title = "Langkah 1 — Menyaring Kasus",
+              "Langkah 1 — Menyaring Kasus",
               value = "step1",
               icon = tags$i(class = "bi bi-funnel-fill"),
-              uiOutput(ns("step1_ui"))
+              div(
+                class = "laspur-fileinput-with-bar",
+                fileInput(ns("idx_padan_file"),
+                          label = "Peta PADAN (.gpkg)",
+                          accept = ".gpkg"),
+                uiOutput(ns("loaded_file_bar"))
+              ),
+              uiOutput(ns("step1_body_ui"))
             ),
-            
-            accordion_panel(
-              title = "Langkah 2 — Menentukan Opsi Alternatif",
-              value = "step2",
-              icon = tags$i(class = "bi bi-signpost-split-fill"),
-              uiOutput(ns("step2_ui"))
-            ),
-            
-            accordion_panel(
-              title = "Langkah 3 — Menghitung Nilai Ekonomi (Opsional)",
-              value = "step3",
-              icon = tags$i(class = "bi bi-cash-coin"),
-              uiOutput(ns("step3_ui"))
-            ),
-            
-            accordion_panel(
-              title = "Langkah 4 — Menentukan Keputusan Alternatif",
-              value = "step4",
-              icon = tags$i(class = "bi bi-check2-circle"),
-              uiOutput(ns("step4_ui"))
-            )
+            accordion_panel("Langkah 2 — Menentukan Opsi Alternatif", value = "step2",
+                            icon = tags$i(class = "bi bi-signpost-split-fill"),
+                            uiOutput(ns("step2_ui"))),
+            accordion_panel("Langkah 3 — Menghitung Nilai Ekonomi (Opsional)", value = "step3",
+                            icon = tags$i(class = "bi bi-cash-coin"),
+                            uiOutput(ns("step3_ui"))),
+            accordion_panel("Langkah 4 — Menentukan Keputusan Alternatif", value = "step4",
+                            icon = tags$i(class = "bi bi-check2-circle"),
+                            uiOutput(ns("step4_ui")))
           )
         )
       ),
-      
-      # ── Right column: Output & Hasil (2/3) ────────────────
       column(
         width = 8,
         card(
           card_header("Output & Hasil"),
-          
           uiOutput(ns("status_box")),
-          
           hr(),
-          
           create_result_ui(ns)
         )
       )
@@ -169,36 +136,27 @@ recommendation_adjacent_ui <- function(id) {
   )
 }
 
-# ── Server ───────────────────────────────────────────────────
 recommendation_adjacent_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
     rv <- reactiveValues(
       unlocked = 1,
-      
-      # step 1
       idx_padan_map        = NULL,
+      idx_padan_source     = NULL,
       filter_snapshot       = NULL,
       idx_padan_map_filter  = NULL,
       count_before          = NULL,
       count_after           = NULL,
-      
-      # step 2
       matriks_serasi        = NULL,
       alt_template_path     = NULL,
       alt_table_snapshot    = NULL,
       idx_padan_map_alt     = NULL,
       alt_status            = NULL,
-      
-      # step 3 
       adjacent_economy_map  = NULL,
       npv_status            = NULL,
-      
-      # step 4
       final_result          = NULL,
       final_log             = NULL,
-      
       analysis_result = NULL,
       gpkg_path       = NULL,
       xlsx_path       = NULL,
@@ -217,7 +175,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$final_log          <- NULL
       rv$unlocked           <- min(rv$unlocked, 2)
     }
-    
     reset_from_step3 <- function() {
       rv$adjacent_economy_map <- NULL
       rv$npv_status   <- NULL
@@ -226,35 +183,88 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$unlocked     <- min(rv$unlocked, 3)
     }
     
-    # ── Step 1 UI ─────────────────────────────────────────────
-    output$step1_ui <- renderUI({
-      file_input <- fileInput(ns("idx_padan_file"), "Pilih Peta Hasil Analisis PADAN (.gpkg)", accept = ".gpkg")
-      
+    discovered_padan_key <- reactive({
+      padan_res <- tryCatch(session$userData$module_results$padan,
+                            error = function(e) NULL)
+      if (!is.null(padan_res) &&
+          !is.null(padan_res$result$idx_padan_map) &&
+          inherits(padan_res$result$idx_padan_map, "sf")) {
+        return("session")
+      }
+      if (!is.null(output_dir()) && nzchar(output_dir())) {
+        f <- file.path(output_dir(), "Analisis PADAN", "idx_padan.gpkg")
+        if (file.exists(f)) return(paste0("file|", as.numeric(file.mtime(f))))
+      }
+      "none"
+    })
+    
+    .load_padan_from_discovery <- function() {
+      key <- discovered_padan_key()
+      if (identical(key, "none")) {
+        rv$idx_padan_map    <- NULL
+        rv$idx_padan_source <- NULL
+        return(invisible(NULL))
+      }
+      if (identical(key, "session")) {
+        rv$idx_padan_map    <- session$userData$module_results$padan$result$idx_padan_map
+        rv$idx_padan_source <- "session"
+      } else {
+        f <- file.path(output_dir(), "Analisis PADAN", "idx_padan.gpkg")
+        map <- tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
+        if (!is.null(map)) {
+          rv$idx_padan_map    <- map
+          rv$idx_padan_source <- "file"
+        } else {
+          rv$idx_padan_map    <- NULL
+          rv$idx_padan_source <- NULL
+        }
+      }
+      if (!is.null(rv$idx_padan_map)) {
+        rv$idx_padan_map_filter <- NULL
+        rv$filter_snapshot      <- NULL
+        rv$count_before         <- NULL
+        rv$count_after          <- NULL
+        reset_from_step2()
+        rv$unlocked             <- 1
+      }
+      invisible(NULL)
+    }
+    
+    observeEvent(discovered_padan_key(), {
+      if (identical(rv$idx_padan_source, "manual")) return()
+      .load_padan_from_discovery()
+    }, ignoreNULL = FALSE, ignoreInit = FALSE)
+    
+    output$loaded_file_bar <- renderUI({
+      render_loaded_file_bar(
+        state    = rv$idx_padan_source,  
+        input_id = ns("idx_padan_file"),
+        filename = "idx_padan.gpkg"
+      )
+    })
+    
+    output$step1_body_ui <- renderUI({
       if (is.null(rv$idx_padan_map)) {
         return(tagList(
-          file_input,
-          tags$p(style = "color: #6c757d; margin-top: 8px;", "Unggah peta PADAN untuk mengaktifkan filter."),
-          .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Step 2")
-        ))
+          tags$p(style = "color: #6c757d; margin-top: 8px;",
+                 "Unggah peta PADAN untuk mengaktifkan filter."),
+          .step_nav(ns, back_id = NULL, next_id = "btn_next_1",
+                    next_label = "Lanjut ke Step 2")))
       }
-      
       tagList(
-        file_input,
         layout_column_wrap(
           width = 1/2,
           div(
             checkboxInput(ns("apply_length"), "Aktifkan Filter Panjang Segmen", value = TRUE),
             conditionalPanel(
               condition = paste0("input['", ns("apply_length"), "']"),
-              numericInput(ns("length_filter"), "Ambang Panjang (meter)", value = 1500, min = 0, step = 50)
-            )
+              numericInput(ns("length_filter"), "Ambang Panjang (meter)", value = 1500, min = 0, step = 50))
           ),
           div(
             checkboxInput(ns("apply_idx"), "Aktifkan Filter Indeks PADAN", value = TRUE),
             conditionalPanel(
               condition = paste0("input['", ns("apply_idx"), "']"),
-              numericInput(ns("idx_filter"), "Ambang Indeks PADAN (<)", value = 0.75, min = 0, max = 1, step = 0.05)
-            )
+              numericInput(ns("idx_filter"), "Ambang Indeks PADAN (<)", value = 0.75, min = 0, max = 1, step = 0.05))
           )
         ),
         uiOutput(ns("filter_count_ui")),
@@ -262,13 +272,11 @@ recommendation_adjacent_server <- function(id, output_dir) {
       )
     })
     
-    # ── Step 1: load map ────────────────────────────────────
     observeEvent(input$idx_padan_file, {
       req(input$idx_padan_file)
       showNotification("Memuat peta PADAN...", type = "message", duration = 2)
       tryCatch({
         loaded_map <- sf::st_read(input$idx_padan_file$datapath, quiet = TRUE)
-        
         if ("id_group.x" %in% names(loaded_map) || "id_group.y" %in% names(loaded_map)) {
           gx <- if ("id_group.x" %in% names(loaded_map)) loaded_map$id_group.x else NA
           gy <- if ("id_group.y" %in% names(loaded_map)) loaded_map$id_group.y else NA
@@ -276,58 +284,51 @@ recommendation_adjacent_server <- function(id, output_dir) {
           loaded_map$id_group.x <- NULL
           loaded_map$id_group.y <- NULL
         }
-        
-        if (!"id_group" %in% names(loaded_map)) {
+        if (!"id_group" %in% names(loaded_map))
           stop("Peta PADAN harus memiliki kolom 'id_group' untuk kasus bertetangga.")
-        }
-        
-        rv$idx_padan_map <- loaded_map
+        rv$idx_padan_map    <- loaded_map
+        rv$idx_padan_source <- "manual"
         rv$idx_padan_map_filter <- NULL
         rv$filter_snapshot <- NULL
         rv$count_before <- NULL
         rv$count_after <- NULL
         reset_from_step2()
         rv$unlocked <- 1
+        
+        fname <- input$idx_padan_file$name
+        fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+        session$sendCustomMessage("set_fileinput_text", list(
+          input_id = ns("idx_padan_file"),
+          filename = fname
+        ))
+        
         showNotification("Peta PADAN berhasil dimuat.", type = "message", duration = 5)
       }, error = function(e) {
-        rv$idx_padan_map <- NULL
+        rv$idx_padan_map    <- NULL
+        rv$idx_padan_source <- NULL
         showNotification(paste("Gagal membaca file:", e$message), type = "error", duration = 10)
       })
     })
     
-    # ── Reactive filter  ──────────────────────────
     filtered_data <- reactive({
       req(rv$idx_padan_map)
-      
       map <- rv$idx_padan_map
       keep <- rep(TRUE, nrow(map))
       if (isTRUE(input$apply_length)) keep <- keep & (as.numeric(map$length) > input$length_filter)
       if (isTRUE(input$apply_idx))    keep <- keep & (map$idx_padan < input$idx_filter)
-      
-      list(
-        filtered = map[keep, ],
-        before = nrow(map) / 2,
-        after  = nrow(map[keep, ]) / 2
-      )
+      list(filtered = map[keep, ], before = nrow(map) / 2, after = nrow(map[keep, ]) / 2)
     })
     
-    # Update rv when filter changes
     observeEvent(filtered_data(), {
       res <- filtered_data()
       rv$idx_padan_map_filter <- res$filtered
       rv$count_before <- res$before
       rv$count_after  <- res$after
-      
       if (!is.null(rv$filter_snapshot)) {
         current <- list(
-          apply_length = input$apply_length,
-          length_filter = input$length_filter,
-          apply_idx = input$apply_idx,
-          idx_filter = input$idx_filter
-        )
-        if (!identical(current, rv$filter_snapshot)) {
-          reset_from_step2()
-        }
+          apply_length = input$apply_length, length_filter = input$length_filter,
+          apply_idx = input$apply_idx,       idx_filter = input$idx_filter)
+        if (!identical(current, rv$filter_snapshot)) reset_from_step2()
       }
     })
     
@@ -335,46 +336,35 @@ recommendation_adjacent_server <- function(id, output_dir) {
       req(!is.null(rv$count_before))
       removed <- rv$count_before - rv$count_after
       pct <- if (rv$count_before > 0) (1 - rv$count_after / rv$count_before) * 100 else 0
-      div(
-        class = "alert alert-info", style = "margin-top: 12px;",
-        tags$div(sprintf("Sebelum filter: %d pasang", rv$count_before)),
-        tags$div(sprintf("Setelah filter: %d pasang", rv$count_after)),
-        tags$div(sprintf("Terhapus: %d pasang (%.1f%%)", removed, pct))
-      )
+      div(class = "alert alert-info", style = "margin-top: 12px;",
+          tags$div(sprintf("Sebelum filter: %d pasang", rv$count_before)),
+          tags$div(sprintf("Setelah filter: %d pasang", rv$count_after)),
+          tags$div(sprintf("Terhapus: %d pasang (%.1f%%)", removed, pct)))
     })
     
-    # ── Step 1 -> Step 2 ────────────────────────────────────
     observeEvent(input$btn_next_1, {
       rv$filter_snapshot <- list(
-        apply_length = input$apply_length,
-        length_filter = input$length_filter,
-        apply_idx = input$apply_idx,
-        idx_filter = input$idx_filter
-      )
+        apply_length = input$apply_length, length_filter = input$length_filter,
+        apply_idx = input$apply_idx,       idx_filter = input$idx_filter)
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
-    # ── Step 2 UI ────────────────────────────────────────────
+    # ── Step 2 (template + upload) ────────────────────────
     output$step2_ui <- renderUI({
       tagList(
         fileInput(ns("matrix_file"), "Pilih Matriks Serasi (.xlsx)", accept = ".xlsx"),
         numericInput(ns("n_alt"), "Jumlah Opsi Alternatif per Kasus", value = 5, min = 1, max = 10, step = 1),
-        
-        # Check output directory
         if (is.null(output_dir()) || !nzchar(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
               "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
         },
-        
-        div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap;",
-          actionButton(ns("btn_make_template"),
-                       tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"), "Buat Template"),
-                       class = "btn-outline-primary btn-sm"),
-          downloadButton(ns("dl_template"), "Unduh Template", class = "btn-outline-success btn-sm")
-        ),
+        div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+            actionButton(ns("btn_make_template"),
+                         tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"), "Buat Template"),
+                         class = "btn-outline-primary btn-sm"),
+            downloadButton(ns("dl_template"), "Unduh Template", class = "btn-outline-success btn-sm")),
         uiOutput(ns("template_status_ui")),
         hr(),
         fileInput(ns("alt_upload"), "Unggah Template yang Sudah Diisi (.xlsx)", accept = ".xlsx"),
@@ -383,7 +373,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
       )
     })
     
-    # Step 2: load matrix on upload 
     observeEvent(input$matrix_file, {
       req(input$matrix_file)
       tryCatch({
@@ -395,43 +384,29 @@ recommendation_adjacent_server <- function(id, output_dir) {
       })
     })
     
-    # ── Step 2: make template ───────────────────────────────
     observeEvent(input$btn_make_template, {
-      
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+                         type = "error", duration = 5)
         return()
       }
-      
       req(rv$idx_padan_map_filter, input$matrix_file)
       withProgress(message = "Membuat Template Opsi Alternatif", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Memuat matriks serasi...")
           rv$matriks_serasi <- load_validate_matrix_table(input$matrix_file$datapath, title = "serasi")
-          
           out_dir_step2 <- file.path(output_dir(), "Penyusunan Alternatif")
           dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
-          
           incProgress(0.5, detail = "Memproses opsi alternatif...")
           determine_alternative_zones(
             idx_padan_map_filter = rv$idx_padan_map_filter,
             serasi_matrix = rv$matriks_serasi,
-            n_alt = input$n_alt,
-            step = "step2",
-            output_dir = out_dir_step2
-          )
-          
+            n_alt = input$n_alt, step = "step2", output_dir = out_dir_step2)
           incProgress(0.8, detail = "Menyimpan file template...")
           generated <- file.path(out_dir_step2, "adjacent_alternative_zones_selections.xlsx")
-          if (!file.exists(generated)) {
+          if (!file.exists(generated))
             stop("Template dibuat tetapi file .xlsx tidak ditemukan di folder output.")
-          }
           rv$alt_template_path <- generated
-          
           showNotification("Template alternatif zona berhasil dibuat.", type = "message")
           incProgress(1.0, detail = "Selesai!")
         }, error = function(e) {
@@ -460,40 +435,28 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     observe({
       req(input$alt_upload)
-      
       if (is.null(rv$matriks_serasi) || is.null(rv$idx_padan_map_filter)) {
         missing <- c(
           if (is.null(rv$matriks_serasi))       "Matriks Serasi (.xlsx)",
-          if (is.null(rv$idx_padan_map_filter)) "Peta PADAN yang sudah difilter"
-        )
+          if (is.null(rv$idx_padan_map_filter)) "Peta PADAN yang sudah difilter")
         rv$alt_status <- list(
           ok  = FALSE,
-          msg = paste0(
-            "File template telah diunggah. Menunggu input berikut sebelum dapat divalidasi:\n- ",
-            paste(missing, collapse = "\n- ")
-          ),
-          preview = NULL
-        )
+          msg = paste0("File template telah diunggah. Menunggu input berikut sebelum dapat divalidasi:\n- ",
+                       paste(missing, collapse = "\n- ")),
+          preview = NULL)
         return()
       }
-      
       tryCatch({
         alt_table <- load_and_validate_table(input$alt_upload$datapath)
         check <- .validate_alt_table(alt_table, rv$matriks_serasi)
-        
         if (!check$ok) {
           rv$idx_padan_map_alt <- NULL
           rv$alt_status <- list(ok = FALSE, msg = check$msg, preview = NULL)
           return()
         }
-        
         is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% names(alt_table)) &&
           !"id" %in% names(alt_table)
-        
-        if (is_dissolved) {
-          alt_table <- undissolve_adjacent_pairs(alt_table)
-        }
-        
+        if (is_dissolved) alt_table <- undissolve_adjacent_pairs(alt_table)
         needed <- c("id", "id_pu", "alt_RTRW", "alt_RZWP3K")
         missing_needed <- setdiff(needed, names(alt_table))
         if (length(missing_needed) > 0) {
@@ -502,32 +465,22 @@ recommendation_adjacent_server <- function(id, output_dir) {
             ok = FALSE,
             msg = paste("Kolom tidak ditemukan setelah un-dissolve:",
                         paste(missing_needed, collapse = ", ")),
-            preview = NULL
-          )
+            preview = NULL)
           return()
         }
-        
         alt_table_feature <- alt_table[, needed]
-        
         idx_padan_map_alt <- dplyr::left_join(
-          rv$idx_padan_map_filter,
-          alt_table_feature,
-          by = c("id", "id_pu")
-        )
-        
+          rv$idx_padan_map_filter, alt_table_feature, by = c("id", "id_pu"))
         new_snapshot <- alt_table_feature
         changed <- is.null(rv$alt_table_snapshot) || !identical(new_snapshot, rv$alt_table_snapshot)
         if (changed) reset_from_step3()
         rv$alt_table_snapshot <- new_snapshot
-        
         rv$idx_padan_map_alt <- idx_padan_map_alt
         rv$alt_status <- list(
           ok = TRUE, msg = check$msg,
           preview = head(sf::st_drop_geometry(idx_padan_map_alt)[, intersect(
             c("id", "id_pu", "RTRW", "RZWP3K", "alt_RTRW", "alt_RZWP3K"),
-            names(idx_padan_map_alt)
-          )], 10)
-        )
+            names(idx_padan_map_alt))], 10))
       }, error = function(e) {
         rv$idx_padan_map_alt <- NULL
         rv$alt_status <- list(ok = FALSE, msg = paste("Gagal membaca file:", e$message), preview = NULL)
@@ -539,7 +492,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
       if (!rv$alt_status$ok) {
         div(class = "alert alert-danger", style = "white-space: pre-wrap;",
             tags$i(class = "bi bi-exclamation-triangle-fill me-2"), rv$alt_status$msg,
-            tags$div(style = "margin-top: 6px; font-weight: 600;", "Silakan unggah ulang file yang sudah diperbaiki."))
+            tags$div(style = "margin-top: 6px; font-weight: 600;",
+                     "Silakan unggah ulang file yang sudah diperbaiki."))
       } else {
         div(class = "alert alert-success mb-2",
             tags$i(class = "bi bi-check-circle me-2"), rv$alt_status$msg)
@@ -547,13 +501,9 @@ recommendation_adjacent_server <- function(id, output_dir) {
     })
     
     observeEvent(input$btn_back_2, go_to_panel("step1"))
+    observeEvent(input$btn_next_2, { rv$unlocked <- max(rv$unlocked, 3); go_to_panel("step3") })
     
-    observeEvent(input$btn_next_2, {
-      rv$unlocked <- max(rv$unlocked, 3)
-      go_to_panel("step3")
-    })
-    
-    # ── Step 3 UI ────────────────────────────────────────────
+    # ── Step 3 (NPV) ──────────────────────────────────────
     output$step3_ui <- renderUI({
       tagList(
         checkboxInput(ns("npv_enable"), "Hitung Nilai Ekonomi (NPV)?", value = FALSE),
@@ -572,19 +522,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
     })
     
     observeEvent(input$btn_calc_npv, {
-      req(rv$idx_padan_map_alt, input$npv_lulc_file, input$land_dist_rtrw_file, input$land_dist_rzwp3k_file)
+      req(rv$idx_padan_map_alt, input$npv_lulc_file,
+          input$land_dist_rtrw_file, input$land_dist_rzwp3k_file)
       tryCatch({
         npv_lulc <- load_and_validate_table(input$npv_lulc_file$datapath)
         matriks_land_distribution_rtrw   <- load_validate_matrix_table(input$land_dist_rtrw_file$datapath, title = "distribusi lahan RTRW")
         matriks_land_distribution_rzwp3k <- load_validate_matrix_table(input$land_dist_rzwp3k_file$datapath, title = "distribusi lahan RZWP3K")
-        
         adjacent_economy_map <- calculate_economic_npv(
           alt_map_with_decision = rv$idx_padan_map_alt,
           npv_lulc = npv_lulc,
           matriks_land_distribution_rtrw = matriks_land_distribution_rtrw,
-          matriks_land_distribution_rzwp3k = matriks_land_distribution_rzwp3k
-        )
-        
+          matriks_land_distribution_rzwp3k = matriks_land_distribution_rzwp3k)
         rv$adjacent_economy_map <- adjacent_economy_map
         rv$npv_status <- list(ok = TRUE, msg = "Perhitungan NPV berhasil.")
         rv$final_result <- NULL
@@ -610,17 +558,14 @@ recommendation_adjacent_server <- function(id, output_dir) {
         base_map <- rv$idx_padan_map_alt
         if (!is.null(base_map)) {
           rv$adjacent_economy_map <- base_map %>%
-            dplyr::mutate(
-              econ_rtrw_delta   = NA_real_,
-              econ_rzwp3k_delta = NA_real_
-            )
+            dplyr::mutate(econ_rtrw_delta = NA_real_, econ_rzwp3k_delta = NA_real_)
         }
       }
       rv$unlocked <- max(rv$unlocked, 4)
       go_to_panel("step4")
     })
     
-    # ── Step 4 UI ────────────────────────────────────────────
+    # ── Step 4 (final) ────────────────────────────────────
     output$step4_ui <- renderUI({
       tagList(
         layout_column_wrap(
@@ -637,64 +582,44 @@ recommendation_adjacent_server <- function(id, output_dir) {
         ),
         sliderInput(ns("alpha_val"), "Proporsi Alpha (\u03B1)", min = 0, max = 1, value = 0.5, step = 0.1),
         hr(),
-        
         if (is.null(output_dir()) || !nzchar(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
               "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
         },
-        
-        div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap;",
-          actionButton(ns("btn_run_final"),
-                       tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis Alternatif"),
-                       class = "btn-success btn-sm")
-        ),
+        div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+            actionButton(ns("btn_run_final"),
+                         tagList(tags$i(class = "bi bi-play-fill me-1"), "Jalankan Analisis Alternatif"),
+                         class = "btn-success btn-sm")),
         .step_nav(ns, back_id = "btn_back_4", next_id = NULL)
       )
     })
     
-    # ── Step 4: Final calculation ────────────────────────────
     observeEvent(input$btn_run_final, {
-      
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification(
-          "Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
-          type = "error",
-          duration = 5
-        )
+        showNotification("Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+                         type = "error", duration = 5)
         return()
       }
-      
       req(rv$adjacent_economy_map, input$rtrw_priority_file, input$rzwp3k_priority_file)
-      
       rv$final_result <- NULL
       log_lines <- character(0)
-      
       withProgress(message = "Menyusun alternatif kasus bertetangga", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Memuat tabel acuan pola...")
           rtrw_prioritas   <- load_and_validate_table(input$rtrw_priority_file$datapath)
           rzwp3k_prioritas <- load_and_validate_table(input$rzwp3k_priority_file$datapath)
-          
-          chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW")
-          if (!chk_rtrw$ok) stop(chk_rtrw$msg)
-          chk_rz <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K")
-          if (!chk_rz$ok) stop(chk_rz$msg)
-          
+          chk_rtrw <- .validate_priority_table(rtrw_prioritas, "RTRW"); if (!chk_rtrw$ok) stop(chk_rtrw$msg)
+          chk_rz   <- .validate_priority_table(rzwp3k_prioritas, "RZWP3K"); if (!chk_rz$ok) stop(chk_rz$msg)
           priority_rtrw   <- rtrw_prioritas$RTRW[rtrw_prioritas$Prioritas == 1]
           priority_rzwp3k <- rzwp3k_prioritas$RZWP3K[rzwp3k_prioritas$Prioritas == 1]
-          
           alpha   <- input$alpha_val
           th_high <- input$th_high
           th_med  <- input$th_med
           th_low  <- input$th_low
-          
           npv_enabled <- isTRUE(input$npv_enable)
-          
           matriks_serasi <- rv$matriks_serasi
           adjacent_economy_map <- rv$adjacent_economy_map
-          
           get_compat <- function(x, y) {
             if (is.na(x) || is.na(y)) return(NA_real_)
             val <- matriks_serasi %>%
@@ -702,31 +627,23 @@ recommendation_adjacent_server <- function(id, output_dir) {
               dplyr::pull(idx_serasi)
             if (length(val) == 0) NA_real_ else val
           }
-          
           incProgress(0.4, detail = "Memisahkan layer RTRW dan RZWP3K...")
           rtrw_rows <- adjacent_economy_map %>%
             dplyr::filter(!is.na(RTRW)) %>%
             dplyr::select(id_pu, id_group, RTRW, alt_RTRW, idx_padu_final, econ_rtrw_delta) %>%
-            sf::st_drop_geometry() %>%
-            dplyr::as_tibble()
-          
+            sf::st_drop_geometry() %>% dplyr::as_tibble()
           rz_rows <- adjacent_economy_map %>%
             dplyr::filter(!is.na(RZWP3K)) %>%
             dplyr::select(id_pu, RZWP3K, alt_RZWP3K, econ_rzwp3k_delta) %>%
-            sf::st_drop_geometry() %>%
-            dplyr::as_tibble()
-          
+            sf::st_drop_geometry() %>% dplyr::as_tibble()
           common_cols <- adjacent_economy_map %>%
             dplyr::select(id_pu, idx_padan, area_buffer_ha) %>%
             sf::st_drop_geometry() %>%
             dplyr::distinct(id_pu, .keep_all = TRUE)
-          
           split_rtrw_rzwp3k <- rtrw_rows %>%
             dplyr::full_join(rz_rows, by = "id_pu") %>%
             dplyr::left_join(common_cols, by = "id_pu")
-          
           stopifnot(all(!is.na(split_rtrw_rzwp3k$RTRW) & !is.na(split_rtrw_rzwp3k$RZWP3K)))
-          
           incProgress(0.6, detail = "Menghitung keputusan alternatif")
           prep_recomendation <- split_rtrw_rzwp3k %>%
             dplyr::mutate(
@@ -734,8 +651,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
                 RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ "Both",
                 RTRW %in% priority_rtrw ~ "Yes",
                 RZWP3K %in% priority_rzwp3k ~ "Yes",
-                TRUE ~ "None"
-              ),
+                TRUE ~ "None"),
               comp_if_rtrw = purrr::map2_dbl(alt_RTRW, RZWP3K, get_compat),
               comp_if_rz   = purrr::map2_dbl(RTRW, alt_RZWP3K, get_compat),
               N_if_rtrw = alpha * comp_if_rtrw + (1 - alpha) * idx_padu_final,
@@ -743,20 +659,15 @@ recommendation_adjacent_server <- function(id, output_dir) {
               dR = N_if_rtrw - idx_padan,
               dZ = N_if_rz   - idx_padan
             )
-          
           recommendation_decision <- prep_recomendation %>%
             dplyr::mutate(
               recommendation = dplyr::case_when(
                 RTRW %in% priority_rtrw & RZWP3K %in% priority_rzwp3k ~ dplyr::case_when(
-                  dZ > dR ~ "Ubah RZ",
-                  dR > dZ ~ "Ubah RTRW",
-                  TRUE    ~ "Tetap/Koordinasi"
-                ),
+                  dZ > dR ~ "Ubah RZ", dR > dZ ~ "Ubah RTRW", TRUE ~ "Tetap/Koordinasi"),
                 RTRW %in% priority_rtrw & dZ > 0 ~ "Ubah RZ",
                 RZWP3K %in% priority_rzwp3k & dR > 0 ~ "Ubah RTRW",
                 dR > 0 | dZ > 0 ~ dplyr::if_else(dR >= dZ, "Ubah RTRW", "Ubah RZ"),
-                TRUE ~ "Tetap/Koordinasi"
-              ),
+                TRUE ~ "Tetap/Koordinasi"),
               RTRW_new = dplyr::if_else(recommendation == "Ubah RTRW", alt_RTRW, RTRW),
               RZWP3K_new = dplyr::if_else(recommendation == "Ubah RZ", alt_RZWP3K, RZWP3K),
               idx_serasi_new = purrr::map2_dbl(RTRW_new, RZWP3K_new, get_compat),
@@ -767,47 +678,24 @@ recommendation_adjacent_server <- function(id, output_dir) {
                 !npv_enabled ~ NA_real_,
                 recommendation == "Ubah RTRW" ~ econ_rtrw_delta,
                 recommendation == "Ubah RZ"   ~ econ_rzwp3k_delta,
-                TRUE ~ 0
-              ),
+                TRUE ~ 0),
               area_change_ha = dplyr::if_else(recommendation == "Tetap/Koordinasi", 0, area_buffer_ha),
               idx_padan_delta = idx_padan_new - idx_padan
             )
-          
           recommendation_decision_filter <- recommendation_decision %>%
-            dplyr::select(
-              id_pu,
-              recommendation,
-              RTRW_new,
-              RZWP3K_new,
-              idx_serasi_new,
-              idx_padan_new,
-              actual_integration,
-              recom_integration,
-              econ_delta,
-              area_change_ha,
-              idx_padan_delta
-            ) %>%
+            dplyr::select(id_pu, recommendation, RTRW_new, RZWP3K_new,
+                          idx_serasi_new, idx_padan_new, actual_integration,
+                          recom_integration, econ_delta, area_change_ha, idx_padan_delta) %>%
             sf::st_drop_geometry()
-          
           adjacent_recom_map <- adjacent_economy_map %>%
             dplyr::left_join(recommendation_decision_filter, by = "id_pu")
-          
           incProgress(0.8, detail = "Menyimpan hasil ke disk...")
-          
           recom_adjacent_dir <- file.path(output_dir(), "Penyusunan Alternatif")
-          if (!dir.exists(recom_adjacent_dir)) {
-            dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
-          }
-          if (!dir.exists(recom_adjacent_dir)) {
-            stop("Tidak dapat membuat atau mengakses direktori: ", recom_adjacent_dir)
-          }
-          
-          out_gpkg <- file.path(recom_adjacent_dir, "idx_padan_recommendation.gpkg")
-          out_xlsx <- file.path(recom_adjacent_dir, "idx_padan_recommendation.xlsx")
-          
+          if (!dir.exists(recom_adjacent_dir)) dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
+          out_gpkg <- file.path(recom_adjacent_dir, "idx_padan_adjacent_recommendation.gpkg")
+          out_xlsx <- file.path(recom_adjacent_dir, "idx_padan_adjacent_recommendation.xlsx")
           sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
           openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
-          
           log_lines <- c(
             log_lines,
             "Ringkasan alternatif:",
@@ -818,72 +706,47 @@ recommendation_adjacent_server <- function(id, output_dir) {
               adjacent_recom_map %>%
                 sf::st_drop_geometry() %>%
                 dplyr::count(actual_integration, recom_integration) %>%
-                dplyr::arrange(actual_integration, recom_integration)
-            ))
-          )
-          
+                dplyr::arrange(actual_integration, recom_integration))))
           adjacent_recom_map_viz <- tryCatch({
             viz <- dissolve_id_pu(adjacent_recom_map)
             if (any(!sf::st_is_valid(viz))) viz <- sf::st_make_valid(viz)
             viz
           }, error = function(e) {
-            warning("dissolve_id_pu failed, using raw map with st_make_valid: ", conditionMessage(e))
+            warning("dissolve_id_pu failed: ", conditionMessage(e))
             sf::st_make_valid(adjacent_recom_map)
           })
-          
-          rv$final_result <- list(
-            map = adjacent_recom_map_viz,
-            table = sf::st_drop_geometry(adjacent_recom_map_viz),
-            gpkg_path = out_gpkg,
-            xlsx_path = out_xlsx
-          )
+          rv$final_result <- list(map = adjacent_recom_map_viz,
+                                  table = sf::st_drop_geometry(adjacent_recom_map_viz),
+                                  gpkg_path = out_gpkg, xlsx_path = out_xlsx)
           rv$final_log <- paste(log_lines, collapse = "\n")
-          
-          # ── Store result for report generation ──
           out <- list(
             inputs = list(
               start_time = Sys.time(),
               idx_padan_file = input$idx_padan_file$name,
+              idx_padan_source = rv$idx_padan_source,
               rtrw_priority_file = input$rtrw_priority_file$name,
               rzwp3k_priority_file = input$rzwp3k_priority_file$name,
               alpha = input$alpha_val,
-              th_high = input$th_high,
-              th_med = input$th_med,
-              th_low = input$th_low,
+              th_high = input$th_high, th_med = input$th_med, th_low = input$th_low,
               npv_enabled = isTRUE(input$npv_enable),
-              output_dir = output_dir()
-            ),
+              output_dir = output_dir()),
             result = list(
               idx_alternative_adjacent_map = adjacent_recom_map,
-              idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)
-            )
-          )
-          
+              idx_alternative_adjacent_table = sf::st_drop_geometry(adjacent_recom_map)))
           log_dir <- file.path(recom_adjacent_dir, "log")
-          if (!dir.exists(log_dir)) {
-            dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
-          }
-          log_path <- file.path(log_dir, "idx_padan_adjacent_recommendation.rda")
-          if (dir.exists(log_dir)) {
-            tryCatch({
-              inputs <- out$inputs
-              save(inputs, file = log_path)
-            }, error = function(e) warning("Gagal menulis file log: ", e$message))
-          }
-          
+          if (!dir.exists(log_dir)) dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+          tryCatch({
+            inputs <- out$inputs
+            save(inputs, file = file.path(log_dir, "idx_padan_adjacent_recommendation.rda"))
+          }, error = function(e) warning("Gagal menulis file log: ", e$message))
           session$userData$module_results$recommendation_adjacent <- out
-          
-          idx_padan_recom <- plot_categorical_map(
-            map      = adjacent_recom_map,
-            title    = "Peta Opsi Alternatif Kasus Bertetangga",
-            column   = "recommendation",         
-            legend   = "Opsi Alternatif",
-            filepath = file.path(log_dir, "peta_opsi_alternatif_bertetangga.png")
-          )
-          
+          plot_categorical_map(
+            map = adjacent_recom_map,
+            title = "Peta Opsi Alternatif Kasus Bertetangga",
+            column = "recommendation", legend = "Opsi Alternatif",
+            filepath = file.path(log_dir, "peta_opsi_alternatif_bertetangga.png"))
           showNotification("Berhasil! Analisis alternatif telah disimpan.", type = "message")
           incProgress(1.0, detail = "Selesai!")
-          
         }, error = function(e) {
           call_txt <- if (!is.null(conditionCall(e))) paste0("\n(pada pemanggilan: ", paste(deparse(conditionCall(e)), collapse = " "), ")") else ""
           rv$final_log <- paste0("Error: ", conditionMessage(e), call_txt)
@@ -894,8 +757,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
     
     observeEvent(input$btn_back_4, go_to_panel("step3"))
     
-    # ── Outputs for right column ─────────────────────────────
-    # Overall status
     output$status_box <- renderUI({
       if (!is.null(rv$final_result)) {
         div(class = "alert alert-success mb-0",
@@ -912,13 +773,9 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
     })
     
-    # ── Sync rv$final_result → standard rv fields for render_result_server ──
     observe({
       if (!is.null(rv$final_result)) {
-        rv$analysis_result <- list(
-          map   = rv$final_result$map,
-          table = rv$final_result$table
-        )
+        rv$analysis_result <- list(map = rv$final_result$map, table = rv$final_result$table)
         rv$gpkg_path   <- rv$final_result$gpkg_path
         rv$xlsx_path   <- rv$final_result$xlsx_path
         rv$log_messages <- if (!is.null(rv$final_log)) rv$final_log else ""
@@ -930,20 +787,15 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
     })
     
-    # ── Shared result server: wires result_map, result_table, log, downloads ──
     recom_adjacent_config <- list(
       map_color_col  = "recommendation",
       map_title      = "Alternatif",
       map_palette    = c("blue", "green", "orange", "red", "purple"),
       map_label_cols = list(
-        "ID PU"       = "id_pu",
-        "ID Grup"     = "id_group",
-        "RTRW"        = "RTRW",
-        "RZWP3K"      = "RZWP3K",
-        "Alternatif"  = "recommendation",
-        "RTRW Baru"   = "RTRW_new",
-        "RZWP3K Baru" = "RZWP3K_new"
-      ),
+        "ID PU" = "id_pu", "ID Grup" = "id_group",
+        "RTRW" = "RTRW", "RZWP3K" = "RZWP3K",
+        "Alternatif" = "recommendation",
+        "RTRW Baru" = "RTRW_new", "RZWP3K Baru" = "RZWP3K_new"),
       table_cols = c(
         "id_pu"                = "ID PU",
         "id_group"             = "ID Grup",
@@ -974,36 +826,23 @@ recommendation_adjacent_server <- function(id, output_dir) {
         "econ_rzwp3k_actual"   = "Nilai Ekonomi RZWP3K (Aktual)",
         "econ_rzwp3k_recom"    = "Nilai Ekonomi RZWP3K (Alternatif)",
         "econ_rzwp3k_delta"    = "Selisih Nilai Ekonomi RZWP3K",
-        "econ_delta"           = "Selisih Nilai Ekonomi Akhir"
-      ),
+        "econ_delta"           = "Selisih Nilai Ekonomi Akhir"),
       table_round_cols = c(
-        "Luas (ha)",
-        "Panjang Segmen Bertetangga (meter)",
-        "Indeks PADU Kombinasi",
-        "Indeks SERASI Awal",
-        "Indeks SERASI Baru",
-        "Indeks PADAN Awal",
-        "Indeks PADAN Baru",
-        "Selisih Indeks PADAN",
-        "NPV per ha (RTRW Aktual)",
-        "NPV per ha (RZWP3K Aktual)",
-        "NPV per ha (RTRW Alternatif)",
-        "NPV per ha (RZWP3K Alternatif)",
-        "Nilai Ekonomi RTRW (Aktual)",
-        "Nilai Ekonomi RTRW (Alternatif)",
+        "Luas (ha)", "Panjang Segmen Bertetangga (meter)",
+        "Indeks PADU Kombinasi", "Indeks SERASI Awal", "Indeks SERASI Baru",
+        "Indeks PADAN Awal", "Indeks PADAN Baru", "Selisih Indeks PADAN",
+        "NPV per ha (RTRW Aktual)", "NPV per ha (RZWP3K Aktual)",
+        "NPV per ha (RTRW Alternatif)", "NPV per ha (RZWP3K Alternatif)",
+        "Nilai Ekonomi RTRW (Aktual)", "Nilai Ekonomi RTRW (Alternatif)",
         "Selisih Nilai Ekonomi RTRW",
-        "Nilai Ekonomi RZWP3K (Aktual)",
-        "Nilai Ekonomi RZWP3K (Alternatif)",
-        "Selisih Nilai Ekonomi RZWP3K",
-        "Selisih Nilai Ekonomi Akhir"
-      ),
+        "Nilai Ekonomi RZWP3K (Aktual)", "Nilai Ekonomi RZWP3K (Alternatif)",
+        "Selisih Nilai Ekonomi RZWP3K", "Selisih Nilai Ekonomi Akhir"),
       table_optional_cols = c(
         "npv_ha_actual_rtrw", "npv_ha_actual_rzwp3k",
         "npv_ha_recom_rtrw",  "npv_ha_recom_rzwp3k",
         "econ_rtrw_actual",   "econ_rtrw_recom",   "econ_rtrw_delta",
         "econ_rzwp3k_actual", "econ_rzwp3k_recom", "econ_rzwp3k_delta",
-        "econ_delta"
-      )
+        "econ_delta")
     )
     
     render_result_server(input, output, session, rv, recom_adjacent_config)

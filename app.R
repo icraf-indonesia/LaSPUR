@@ -734,6 +734,24 @@ ui <- page_sidebar(
       margin: 0.5rem 0 !important;
     }
 
+    .laspur-fileinput-with-bar {
+      margin-bottom: 16px !important;
+    }
+    .laspur-fileinput-with-bar .form-group.shiny-input-container {
+      margin-bottom: 0 !important;
+    }
+    .laspur-fileinput-with-bar .laspur-loaded-bar {
+      margin-top: 3px !important;
+      margin-bottom: 0 !important;
+    }
+    @keyframes laspur-loaded-bar-fade {
+      0%   { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    .laspur-loaded-bar {
+      animation: laspur-loaded-bar-fade 0.4s ease-out;
+    }
+
     /* ========================================================
        ANALYSIS BUTTON LOADING STATE (frozen while running)
        ======================================================== */
@@ -943,6 +961,8 @@ server <- function(input, output, session) {
   pending_action <- reactiveVal(NULL)
   active_path   <- reactiveVal("")
   report_path    <- reactiveVal(NULL)
+  
+  session$userData$active_path <- active_path
   
   output$active_path_indicator <- renderUI({
     path <- active_path()
@@ -1902,6 +1922,22 @@ $(document).ready(function() {
     });
   })();
 
+  Shiny.addCustomMessageHandler('set_fileinput_text', function(msg) {
+    if (!msg || !msg.input_id || !msg.filename) return;
+    [30, 90, 200, 400, 700].forEach(function(d) {
+      setTimeout(function() {
+        var input = document.getElementById(msg.input_id);
+        if (!input) return;
+        var group = input.closest('.input-group');
+        if (!group) return;
+        var txt = group.querySelector('.form-control');
+        if (!txt) return;
+        txt.value = msg.filename;
+        txt.placeholder = msg.filename;
+        txt.dataset.laspurAutofilled = '1';
+      }, d);
+    });
+  });
 });
 "
 

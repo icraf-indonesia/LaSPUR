@@ -1,25 +1,20 @@
 # ui/modules/mod_reconcile.R
 # ============================================================
-#  MODULE: Reconcile (RTRW & RZWP3K)
-#  Uses the standardized create_result_ui() / render_result_server().
-#  Exports GPKG, XLSX, template, PNG map, and RDA log to the
-#  module's folder under output_dir ("Rekonsiliasi").
-# ============================================================
 
 source("R/functions.R")
 source("R/helpers.R")
 
-# Config
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(a, b) if (is.null(a)) b else a
+}
+
 .RECON_MODULE_FOLDER <- "Rekonsiliasi"
 .RECON_RDA           <- "log/idx_reconcile_log.rda"
 .RECON_PNG_DIR       <- "log"
 
-# ── Small UI Helpers ────────────────────────────────────────────
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
-  div(
-    class = "alert alert-secondary mb-0",
-    tags$i(class = "bi bi-lock-fill me-2"), msg
-  )
+  div(class = "alert alert-secondary mb-0",
+      tags$i(class = "bi bi-lock-fill me-2"), msg)
 }
 
 .step_nav <- function(ns, back_id = NULL, next_id = NULL, next_label = "Lanjut") {
@@ -36,28 +31,55 @@ source("R/helpers.R")
   )
 }
 
-# ── Shapefile / GPKG Layer Reader Helper ────────────────────────
 .read_spatial_input <- function(file_df) {
   if (is.null(file_df)) return(NULL)
-  
   if (nrow(file_df) == 1 && grepl("\\.gpkg$", file_df$name[1], ignore.case = TRUE)) {
     return(sf::st_read(file_df$datapath[1], quiet = TRUE))
   }
-  
   temp_dir <- tempdir()
   for (i in 1:nrow(file_df)) {
     file.copy(file_df$datapath[i], file.path(temp_dir, file_df$name[i]), overwrite = TRUE)
   }
-  
   shp_file <- file_df$name[grepl("\\.shp$", file_df$name, ignore.case = TRUE)]
-  if (length(shp_file) == 0) {
+  if (length(shp_file) == 0)
     stop("Komponen file .shp tidak ditemukan. Pastikan Anda memilih file .shp, .shx, .dbf, dan .prj sekaligus.")
-  }
-  
   sf::st_read(file.path(temp_dir, shp_file[1]), quiet = TRUE)
 }
 
-# ── UI ──────────────────────────────────────────────────────────
+.resolve_alpha_from_recommendation <- function(step, output_dir, session,
+                                               default_alpha = 0.5) {
+  if (identical(as.integer(step), 1L)) {
+    mem_key  <- "recommendation_overlaps"
+    log_file <- "idx_padan_overlaps_recommendation.rda"
+  } else if (identical(as.integer(step), 2L)) {
+    mem_key  <- "recommendation_adjacent"
+    log_file <- "idx_padan_adjacent_recommendation.rda"
+  } else {
+    return(list(alpha = default_alpha, source = "default (step unknown)"))
+  }
+  rec <- tryCatch(session$userData$module_results[[mem_key]], error = function(e) NULL)
+  if (!is.null(rec) && !is.null(rec$inputs) && !is.null(rec$inputs$alpha)) {
+    a <- suppressWarnings(as.numeric(rec$inputs$alpha))
+    if (is.finite(a)) return(list(alpha = a, source = "sesi (memori)"))
+  }
+  if (!is.null(output_dir) && nzchar(output_dir)) {
+    log_path <- file.path(output_dir, "Penyusunan Alternatif", "log", log_file)
+    if (file.exists(log_path)) {
+      res <- tryCatch({
+        env <- new.env(parent = emptyenv())
+        load(log_path, envir = env)
+        if (exists("inputs", envir = env, inherits = FALSE)) {
+          inp <- get("inputs", envir = env, inherits = FALSE)
+          a <- suppressWarnings(as.numeric(inp$alpha))
+          if (is.finite(a)) list(alpha = a, source = "file log") else NULL
+        } else NULL
+      }, error = function(e) NULL)
+      if (!is.null(res)) return(res)
+    }
+  }
+  list(alpha = default_alpha, source = "default (tidak ditemukan)")
+}
+
 reconcile_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -66,39 +88,59 @@ reconcile_ui <- function(id) {
       h4("5. Rekonsiliasi Integrasi Tata Ruang", style = "margin: 0; font-weight: 700;"),
       tags$p(
         "Sinkronisasi peta RTRW dan RZWP3K secara otomatis berdasarkan matriks keputusan prioritas wilayah darat dan laut.",
-        style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;"
-      )
+        style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;")
     ),
-    
     fluidRow(
       class = "g-3",
-      
       column(
         width = 4,
         card(
           card_header("Input & Parameter"),
           accordion(
-            id = ns("wizard"),
-            open = "step1",
-            multiple = FALSE,
-            
+            id = ns("wizard"), open = "step1", multiple = FALSE,
             accordion_panel(
-              title = "Langkah 1 — Menyiapkan Keputusan Rekonsiliasi",
+              "Langkah 1 — Menyiapkan Keputusan Rekonsiliasi",
               value = "step1",
               icon = tags$i(class = "bi bi-file-earmark-spreadsheet-fill"),
-              uiOutput(ns("step1_ui"))
+              div(
+                class = "laspur-fileinput-with-bar",
+                fileInput(ns("recon_map_file"),
+                          label = "Peta Rekomendasi (.gpkg)",
+                          accept = ".gpkg"),
+                uiOutput(ns("loaded_file_bar"))
+              ),
+              hr(),
+              div(style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;",
+                  actionButton(ns("btn_make_template"),
+                               tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"),
+                                       "Buat Templat"),
+                               class = "btn-outline-primary btn-sm"),
+                  downloadButton(ns("dl_template"), "Unduh Templat",
+                                 class = "btn-outline-success btn-sm")),
+              uiOutput(ns("template_status_ui")),
+              hr(),
+              fileInput(ns("rtrw_file"), "Peta RTRW (.shp/.gpkg)",
+                        accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"),
+                        multiple = TRUE),
+              fileInput(ns("rzwp3k_file"), "Peta RZWP3K (.shp/.gpkg)",
+                        accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"),
+                        multiple = TRUE),
+              fileInput(ns("rtrw_priority_file"), "Tabel Acuan Pola RTRW (.xlsx)",
+                        accept = ".xlsx"),
+              fileInput(ns("rzwp3k_priority_file"), "Tabel Acuan Pola RZWP3K (.xlsx)",
+                        accept = ".xlsx"),
+              fileInput(ns("serasi_matrix_file"), "Matriks SERASI (.xlsx)",
+                        accept = ".xlsx"),
+              .step_nav(ns, back_id = NULL, next_id = "btn_next_1",
+                        next_label = "Lanjut ke Langkah 2")
             ),
-            
-            accordion_panel(
-              title = "Langkah 2 — Menentukan Keputusan Rekonsiliasi",
-              value = "step2",
-              icon = tags$i(class = "bi bi-check2-circle"),
-              uiOutput(ns("step2_ui"))
-            )
+            accordion_panel("Langkah 2 — Menentukan Keputusan Rekonsiliasi",
+                            value = "step2",
+                            icon = tags$i(class = "bi bi-check2-circle"),
+                            uiOutput(ns("step2_ui")))
           )
         )
       ),
-      
       column(
         width = 8,
         card(
@@ -112,7 +154,6 @@ reconcile_ui <- function(id) {
   )
 }
 
-# ── Server ──────────────────────────────────────────────────────
 reconcile_server <- function(id, output_dir) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -120,87 +161,188 @@ reconcile_server <- function(id, output_dir) {
     rv <- reactiveValues(
       unlocked = 1,
       detected_step = NULL,
-      
-      # inputs
       recon_map = NULL,
+      recon_map_source = NULL,  
       rtrw_vect = NULL,
       rzwp3k_vect = NULL,
       rtrw_prioritas = NULL,
       rzwp3k_prioritas = NULL,
       serasi_matrix = NULL,
-      
       template_path = NULL,
-      
       resolved_rtrw = NULL,
       resolved_rzwp3k = NULL,
       resolved_integrated = NULL,
-      
       analysis_result = NULL,
       gpkg_path       = NULL,
       xlsx_path       = NULL,
       log_messages    = "",
-      
       final_log = NULL
     )
     
     go_to_panel <- function(value) accordion_panel_set(id = "wizard", values = value, session = session)
+    have_results <- reactive({ !is.null(rv$analysis_result) })
     
-    have_results <- reactive({
-      !is.null(rv$analysis_result)
+    active_path_val <- reactive({
+      ap <- tryCatch(session$userData$active_path, error = function(e) NULL)
+      if (is.null(ap)) return("")
+      if (is.function(ap)) return(tryCatch(ap(), error = function(e) ""))
+      as.character(ap)
+    })
+    expected_step <- reactive({
+      switch(active_path_val(), "overlap" = 1L, "adjacent" = 2L, NULL)
     })
     
-    # ── Step 1 UI ──────────────────────────────────────────────
-    output$step1_ui <- renderUI({
-      tagList(
-        fileInput(ns("recon_map_file"), "Pilih Peta Rekomendasi (.gpkg)", accept = ".gpkg"),
-        fileInput(ns("rtrw_file"), "Pilih Peta RTRW (.shp/.gpkg)", accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"), multiple = TRUE),
-        fileInput(ns("rzwp3k_file"), "Pilih Peta RZWP3K (.shp/.gpkg)", accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"), multiple = TRUE),
-        fileInput(ns("rtrw_priority_file"), "Tabel Acuan Pola RTRW (.xlsx)", accept = ".xlsx"),
-        fileInput(ns("rzwp3k_priority_file"), "Tabel Acuan Pola RZWP3K (.xlsx)", accept = ".xlsx"),
-        fileInput(ns("serasi_matrix_file"), "Matriks SERASI (.xlsx)", accept = ".xlsx"),
-        div(
-          style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;",
-          actionButton(ns("btn_make_template"),
-                       tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"), "Buat Templat"),
-                       class = "btn-outline-primary btn-sm"),
-          downloadButton(ns("dl_template"), "Unduh Templat", class = "btn-outline-success btn-sm")
-        ),
-        uiOutput(ns("template_status_ui")),
-        .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
+    discovered_recon_key <- reactive({
+      step <- expected_step()
+      rec_key <- switch(as.character(step %||% ""),
+                        "1" = "recommendation_overlaps",
+                        "2" = "recommendation_adjacent",
+                        NULL)
+      if (!is.null(rec_key)) {
+        rec_res <- tryCatch(session$userData$module_results[[rec_key]],
+                            error = function(e) NULL)
+        if (!is.null(rec_res) && !is.null(rec_res$result)) {
+          m <- rec_res$result$idx_alternative_overlaps_map %||%
+            rec_res$result$idx_alternative_adjacent_map
+          if (!is.null(m) && inherits(m, "sf")) {
+            return(paste0("session|", rec_key))
+          }
+        }
+      }
+      if (!is.null(output_dir()) && nzchar(output_dir())) {
+        folder <- file.path(output_dir(), "Penyusunan Alternatif")
+        expected_file <- switch(as.character(step %||% ""),
+                                "1" = "idx_padan_overlaps_recommendation.gpkg",
+                                "2" = "idx_padan_adjacent_recommendation.gpkg",
+                                NULL)
+        if (!is.null(expected_file)) {
+          f <- file.path(folder, expected_file)
+          if (file.exists(f)) return(paste0("file|", expected_file, "|",
+                                            as.numeric(file.mtime(f))))
+        }
+      }
+      "none"
+    })
+    
+    .detect_step_from_sf <- function(map_data) {
+      cols <- names(map_data)
+      if (any(c("stat_pu", "id_rtrw", "id_rzwp3k") %in% cols)) {
+        if (!"length" %in% cols) return(1L)
+      }
+      if ("length" %in% cols) return(2L)
+      NA_integer_
+    }
+    
+    .load_recon_from_discovery <- function() {
+      key <- discovered_recon_key()
+      if (identical(key, "none")) {
+        rv$recon_map        <- NULL
+        rv$recon_map_source <- NULL
+        rv$detected_step    <- NULL
+        return(invisible(NULL))
+      }
+      map_data <- NULL
+      source   <- NULL
+      if (startsWith(key, "session|")) {
+        rec_key <- sub("^session\\|", "", key)
+        rec_res <- session$userData$module_results[[rec_key]]
+        map_data <- rec_res$result$idx_alternative_overlaps_map %||%
+          rec_res$result$idx_alternative_adjacent_map
+        source <- "session"
+      } else {
+        parts <- strsplit(key, "\\|")[[1]]
+        fname <- parts[2]
+        f <- file.path(output_dir(), "Penyusunan Alternatif", fname)
+        map_data <- tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
+        source <- "file"
+      }
+      if (is.null(map_data)) {
+        rv$recon_map <- NULL; rv$recon_map_source <- NULL; rv$detected_step <- NULL
+        return(invisible(NULL))
+      }
+      step <- .detect_step_from_sf(map_data)
+      if (is.na(step)) {
+        rv$recon_map <- NULL; rv$recon_map_source <- NULL; rv$detected_step <- NULL
+        return(invisible(NULL))
+      }
+      rv$recon_map        <- map_data
+      rv$recon_map_source <- source
+      rv$detected_step    <- step
+      rv$unlocked         <- 1
+      showNotification(
+        sprintf("Peta Rekomendasi terdeteksi sebagai STEP %d (%s) [%s].",
+                step, if (step == 1) "Overlaps" else "Adjacent",
+                if (source == "session") "sesi" else "berkas"),
+        type = "message", duration = 5)
+      invisible(NULL)
+    }
+    
+    observeEvent(discovered_recon_key(), {
+      if (identical(rv$recon_map_source, "manual")) return()
+      .load_recon_from_discovery()
+    }, ignoreNULL = FALSE, ignoreInit = FALSE)
+    
+    output$loaded_file_bar <- renderUI({
+      detected_name <- if (identical(rv$detected_step, 1L)) {
+        "idx_padan_overlaps_recommendation.gpkg"
+      } else if (identical(rv$detected_step, 2L)) {
+        "idx_padan_adjacent_recommendation.gpkg"
+      } else {
+        "idx_padan_recommendation.gpkg"
+      }
+      render_loaded_file_bar(
+        state    = rv$recon_map_source,   
+        input_id = ns("recon_map_file"),
+        filename = detected_name
       )
     })
     
-    # Detect step from uploaded GPKG
+    # ── Manual recon_map upload (reject wrong step) ───────
     observeEvent(input$recon_map_file, {
       req(input$recon_map_file)
       rv$template_path <- NULL
-      rv$detected_step <- NULL
       rv$unlocked <- 1
-      
       tryCatch({
         map_data <- sf::st_read(input$recon_map_file$datapath, quiet = TRUE)
-        cols <- names(map_data)
-        
-        if (any(c("stat_pu", "id_rtrw", "id_rzwp3k") %in% cols)) {
-          rv$detected_step <- 1
-          rv$recon_map <- map_data
-          showNotification("Peta Rekomendasi terdeteksi sebagai STEP 1 (Overlaps).", type = "message")
-        } else if ("length" %in% cols) {
-          rv$detected_step <- 2
-          rv$recon_map <- map_data
-          showNotification("Peta Rekomendasi terdeteksi sebagai STEP 2 (Adjacent).", type = "message")
-        } else {
-          rv$recon_map <- NULL
-          stop("Kolom penanda struktural tidak ditemukan.")
+        step <- .detect_step_from_sf(map_data)
+        if (is.na(step)) stop("Kolom penanda struktural tidak ditemukan.")
+        exp_step <- expected_step()
+        if (!is.null(exp_step) && step != exp_step) {
+          rv$recon_map        <- NULL
+          rv$recon_map_source <- NULL
+          rv$detected_step    <- NULL
+          showNotification(
+            sprintf("Berkas yang Anda unggah adalah STEP %d, tetapi jalur aktif saat ini adalah STEP %d. Silakan unggah berkas yang sesuai.",
+                    step, exp_step),
+            type = "error", duration = 10)
+          return()
         }
+        rv$recon_map        <- map_data
+        rv$recon_map_source <- "manual"
+        rv$detected_step    <- step
+        
+        fname <- input$recon_map_file$name
+        fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+        session$sendCustomMessage("set_fileinput_text", list(
+          input_id = ns("recon_map_file"),
+          filename = fname
+        ))
+        
+        showNotification(
+          sprintf("Peta Rekomendasi (manual) terdeteksi sebagai STEP %d (%s).",
+                  step, if (step == 1) "Overlaps" else "Adjacent"),
+          type = "message"
+        )
       }, error = function(e) {
-        rv$recon_map <- NULL
-        rv$detected_step <- NULL
-        showNotification(paste("Gagal Memvalidasi Berkas:", e$message), type = "error", duration = NULL)
+        rv$recon_map        <- NULL
+        rv$recon_map_source <- NULL
+        rv$detected_step    <- NULL
+        showNotification(paste("Gagal Memvalidasi Berkas:", e$message),
+                         type = "error", duration = NULL)
       })
     })
     
-    # Load other inputs
+    # ── 5 supporting inputs (manual only, no auto-load) ───
     observeEvent(input$rtrw_file, {
       req(input$rtrw_file)
       rv$rtrw_vect <- .read_spatial_input(input$rtrw_file)
@@ -222,28 +364,21 @@ reconcile_server <- function(id, output_dir) {
       rv$serasi_matrix <- load_validate_matrix_table(input$serasi_matrix_file$datapath, title = "serasi")
     })
     
-    # Template Generation
+    # ── Template generation ───────────────────────────────
     observeEvent(input$btn_make_template, {
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification("Direktori output belum diatur.", type = "error", duration = 5)
         return()
       }
-      
       req(rv$recon_map, rv$detected_step, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
       rv$template_path <- NULL
-      
       withProgress(message = "Membuat Templat Rekonsiliasi", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Menyiapkan direktori modul...")
           module_dir <- file.path(output_dir(), .RECON_MODULE_FOLDER)
           dir.create(module_dir, recursive = TRUE, showWarnings = FALSE)
-          
-          file_name <- if (rv$detected_step == 1) {
-            "overlaps_reconcilliation_table.xlsx"
-          } else {
-            "adjacent_reconcilliation_table.xlsx"
-          }
-          
+          file_name <- if (rv$detected_step == 1) "overlaps_reconcilliation_table.xlsx"
+          else                        "adjacent_reconcilliation_table.xlsx"
           incProgress(0.5, detail = "Menjalankan pembuat templat...")
           generate_reconciliation_excel(
             recon_map        = rv$recon_map,
@@ -251,18 +386,16 @@ reconcile_server <- function(id, output_dir) {
             rzwp3k_prioritas = rv$rzwp3k_prioritas,
             output_dir       = module_dir,
             step             = rv$detected_step,
-            file_name        = file_name
-          )
-          
+            file_name        = file_name)
           incProgress(0.8, detail = "Verifikasi berkas templat...")
           generated_path <- file.path(module_dir, file_name)
           if (!file.exists(generated_path)) stop("File templat gagal dibuat.")
-          
           rv$template_path <- generated_path
           showNotification("Templat Rekonsiliasi Berhasil Dibuat.", type = "message")
           incProgress(1.0, detail = "Selesai!")
         }, error = function(e) {
-          showNotification(paste("Gagal membuat templat:", e$message), type = "error", duration = 10)
+          showNotification(paste("Gagal membuat templat:", e$message),
+                           type = "error", duration = 10)
         })
       })
     })
@@ -271,7 +404,8 @@ reconcile_server <- function(id, output_dir) {
       req(rv$template_path)
       div(class = "alert alert-success mb-0 mt-2",
           tags$i(class = "bi bi-check-circle me-2"),
-          sprintf("Templat Siap (%s): %s", paste0("Step ", rv$detected_step), basename(rv$template_path)))
+          sprintf("Templat Siap (%s): %s",
+                  paste0("Step ", rv$detected_step), basename(rv$template_path)))
     })
     
     output$dl_template <- downloadHandler(
@@ -304,35 +438,51 @@ reconcile_server <- function(id, output_dir) {
       if (is.null(rv$template_path)) {
         showNotification(
           "Templat belum dibuat. Jika sudah memiliki tabel rekonsiliasi yang sudah diisi, Anda tetap dapat melanjutkan.",
-          type = "message", duration = 5
-        )
+          type = "message", duration = 5)
       }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
-    # ── Step 2 UI ──────────────────────────────────────────────
+    resolved_alpha_info <- reactive({
+      req(rv$detected_step)
+      .resolve_alpha_from_recommendation(
+        step = rv$detected_step, output_dir = output_dir(), session = session)
+    })
+    
     output$step2_ui <- renderUI({
+      alpha_info  <- resolved_alpha_info()
+      alpha_txt   <- sprintf("Alpha (\u03B1) dari modul Penyusunan Alternatif: %.2f  [%s]",
+                             alpha_info$alpha, alpha_info$source)
+      alpha_style <- if (grepl("default", alpha_info$source)) {
+        "background-color: #FEF3C7; border-color: #FDE68A; color: #92400E;"
+      } else {
+        "background-color: #eef6fc; border-color: #cfe3f5; color: #1b75ba;"
+      }
       tagList(
-        fileInput(ns("recon_table_filled_file"), "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)", accept = ".xlsx"),
+        fileInput(ns("recon_table_filled_file"),
+                  "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)",
+                  accept = ".xlsx"),
+        div(class = "alert",
+            style = paste("font-size: 0.85rem; padding: 8px 12px; margin-top: 8px;",
+                          alpha_style),
+            tags$i(class = "bi bi-info-circle me-1"), alpha_txt),
         if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
           div(class = "alert alert-warning py-2 px-3 mb-2", style = "font-size: 0.85rem;",
               tags$i(class = "bi bi-exclamation-triangle me-1"),
               "Direktori output belum diatur. Atur terlebih dahulu di menu utama.")
         },
-        div(
-          style = "margin-top: 10px;",
-          actionButton(ns("btn_run_reconcile"),
-                       tagList(tags$i(class = "bi bi-lightning-charge-fill me-1"), "Lakukan Rekonsiliasi"),
-                       class = "btn-success btn-sm")
-        ),
+        div(style = "margin-top: 10px;",
+            actionButton(ns("btn_run_reconcile"),
+                         tagList(tags$i(class = "bi bi-play-fill me-1"),
+                                 "Lakukan Rekonsiliasi"),
+                         class = "btn-success btn-sm")),
         .step_nav(ns, back_id = "btn_back_2", next_id = NULL)
       )
     })
     
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
-    # ── Core Reconciliation Execution ──────────────────────────
     observeEvent(input$btn_run_reconcile, {
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification("Direktori output belum diatur.", type = "error", duration = 5)
@@ -351,7 +501,8 @@ reconcile_server <- function(id, output_dir) {
       rv$log_messages <- ""
       log_lines <- character(0)
       
-      showNotification("Menjalankan proses rekonsiliasi...", type = "message", id = "recon_progress", duration = 10)
+      showNotification("Menjalankan proses rekonsiliasi...", type = "message",
+                       id = "recon_progress", duration = 10)
       
       withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
         tryCatch({
@@ -360,32 +511,39 @@ reconcile_server <- function(id, output_dir) {
           dir.create(module_dir, recursive = TRUE, showWarnings = FALSE)
           dir.create(log_dir,    recursive = TRUE, showWarnings = FALSE)
           
+          alpha_info <- .resolve_alpha_from_recommendation(
+            step = rv$detected_step, output_dir = output_dir(), session = session)
+          alpha_val <- alpha_info$alpha
+          
+          log_lines <- c(log_lines,
+                         sprintf("Alpha (\u03B1) yang digunakan: %.2f  [sumber: %s]",
+                                 alpha_val, alpha_info$source))
+          
+          if (identical(alpha_info$source, "default (tidak ditemukan)")) {
+            showNotification(
+              "Alpha dari modul Penyusunan Alternatif tidak ditemukan. Menggunakan nilai default 0.5.",
+              type = "warning", duration = 8)
+          }
+          
           if (rv$detected_step == 1) {
-            # ── Step 1 (Overlaps) ─────────────────────────────
             incProgress(0.1, detail = "Membaca tabel keputusan...")
             recon_table <- load_and_validate_table(input$recon_table_filled_file$datapath) %>%
               select(id_pu, user_decision)
-            
             incProgress(0.2, detail = "Menggabungkan dengan peta rekomendasi...")
             overlaps_map <- rv$recon_map %>%
               left_join(recon_table, by = "id_pu") %>%
               mutate(user_decision = user_decision)
-            
             incProgress(0.4, detail = "Menjalankan rekonsiliasi Overlaps...")
             result <- reconciliation_step1(
-              rtrw_base = rv$rtrw_vect,
-              rzwp3k_base = rv$rzwp3k_vect,
+              rtrw_base = rv$rtrw_vect, rzwp3k_base = rv$rzwp3k_vect,
               overlaps_map = overlaps_map,
               rtrw_priority = rv$rtrw_prioritas,
               rzwp3k_priority = rv$rzwp3k_prioritas,
               matriks_serasi = rv$serasi_matrix,
-              alpha = 0.5
-            )
-            
+              alpha = alpha_val)
             rv$resolved_rtrw <- result$rtrw
             rv$resolved_rzwp3k <- result$rzwp3k
             rv$resolved_integrated <- NULL
-            
             log_lines <- c(
               log_lines,
               "--- LOG REKONSILIASI KASUS STEP 1 (OVERLAPS) ---",
@@ -396,103 +554,74 @@ reconcile_server <- function(id, output_dir) {
                       sum(result$rtrw$Reconcile == "No", na.rm = TRUE)),
               sprintf("RZWP3K Reconcile=Yes: %d, No: %d",
                       sum(result$rzwp3k$Reconcile == "Yes", na.rm = TRUE),
-                      sum(result$rzwp3k$Reconcile == "No", na.rm = TRUE))
-            )
-            
+                      sum(result$rzwp3k$Reconcile == "No", na.rm = TRUE)))
             rtrw_combined   <- result$rtrw   %>% dplyr::mutate(Source = "RTRW")
             rzwp3k_combined <- result$rzwp3k %>% dplyr::mutate(Source = "RZWP3K")
             combined <- dplyr::bind_rows(rtrw_combined, rzwp3k_combined)
-            
           } else if (rv$detected_step == 2) {
-            # ── Step 2 (Adjacent) ─────────────────────────────
             incProgress(0.1, detail = "Membaca tabel keputusan...")
             recon_table_filled <- load_and_validate_table(input$recon_table_filled_file$datapath)
-            
             is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% names(recon_table_filled)) &&
               !"id" %in% names(recon_table_filled)
-            
             if (is_dissolved) {
               incProgress(0.15, detail = "Mengubah tabel ke bentuk fitur...")
               recon_table_filled <- undissolve_adjacent_pairs(
                 recon_table_filled,
                 decisions_rtrw_col   = "user_decision_rtrw",
-                decisions_rzwp3k_col = "user_decision_rzwp3k"
-              )
+                decisions_rzwp3k_col = "user_decision_rzwp3k")
             }
-            
             incProgress(0.2, detail = "Menjalankan rekonsiliasi Bertetangga...")
             result <- reconcilliation_step2(
-              recon_table_path   = recon_table_filled,  
+              recon_table_path   = recon_table_filled,
               adjacent_recom_map = rv$recon_map,
               rtrw_vect          = rv$rtrw_vect,
               rzwp3k_vect        = rv$rzwp3k_vect,
               matriks_serasi     = rv$serasi_matrix,
-              alpha              = 0.5
-            )
-            
+              alpha              = alpha_val)
             rv$resolved_integrated <- result
             rv$resolved_rtrw <- NULL
             rv$resolved_rzwp3k <- NULL
-            
             log_lines <- c(
               log_lines,
               "--- LOG REKONSILIASI KASUS STEP 2 (ADJACENT) ---",
               sprintf("Jumlah Feature Hasil Integrasi: %d", nrow(result)),
               sprintf("Reconcile=Yes: %d, No: %d",
                       sum(result$Reconcile == "Yes", na.rm = TRUE),
-                      sum(result$Reconcile == "No", na.rm = TRUE))
-            )
-            
+                      sum(result$Reconcile == "No", na.rm = TRUE)))
             combined <- result
           } else {
             stop("Step tidak dikenali.")
           }
           
           incProgress(0.6, detail = "Menyiapkan hasil untuk ditampilkan...")
-          
-          if (!"Source" %in% names(combined)) {
-            combined$Source <- "Integrated"
-          }
-          
-          # Unique display id
+          if (!"Source" %in% names(combined)) combined$Source <- "Integrated"
           combined <- combined %>%
             dplyr::mutate(
               original_id_pu = as.character(id_pu),
-              id_pu          = paste0(Source, "_", dplyr::row_number())
-            )
-          
+              id_pu          = paste0(Source, "_", dplyr::row_number()))
           combined <- tryCatch(sf::st_make_valid(combined), error = function(e) combined)
           
           incProgress(0.7, detail = "Menyimpan hasil ke disk...")
-          
           case_suffix <- if (rv$detected_step == 1) "overlaps" else "adjacent"
           base_name   <- sprintf("rtrwp_terintegrasi_%s", case_suffix)
           
           stale_case <- if (rv$detected_step == 1) "adjacent" else "overlaps"
-          stale_files <- file.path(
-            module_dir,
-            sprintf("rtrwp_terintegrasi_%s.%s", stale_case, c("gpkg", "xlsx"))
-          )
+          stale_files <- file.path(module_dir,
+                                   sprintf("rtrwp_terintegrasi_%s.%s", stale_case, c("gpkg", "xlsx")))
           stale_files <- stale_files[file.exists(stale_files)]
           if (length(stale_files) > 0) file.remove(stale_files)
           
           out_gpkg <- file.path(module_dir, paste0(base_name, ".gpkg"))
           sf::st_write(combined, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-          
           out_xlsx <- file.path(module_dir, paste0(base_name, ".xlsx"))
           openxlsx::write.xlsx(sf::st_drop_geometry(combined), out_xlsx)
           
           tryCatch({
             plot_categorical_map(
-              map      = combined,
-              title    = "Peta Status Rekonsiliasi",
-              column   = "Reconcile",
-              legend   = "Status Rekonsiliasi",
-              filepath = file.path(log_dir, sprintf("reconcile_map_%s.png", case_suffix))
-            )
-          }, error = function(e) {
-            warning("Gagal membuat PNG peta rekonsiliasi: ", e$message)
-          })
+              map = combined, title = "Peta Status Rekonsiliasi",
+              column = "Reconcile", legend = "Status Rekonsiliasi",
+              filepath = file.path(log_dir, sprintf("reconcile_map_%s.png", case_suffix)))
+          }, error = function(e) warning("Gagal membuat PNG: ", e$message))
           
           incProgress(0.9, detail = "Menyimpan log...")
           rv$final_log    <- paste(log_lines, collapse = "\n")
@@ -502,18 +631,18 @@ reconcile_server <- function(id, output_dir) {
             inputs = list(
               start_time         = Sys.time(),
               recon_step         = rv$detected_step,
+              recon_map_source   = rv$recon_map_source,
               recon_table_filled = input$recon_table_filled_file$name,
-              recon_map_file     = input$recon_map_file$name,
-              output_dir         = output_dir()
-            ),
+              recon_map_file     = if (!is.null(input$recon_map_file)) input$recon_map_file$name else NULL,
+              alpha              = alpha_val,
+              alpha_source       = alpha_info$source,
+              output_dir         = output_dir()),
             result = list(
               idx_reconcile_map   = combined,
               idx_reconcile_table = sf::st_drop_geometry(combined),
-              resolved_rtrw        = rv$resolved_rtrw,
-              resolved_rzwp3k      = rv$resolved_rzwp3k,
-              resolved_integrated  = rv$resolved_integrated
-            )
-          )
+              resolved_rtrw       = rv$resolved_rtrw,
+              resolved_rzwp3k     = rv$resolved_rzwp3k,
+              resolved_integrated = rv$resolved_integrated))
           
           log_path <- file.path(module_dir, .RECON_RDA)
           tryCatch({
@@ -522,31 +651,26 @@ reconcile_server <- function(id, output_dir) {
           }, error = function(e) warning("Gagal menulis file log: ", e$message))
           
           session$userData$module_results$reconcile <- out
-          
-          rv$analysis_result <- list(
-            map   = combined,
-            table = sf::st_drop_geometry(combined)
-          )
+          rv$analysis_result <- list(map = combined, table = sf::st_drop_geometry(combined))
           rv$gpkg_path <- out_gpkg
           rv$xlsx_path <- out_xlsx
           
           showNotification("Proses Penyelesaian Konflik Peta Selesai.", type = "message")
           incProgress(1.0, detail = "Selesai!")
-          
         }, error = function(e) {
           rv$final_log    <- paste0("Error Runtime Execution:\n", e$message)
           rv$log_messages <- rv$final_log
-          showNotification(paste("Gagal melakukan rekonsiliasi:", e$message), type = "error", duration = NULL)
+          showNotification(paste("Gagal melakukan rekonsiliasi:", e$message),
+                           type = "error", duration = NULL)
         })
       })
     })
     
-    # ── Status box ─────────────────────────────────────────────
     output$status_box <- renderUI({
       if (have_results()) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
-            "Peta berhasil diperbaiki! Silakan periksa hasil visual spasial dan unduh gpkg.")
+            "Peta berhasil direkonsiliasi! Silakan periksa peta hasil dan unduh gpkg.")
       } else if (!is.null(rv$final_log) && grepl("^Error", rv$final_log)) {
         div(class = "alert alert-danger mb-0",
             tags$i(class = "bi bi-exclamation-triangle-fill me-2"),
@@ -556,21 +680,15 @@ reconcile_server <- function(id, output_dir) {
       }
     })
     
-    # ── Shared result server ────────────────────────────────────
     reconcile_config <- list(
       map_color_col  = "Reconcile",
       map_title      = "Status Rekonsiliasi",
       map_palette    = c("#BDBDBD", "#2B8CBE"),
       map_label_cols = list(
-        "ID PU"         = "original_id_pu",
-        "Sumber"        = "Source",
-        "Kelas Lama"    = "Zoning_Old",
-        "Kelas Baru"    = "Zoning_New",
-        "Rekonsiliasi"  = "Reconcile",
-        "Indeks SERASI" = "idx_serasi",
-        "Indeks PADAN"  = "idx_padan",
-        "Selisih PADAN" = "delta_idx_padan"
-      ),
+        "ID PU" = "original_id_pu", "Sumber" = "Source",
+        "Kelas Lama" = "Zoning_Old", "Kelas Baru" = "Zoning_New",
+        "Rekonsiliasi" = "Reconcile", "Indeks SERASI" = "idx_serasi",
+        "Indeks PADAN" = "idx_padan", "Selisih PADAN" = "delta_idx_padan"),
       table_cols = c(
         "original_id_pu"   = "ID PU",
         "Source"           = "Sumber",
@@ -585,16 +703,10 @@ reconcile_server <- function(id, output_dir) {
         "idx_padan"        = "Indeks PADAN",
         "idx_serasi_new"   = "Indeks SERASI Baru",
         "idx_padan_new"    = "Indeks PADAN Baru",
-        "delta_idx_padan"  = "Selisih Indeks PADAN"
-      ),
+        "delta_idx_padan"  = "Selisih Indeks PADAN"),
       table_round_cols = c(
-        "Indeks SERASI",
-        "Indeks PADU",
-        "Indeks PADAN",
-        "Indeks SERASI Baru",
-        "Indeks PADAN Baru",
-        "Selisih Indeks PADAN"
-      )
+        "Indeks SERASI", "Indeks PADU", "Indeks PADAN",
+        "Indeks SERASI Baru", "Indeks PADAN Baru", "Selisih Indeks PADAN")
     )
     
     render_result_server(input, output, session, rv, reconcile_config)
