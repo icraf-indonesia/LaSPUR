@@ -212,7 +212,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         f <- file.path(output_dir(), "Analisis PADAN", "idx_padan.gpkg")
         map <- tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
         if (!is.null(map)) {
-          rv$idx_padan_map    <- map
+          rv$idx_padan_map    <- normalize_legacy_ids(map)
           rv$idx_padan_source <- "file"
         } else {
           rv$idx_padan_map    <- NULL
@@ -286,6 +286,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         }
         if (!"id_group" %in% names(loaded_map))
           stop("Peta PADAN harus memiliki kolom 'id_group' untuk kasus bertetangga.")
+        loaded_map <- normalize_legacy_ids(loaded_map)
         rv$idx_padan_map    <- loaded_map
         rv$idx_padan_source <- "manual"
         rv$idx_padan_map_filter <- NULL

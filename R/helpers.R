@@ -36,7 +36,8 @@ pacman::p_load(
   bslib,
   base64enc,
   tidyterra,
-  slickR
+  slickR,
+  igraph
 )
 
 if (!exists("render_loaded_file_bar", mode = "function")) {
@@ -521,6 +522,57 @@ ensure_geometry_name <- function(sf_obj) {
     sf_obj <- sf::st_set_geometry(sf_obj, "geometry")
   }
   return(sf_obj)
+}
+
+#' Normalize Legacy (Un-namespaced) Adjacent-Map IDs
+#'
+#' @description
+#' Before the layer-namespacing fix, `identify_adjacent()` assigned
+#' `id_SRC = row_number()` independently to RTRW and RZWP3K, so RTRW
+#' feature 5 and RZWP3K feature 5 shared the integer key `5`. Saved
+#' gpkg files produced by that version carry these colliding ids and
+#' will produce incorrect group assignments in `identify_adjacent_group()`.
+#'
+#' This helper detects feature-level adjacent maps whose `id` column is
+#' purely integer and prefixes each id with `"R"` or `"Z"` based on
+#' which side (RTRW or RZWP3K) the row belongs to. Maps that are already
+#' namespaced, or that lack an `id` column, or that are not in the
+#' feature-level adjacent form (2 rows per `id_pu`) are returned unchanged.
+#'
+#' @param sf_obj An `sf` object (or `data.frame`) with an `id` column.
+#' @param id_col Name of the id column (default `"id"`).
+#' @return The input object, with namespaced ids in `id_col` when applicable.
+#' @export
+normalize_legacy_ids <- function(sf_obj, id_col = "id") {
+  if (is.null(sf_obj)) return(sf_obj)
+  if (!id_col %in% names(sf_obj)) return(sf_obj)
+  if (!all(c("RTRW", "RZWP3K", "id_pu") %in% names(sf_obj))) return(sf_obj)
+  
+  ids_chr <- as.character(sf_obj[[id_col]])
+  non_na  <- ids_chr[!is.na(ids_chr)]
+  if (length(non_na) == 0) return(sf_obj)
+  
+  # Already namespaced? ("R<digits>" or "Z<digits>")
+  if (any(grepl("^[RZ][0-9]+$", non_na))) return(sf_obj)
+  
+  # Only proceed if ALL values are pure integers (legacy format)
+  if (!all(grepl("^[0-9]+$", non_na))) return(sf_obj)
+  
+  # Only proceed if every id_pu has exactly 2 rows (feature-level adjacent form)
+  pu_counts <- table(table(sf_obj$id_pu))
+  if (length(pu_counts) != 1 || names(pu_counts)[1] != "2") return(sf_obj)
+  
+  is_rtrw <- !is.na(sf_obj$RTRW)
+  is_rzwp <- !is.na(sf_obj$RZWP3K)
+  
+  # Each pair must have exactly one RTRW row and one RZWP3K row
+  if (!all(xor(is_rtrw, is_rzwp))) return(sf_obj)
+  
+  new_ids <- ids_chr
+  new_ids[is_rtrw] <- paste0("R", ids_chr[is_rtrw])
+  new_ids[is_rzwp] <- paste0("Z", ids_chr[is_rzwp])
+  sf_obj[[id_col]] <- new_ids
+  sf_obj
 }
 
 #' Create Result Visualization UI

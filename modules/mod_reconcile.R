@@ -251,12 +251,14 @@ reconcile_server <- function(id, output_dir) {
           rec_res$result$idx_alternative_overlaps_map
         else
           rec_res$result$idx_alternative_adjacent_map
+        map_data <- normalize_legacy_ids(map_data)        
         source <- "session"
       } else {
         parts <- strsplit(key, "\\|")[[1]]
         fname <- parts[2]
         f <- file.path(output_dir(), "Penyusunan Alternatif", fname)
         map_data <- tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
+        if (!is.null(map_data)) map_data <- normalize_legacy_ids(map_data) 
         source <- "file"
       }
       if (is.null(map_data)) {
@@ -307,6 +309,7 @@ reconcile_server <- function(id, output_dir) {
       rv$unlocked <- 1
       tryCatch({
         map_data <- sf::st_read(input$recon_map_file$datapath, quiet = TRUE)
+        map_data <- normalize_legacy_ids(map_data) 
         step <- .detect_step_from_sf(map_data)
         if (is.na(step)) stop("Kolom penanda struktural tidak ditemukan.")
         exp_step <- expected_step()

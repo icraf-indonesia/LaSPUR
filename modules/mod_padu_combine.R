@@ -416,6 +416,7 @@ padu_combine_server <- function(id, output_dir) {
                          found_keys = character(0)))
       
       idx_serasi_map <- serasi_in$idx_serasi_map()
+
       if (is.null(idx_serasi_map)) {
         showNotification(
           "Peta SERASI belum tersedia. Jalankan modul 1.1/1.2 terlebih dahulu atau unggah berkas.",
@@ -462,7 +463,8 @@ padu_combine_server <- function(id, output_dir) {
         tryCatch({
           incProgress(0.1, detail = "Memuat peta SERASI...")
           idx_serasi_map <- idx_serasi_map %>%
-            dplyr::select(-dplyr::any_of("area_flag"))
+            dplyr::select(-dplyr::any_of("area_flag")) %>%
+            normalize_legacy_ids()
           append_log("Peta SERASI berhasil dimuat.")
           
           incProgress(0.2, detail = "Membaca file PADU...")

@@ -151,12 +151,12 @@ padan_server <- function(id, output_dir) {
     ns <- session$ns
     
     rv <- reactiveValues(
-      idx_padu_source  = NULL, 
+      idx_padu_source  = NULL,
       analysis_result  = NULL,
       gpkg_path        = NULL,
       xlsx_path        = NULL,
       log_messages     = "",
-      raw_map          = NULL,
+      display_map      = NULL,
       has_id_group     = FALSE,
       query_geom       = NULL,
       query_result     = NULL
@@ -220,7 +220,7 @@ padan_server <- function(id, output_dir) {
     
     loaded_padu_map <- reactive({
       src <- rv$idx_padu_source
-      if (identical(src, "manual")) {
+      raw <- if (identical(src, "manual")) {
         req(input$idx_padu_file)
         tryCatch(sf::st_read(input$idx_padu_file$datapath, quiet = TRUE),
                  error = function(e) NULL)
@@ -231,9 +231,9 @@ padan_server <- function(id, output_dir) {
         if (file.exists(f)) {
           tryCatch(sf::st_read(f, quiet = TRUE), error = function(e) NULL)
         } else NULL
-      } else {
-        NULL
-      }
+      } else NULL
+      if (is.null(raw)) return(NULL)
+      normalize_legacy_ids(raw)    
     })
     
     # ── Run analysis ─────────────────────────────────────────
@@ -259,7 +259,7 @@ padan_server <- function(id, output_dir) {
       rv$gpkg_path <- NULL
       rv$xlsx_path <- NULL
       rv$log_messages <- ""
-      rv$raw_map <- NULL
+      rv$display_map <- NULL
       rv$has_id_group <- FALSE
       rv$query_geom <- NULL
       rv$query_result <- NULL
@@ -272,11 +272,52 @@ padan_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Memuat file PADU...")
           append_log("Peta PADU berhasil dimuat.")
           
-          required_cols <- c("idx_serasi", "idx_padu_final")
+          required_cols <- c("idx_serasi", "idx_padu_final", "RTRW", "RZWP3K")
           missing_cols <- setdiff(required_cols, names(idx_padu_map))
           if (length(missing_cols) > 0) {
-            stop(paste("Kolom berikut tidak ditemukan:", paste(missing_cols, collapse = ", ")))
+            stop(paste("Kolom berikut tidak ditemukan:",
+                       paste(missing_cols, collapse = ", ")))
           }
+          
+          is_adjacent_case <- "length" %in% names(idx_padu_map)
+          append_log(sprintf("Kasus terdeteksi: %s",
+                             if (is_adjacent_case) "Bertetangga (adjacent)"
+                             else "Tumpang Tindih (overlap)"))
+          
+          pu_counts <- table(table(idx_padu_map$id_pu))
+          
+          if (is_adjacent_case) {
+            if (length(pu_counts) == 0 || any(names(pu_counts) != "2")) {
+              bad <- names(pu_counts)[names(pu_counts) != "2"]
+              stop(sprintf(
+                paste0("Peta PADU Kombinasi tidak berbentuk pasangan (adjacent). ",
+                       "Setiap id_pu harus muncul tepat dua kali. ",
+                       "id_pu dengan jumlah baris %s: %s."),
+                paste(bad, collapse = ", "),
+                paste(pu_counts[bad], collapse = ", ")
+              ))
+            }
+            if (any(is.na(idx_padu_map$RTRW) & is.na(idx_padu_map$RZWP3K))) {
+              stop("Peta PADU Kombinasi (adjacent) memiliki baris tanpa RTRW maupun RZWP3K.")
+            }
+            append_log("Kontrak bentuk pasangan (adjacent) terpenuhi.")
+          } else {
+            if (length(pu_counts) == 0 || any(names(pu_counts) != "1")) {
+              bad <- names(pu_counts)[names(pu_counts) != "1"]
+              stop(sprintf(
+                paste0("Peta PADU Kombinasi tidak berbentuk irisan (overlap). ",
+                       "Setiap id_pu harus muncul tepat satu kali. ",
+                       "id_pu dengan jumlah baris %s: %s."),
+                paste(bad, collapse = ", "),
+                paste(pu_counts[bad], collapse = ", ")
+              ))
+            }
+            if (any(is.na(idx_padu_map$RTRW) | is.na(idx_padu_map$RZWP3K))) {
+              stop("Peta PADU Kombinasi (overlap) memiliki baris dengan RTRW atau RZWP3K kosong.")
+            }
+            append_log("Kontrak bentuk irisan (overlap) terpenuhi.")
+          }
+          
           append_log("Kolom yang diperlukan ditemukan.")
           
           incProgress(0.4, detail = "Menghitung indeks PADAN...")
@@ -289,18 +330,31 @@ padan_server <- function(id, output_dir) {
             )
           append_log("Perhitungan indeks PADAN selesai.")
           
-          idx_padan_map_viz <- tryCatch({
-            df_for_dissolve <- idx_padan_map
-            if (!"geometry" %in% names(df_for_dissolve)) {
-              sf::st_geometry(df_for_dissolve) <- "geometry"
+          if (is_adjacent_case) {
+            dissolve_error <- NULL
+            idx_padan_map_viz <- tryCatch({
+              df_for_dissolve <- idx_padan_map
+              if (!"geometry" %in% names(df_for_dissolve)) {
+                sf::st_geometry(df_for_dissolve) <- "geometry"
+              }
+              dissolve_id_pu(df_for_dissolve)
+            }, error = function(e) {
+              dissolve_error <<- conditionMessage(e)
+              append_log(paste("ERROR DISSOLVE:", dissolve_error))
+              idx_padan_map
+            })
+            if (!is.null(dissolve_error)) {
+              showNotification(
+                paste("Peta visualisasi tidak dapat digabungkan (dissolve) ",
+                      "dan akan ditampilkan dalam bentuk fitur mentah: ",
+                      dissolve_error),
+                type = "warning", duration = 10)
             }
-            dissolve_id_pu(df_for_dissolve)
-          }, error = function(e) {
-            append_log(paste("ERROR DISSOLVE:", conditionMessage(e)))
-            idx_padan_map
-          })
+          } else {
+            idx_padan_map_viz <- idx_padan_map
+          }
           
-          rv$raw_map <- idx_padan_map_viz
+          rv$display_map  <- idx_padan_map_viz
           rv$has_id_group <- "id_group" %in% names(idx_padan_map_viz)
           
           incProgress(0.3, detail = "Menyimpan hasil...")
@@ -322,7 +376,8 @@ padan_server <- function(id, output_dir) {
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path
-          rv$analysis_result <- list(map = idx_padan_map_viz, table = sf::st_drop_geometry(idx_padan_map_viz))
+          rv$analysis_result <- list(map = idx_padan_map_viz,
+                                     table = sf::st_drop_geometry(idx_padan_map_viz))
           
           idx_padu_path_used <- if (identical(rv$idx_padu_source, "manual")) {
             input$idx_padu_file$datapath
@@ -336,15 +391,18 @@ padan_server <- function(id, output_dir) {
           
           out <- list(
             inputs = list(
-              start_time    = Sys.time(),
-              idx_padu_path = idx_padu_path_used,
+              start_time      = Sys.time(),
+              idx_padu_path   = idx_padu_path_used,
               idx_padu_source = rv$idx_padu_source,
-              alpha         = input$alpha_val,
-              output_dir    = output_dir()
+              padan_case      = if (is_adjacent_case) "adjacent" else "overlap",
+              alpha           = input$alpha_val,
+              output_dir      = output_dir()
             ),
             result = list(
-              idx_padan_map   = idx_padan_map,
-              idx_padan_table = res_table
+              idx_padan_map           = idx_padan_map,
+              idx_padan_map_dissolved = idx_padan_map_viz,
+              idx_padan_map_form      = if (is_adjacent_case) "feature" else "intersection",
+              idx_padan_table         = res_table
             )
           )
           
@@ -408,16 +466,16 @@ padan_server <- function(id, output_dir) {
     
     # ── Query Tab Logic ──────────────────────────────────────
     output$query_id_type_ui <- renderUI({
-      if (is.null(rv$raw_map)) return(NULL)
+      if (is.null(rv$display_map)) return(NULL)
       choices <- c("id_pu")
       if (isTRUE(rv$has_id_group)) choices <- c(choices, "id_group")
       selectInput(ns("query_id_type"), "Pilih Tipe ID", choices = choices)
     })
     
     output$query_id_hint_ui <- renderUI({
-      req(rv$raw_map, input$query_id_type)
+      req(rv$display_map, input$query_id_type)
       id_type <- input$query_id_type
-      available_all <- unique(as.numeric(rv$raw_map[[id_type]]))
+      available_all <- unique(as.numeric(rv$display_map[[id_type]]))
       n_avail <- length(available_all)
       max_avail <- suppressWarnings(max(available_all, na.rm = TRUE))
       if (!is.finite(max_avail)) max_avail <- "—"
@@ -428,8 +486,8 @@ padan_server <- function(id, output_dir) {
     })
     
     observeEvent(input$btn_query, {
-      req(rv$raw_map, input$query_id_val, input$query_id_type)
-      df <- rv$raw_map
+      req(rv$display_map, input$query_id_val, input$query_id_type)
+      df <- rv$display_map
       id_val <- input$query_id_val
       id_type <- input$query_id_type
       

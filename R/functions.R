@@ -409,14 +409,14 @@ identify_adjacent <- function(rtrw,
   # Calculate and filter based on area size
   rtrw_filter <- rtrw %>%
     dplyr::mutate(
-      id_SRC = dplyr::row_number(),
+      id_SRC  = paste0("R", dplyr::row_number()),
       area_ha = as.numeric(units::set_units(sf::st_area(geometry), "ha"))
     ) %>%
     dplyr::filter(area_ha >= min_area_ha)
   
   rzwp_filter <- rzwp %>%
     dplyr::mutate(
-      id_SRC = dplyr::row_number(),
+      id_SRC  = paste0("Z", dplyr::row_number()),
       area_ha = as.numeric(units::set_units(sf::st_area(geometry), "ha"))
     ) %>%
     dplyr::filter(area_ha >= min_area_ha)
@@ -531,79 +531,83 @@ identify_adjacent <- function(rtrw,
 
 #' Identify multipair groups and degree in an adjacency sf object
 #'
-#' For each polygon (identified by `id`), this function counts how many distinct
-#' `id_pu` pairs it appears in (the degree). It then adds:
-#' \itemize{
-#'   \item `multipair`: `"Yes"` if either polygon in the pair has degree > 1.
-#'   \item `id_group`: numeric group for each center hub (0 for isolated pairs).
-#'   \item `n_pairs`: the number of distinct `id_pu` pairs this polygon is in.
-#' }
+#' Assigns a `id_group` to each pair (`id_pu`) using the connected
+#' components of the RTRW–RZWP3K bipartite graph, and adds the true
+#' per-feature degree as `n_pairs`.
 #'
-#' @param sf_obj An `sf` object with columns `id` and `id_pu`. Each `id_pu` appears twice.
-#' @param tie_break Function to choose a center when both polygons have degree > 1.
-#'   Default: choose the smaller `id`.
-#' @return The same `sf` object with added columns `multipair`, `id_group`, and `n_pairs`.
+#' The previous implementation picked a per-pair "center" via
+#' `tie_break(id1, id2) = min(id1, id2)` whenever both endpoints had
+#' degree > 1. This is not transitive: a hub connected to several
+#' satellites would be fragmented into one group per satellite. Using
+#' connected components makes grouping invariant to numeric id ordering.
+#'
+#' `id` values are expected to be layer-namespaced ("R110", "Z331").
+#' If the input still carries legacy integer ids, `normalize_legacy_ids()`
+#' is applied first.
+#'
+#' @param sf_obj An `sf` object with columns `id` and `id_pu`.
+#'   Each `id_pu` must appear exactly twice (one RTRW row, one RZWP3K row).
+#' @param tie_break Deprecated and ignored; kept for API compatibility.
+#' @return The same `sf` object with `id_group` (integer) and `n_pairs`
+#'   (integer) appended.
 #' @export
-identify_adjacent_group <- function(sf_obj,
-                                    tie_break = function(x, y) if (x < y) x else y) {
-  stopifnot(inherits(sf_obj, "sf"))
-  stopifnot(all(c("id", "id_pu") %in% names(sf_obj)))
-  
-  # Compute degree (n_pairs) per polygon and drop geometry
+identify_adjacent_group <- function(sf_obj, tie_break = NULL) {
+  if (!inherits(sf_obj, "sf")) stop("sf_obj must be an sf object")
+  if (!all(c("id", "id_pu") %in% names(sf_obj)))
+    stop("sf_obj must have 'id' and 'id_pu' columns")
+  if (!all(c("RTRW", "RZWP3K") %in% names(sf_obj)))
+    stop("sf_obj must have 'RTRW' and 'RZWP3K' columns")
+
+  sf_obj <- normalize_legacy_ids(sf_obj)
+
   degree <- sf_obj %>%
-    group_by(id) %>%
-    summarise(n_pairs = n_distinct(id_pu), .groups = "drop") %>%
-    st_drop_geometry()   
+    dplyr::group_by(id) %>%
+    dplyr::summarise(n_pairs = dplyr::n_distinct(id_pu), .groups = "drop") %>%
+    sf::st_drop_geometry()
   
-  deg_lookup <- setNames(degree$n_pairs, degree$id)
-  
-  # Build pair table (one row per id_pu) and drop geometry
-  pairs <- sf_obj %>%
-    group_by(id_pu) %>%
-    summarise(id1 = first(id), id2 = last(id), .groups = "drop") %>%
-    mutate(
-      deg1 = deg_lookup[as.character(id1)],
-      deg2 = deg_lookup[as.character(id2)]
+  edges_df <- sf_obj %>%
+    sf::st_drop_geometry() %>%
+    dplyr::group_by(id_pu) %>%
+    dplyr::summarise(
+      r = dplyr::first(id[!is.na(RTRW)]),
+      z = dplyr::first(id[!is.na(RZWP3K)]),
+      .groups = "drop"
     )
   
-  pairs_df <- st_drop_geometry(pairs)  
-  
-  # Assign group numbers to centers 
-  center_env <- new.env()
-  center_env$next_group <- 1L
-  get_group <- function(center_id) {
-    key <- as.character(center_id)
-    if (is.null(center_env[[key]])) {
-      center_env[[key]] <- center_env$next_group
-      center_env$next_group <- center_env$next_group + 1L
-    }
-    center_env[[key]]
+  edges_df <- edges_df[!is.na(edges_df$r) & !is.na(edges_df$z), , drop = FALSE]
+
+  if (nrow(edges_df) == 0) {
+    result <- sf_obj %>%
+      dplyr::left_join(degree, by = "id") %>%
+      dplyr::mutate(
+        id_group = 0L,
+        n_pairs  = ifelse(is.na(n_pairs), 0L, n_pairs)
+      )
+    return(result)
   }
   
-  pairs_df <- pairs_df %>%
-    rowwise() %>%
-    mutate(
-      multipair_log = (deg1 > 1 | deg2 > 1),
-      center = case_when(
-        deg1 > 1 & deg2 > 1 ~ tie_break(id1, id2),
-        deg1 > 1 ~ id1,
-        deg2 > 1 ~ id2,
-        TRUE ~ NA_integer_
-      ),
-      group = if (multipair_log) get_group(center) else 0L
-    ) %>%
-    ungroup()
-  
-  # Join back – first with pair info, then with degree
+  g <- igraph::graph_from_data_frame(
+    edges_df[, c("r", "z")],
+    directed = FALSE
+  )
+  comp_membership <- igraph::components(g)$membership
+
+  edge_group <- data.frame(
+    id_pu    = edges_df$id_pu,
+    id_group = as.integer(comp_membership[as.character(edges_df$r)]),
+    stringsAsFactors = FALSE
+  )
+
   result <- sf_obj %>%
-    left_join(pairs_df, by = "id_pu") %>%
-    left_join(degree, by = "id") %>%       
-    mutate(
-      multipair = ifelse(multipair_log, "Yes", "No"),
-      id_group = group
-    ) %>%
-    select(-id1, -id2, -deg1, -deg2, -multipair_log, -multipair, -center, -group) %>%
-    select(all_of(names(sf_obj)), id_group, n_pairs)
+    dplyr::left_join(edge_group, by = "id_pu") %>%
+    dplyr::left_join(degree,     by = "id") %>%
+    dplyr::mutate(
+      id_group = ifelse(is.na(id_group), 0L, id_group),
+      n_pairs  = ifelse(is.na(n_pairs),  0L, n_pairs)
+    )
+  
+  trailing <- c("id_group", "n_pairs")
+  result <- result[, c(setdiff(names(result), trailing), trailing)]
   
   stopifnot(nrow(result) == nrow(sf_obj))
   return(result)

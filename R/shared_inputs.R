@@ -268,15 +268,20 @@ serasi_input <- function(input, output, session, output_dir,
   
   # ── Resolve the map ─────────────────────────────────────
   idx_serasi_map <- reactive({
-    if (identical(internal$source, "manual")) return(manual_map_rv())
-    
-    sess <- session_serasi_map()
-    if (!is.null(sess)) return(sess)
-    
-    s <- get_shared()
-    if (!is.null(s) && !is.null(s$map) && inherits(s$map, "sf")) return(s$map)
-    
-    NULL
+    raw <- if (identical(internal$source, "manual")) {
+      manual_map_rv()
+    } else {
+      sess <- session_serasi_map()
+      if (!is.null(sess)) {
+        sess
+      } else {
+        s <- get_shared()
+        if (!is.null(s) && !is.null(s$map) && inherits(s$map, "sf")) s$map
+        else NULL
+      }
+    }
+    if (is.null(raw)) return(NULL)
+    normalize_legacy_ids(raw)
   })
   
   # ── Fingerprint (for PADU-Combine consistency check) ────
