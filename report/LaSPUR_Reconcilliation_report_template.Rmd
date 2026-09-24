@@ -1,0 +1,278 @@
+---
+title: "LaSPUR - Laporan Analisis Rekonsiliasi"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Rekonsiliasi
+
+```{r prepare}
+recon_map <- params$result$idx_reconcile_map
+recon_tbl <- params$result$idx_reconcile_table
+recon_available <- !is.null(recon_map) && inherits(recon_map, "sf")
+
+if (recon_available && is.null(recon_tbl)) {
+  recon_tbl <- sf::st_drop_geometry(recon_map)
+} else if (!is.null(recon_tbl)) {
+  recon_tbl <- as.data.frame(recon_tbl)
+}
+
+recon_step <- tryCatch(as.integer(params$inputs$recon_step[1]),
+                       error = function(e) NA_integer_)
+case_label <- if (is.na(recon_step)) {
+  "Tidak Diketahui"
+} else if (recon_step == 1L) {
+  "Tumpang Tindih"
+} else if (recon_step == 2L) {
+  "Bertetangga"
+} else {
+  "Tidak Diketahui"
+}
+
+alpha_val <- tryCatch(as.numeric(params$inputs$alpha[1]),
+                      error = function(e) NA_real_)
+alpha_txt <- if (is.na(alpha_val)) {
+  "tidak diketahui"
+} else {
+  format(alpha_val, nsmall = 2)
+}
+alpha_src <- tryCatch(as.character(params$inputs$alpha_source[1]),
+                      error = function(e) NA_character_)
+```
+
+## Ringkasan Umum
+
+```{r ringkasan}
+if (!recon_available) {
+  cat("\n*Tidak ada hasil analisis rekonsiliasi yang tersedia dalam laporan ini.*\n")
+} else {
+  n_feat <- nrow(recon_tbl)
+  n_yes  <- if ("Reconcile" %in% names(recon_tbl)) {
+    sum(recon_tbl$Reconcile == "Yes", na.rm = TRUE)
+  } else NA_integer_
+  n_no   <- if ("Reconcile" %in% names(recon_tbl)) {
+    sum(recon_tbl$Reconcile == "No", na.rm = TRUE)
+  } else NA_integer_
+
+  total_area <- if ("area_ha" %in% names(recon_tbl)) {
+    sum(as.numeric(recon_tbl$area_ha), na.rm = TRUE)
+  } else NA_real_
+
+  summary_stats <- data.frame(
+    Statistik = c(
+      "Kasus rekonsiliasi",
+      "Jumlah fitur hasil",
+      "Fitur direkonsiliasi (Yes)",
+      "Fitur tetap (No)",
+      "Total luas (ha)",
+      "Alpha (\u03B1) yang digunakan"
+    ),
+    Nilai = c(
+      case_label,
+      as.character(n_feat),
+      if (is.na(n_yes)) "tidak tersedia" else as.character(n_yes),
+      if (is.na(n_no))  "tidak tersedia" else as.character(n_no),
+      if (is.na(total_area)) "tidak tersedia" else fmt2(total_area),
+      alpha_txt
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  DT::datatable(
+    summary_stats,
+    rownames = FALSE,
+    options  = list(dom = 't', pageLength = 10, ordering = FALSE),
+    caption  = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: 600;",
+      "Ringkasan Hasil Rekonsiliasi"
+    )
+  )
+}
+```
+
+## Tentang Modul
+
+Modul Rekonsiliasi menyinkronkan peta RTRW dan RZWP3K dengan menerapkan keputusan pengguna pada setiap kasus konflik integrasi. Hasilnya adalah peta gabungan yang menandai fitur mana yang direkonsiliasi (Reconcile = Yes) dan mana yang tetap seperti semula (Reconcile = No).
+
+## Data dan Metode
+
+### Data
+
+```{r data}
+if (!recon_available) {
+  cat("\n*Data analisis rekonsiliasi tidak tersedia.*\n")
+} else {
+  cat("**Kasus:** ", case_label, "\n\n", sep = "")
+  cat("**Alpha (\u03B1):** ", alpha_txt,
+      if (!is.na(alpha_src) && nzchar(alpha_src))
+        paste0(" *(sumber: ", alpha_src, ")*") else "",
+      "\n\n", sep = "")
+  cat("**Jumlah fitur hasil:** ", nrow(recon_tbl), "\n\n", sep = "")
+  if (!is.null(params$inputs$recon_map_file)) {
+    cat("**Berkas peta rekomendasi:** `",
+        params$inputs$recon_map_file, "`\n\n", sep = "")
+  }
+  if (!is.null(params$inputs$recon_table_filled)) {
+    cat("**Berkas tabel keputusan:** `",
+        params$inputs$recon_table_filled, "`\n\n", sep = "")
+  }
+  if (!is.null(params$inputs$output_dir)) {
+    cat("**Direktori output:** `", params$inputs$output_dir, "`\n\n", sep = "")
+  }
+}
+```
+
+### Metode
+
+```{r method}
+if (recon_available) {
+  cat("Rekonsiliasi menerapkan keputusan pengguna per unit perencanaan ")
+  cat("(`user_decision`) ke peta dasar RTRW dan RZWP3K, memotong bagian ")
+  cat("yang dikuasai satu layer dari layer lainnya, dan menandai setiap ")
+  cat("fitur hasil dengan status `Reconcile = Yes` bila kelola zona berubah ")
+  cat("atau `No` bila tetap.\n")
+}
+```
+
+## Hasil Rekonsiliasi
+
+```{r result}
+if (!recon_available) {
+  cat("\n*Hasil analisis rekonsiliasi tidak tersedia.*\n")
+} else {
+  if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+  pacman::p_load(leaflet, htmltools, htmlwidgets, sf, dplyr)
+
+  map_data <- recon_map %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+
+  # Reconcile palette (Yes / No)
+  pal <- leaflet::colorFactor(
+    palette  = c("Yes" = "#2B8CBE", "No" = "#BDBDBD"),
+    domain   = map_data$Reconcile,
+    na.color = "#808080"
+  )
+
+  label_html <- paste0(
+    "<b>ID PU:</b> ",   map_data$original_id_pu, "<br>",
+    "<b>Sumber:</b> ",  map_data$Source,          "<br>",
+    "<b>Kelas Lama:</b> ", ifelse(is.na(map_data$Zoning_Old), "-",
+                                   map_data$Zoning_Old), "<br>",
+    "<b>Kelas Baru:</b> ", ifelse(is.na(map_data$Zoning_New), "-",
+                                   map_data$Zoning_New), "<br>",
+    "<b>Rekonsiliasi:</b> ", map_data$Reconcile
+  ) %>% lapply(htmltools::HTML)
+
+  map_widget <- leaflet::leaflet(map_data, elementId = "reconcile-map") %>%
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
+    leaflet::addPolygons(
+      fillColor   = ~pal(Reconcile),
+      fillOpacity = 0.75,
+      color       = "#444",
+      weight      = 0.8,
+      label       = label_html,
+      highlightOptions = leaflet::highlightOptions(
+        color        = "#ff6600",
+        weight       = 3,
+        fillOpacity  = 0.9,
+        bringToFront = TRUE
+      )
+    ) %>%
+    leaflet::addLegend(
+      pal      = pal,
+      values   = ~Reconcile,
+      title    = "Status Rekonsiliasi",
+      position = "bottomright",
+      opacity  = 0.8
+    )
+
+  htmltools::browsable(
+    htmltools::tags$div(style = "width: 100%; margin-bottom: 20px;", map_widget)
+  )
+}
+```
+
+```{r result2}
+if (recon_available) {
+  preferred_cols <- c(
+    "original_id_pu", "Source",
+    "Zoning_Old", "Zoning_New",
+    "Reconcile", "Overlap", "Overlap_Pair", "Adjacent",
+    "idx_serasi", "idx_padu_final", "idx_padan",
+    "idx_serasi_new", "idx_padan_new", "delta_idx_padan",
+    "area_ha"
+  )
+  kept_cols <- intersect(preferred_cols, names(recon_tbl))
+  recon_tbl_view <- recon_tbl[, kept_cols, drop = FALSE]
+
+  display_names <- c(
+    original_id_pu = "ID PU",
+    Source         = "Sumber",
+    Zoning_Old     = "Kelas Lama",
+    Zoning_New     = "Kelas Baru",
+    Reconcile      = "Rekonsiliasi?",
+    Overlap        = "Tumpang Tindih?",
+    Overlap_Pair   = "Pasangan Tumpang Tindih",
+    Adjacent       = "Bertetangga?",
+    idx_serasi     = "Indeks SERASI",
+    idx_padu_final = "Indeks PADU",
+    idx_padan      = "Indeks PADAN",
+    idx_serasi_new = "Indeks SERASI Baru",
+    idx_padan_new  = "Indeks PADAN Baru",
+    delta_idx_padan = "Selisih Indeks PADAN",
+    area_ha        = "Luas (ha)"
+  )
+  for (nm in names(display_names)) {
+    if (nm %in% names(recon_tbl_view)) {
+      names(recon_tbl_view)[names(recon_tbl_view) == nm] <- display_names[[nm]]
+    }
+  }
+
+  round_cols <- intersect(
+    c("Luas (ha)", "Indeks SERASI", "Indeks PADU", "Indeks PADAN",
+      "Indeks SERASI Baru", "Indeks PADAN Baru", "Selisih Indeks PADAN"),
+    names(recon_tbl_view)
+  )
+  for (col in round_cols) {
+    recon_tbl_view[[col]] <- suppressWarnings(as.numeric(recon_tbl_view[[col]]))
+  }
+
+  dt <- DT::datatable(
+    recon_tbl_view,
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(
+      pageLength = 10,
+      scrollX    = TRUE,
+      scrollY    = "350px",
+      scroller   = TRUE
+    )
+  )
+  if (length(round_cols) > 0) {
+    dt <- DT::formatRound(dt, columns = round_cols, digits = 2)
+  }
+  dt
+}
+```

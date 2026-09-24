@@ -1,0 +1,313 @@
+---
+title: "LaSPUR - Laporan Analisis Penyusunan Alternatif"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Penyusunan Alternatif
+
+```{r prepare}
+is_adjacent <- identical(params$inputs$case, "adjacent")
+is_overlaps <- identical(params$inputs$case, "overlaps")
+
+alt_map <- if (is_adjacent) {
+  params$result$idx_alternative_adjacent_map
+} else if (is_overlaps) {
+  params$result$idx_alternative_overlaps_map
+} else NULL
+
+alt_tbl <- if (is_adjacent) {
+  params$result$idx_alternative_adjacent_table
+} else if (is_overlaps) {
+  params$result$idx_alternative_overlaps_table
+} else NULL
+
+alt_available <- !is.null(alt_map) && inherits(alt_map, "sf")
+
+if (!alt_available && !is.null(alt_tbl)) {
+  alt_tbl <- as.data.frame(alt_tbl)
+} else if (alt_available && is.null(alt_tbl)) {
+  alt_tbl <- sf::st_drop_geometry(alt_map)
+}
+
+case_label <- if (is_adjacent) {
+  "Bertetangga"
+} else if (is_overlaps) {
+  "Tumpang Tindih"
+} else {
+  "Tidak Diketahui"
+}
+
+alpha_val <- tryCatch(as.numeric(params$inputs$alpha[1]),
+                      error = function(e) NA_real_)
+alpha_txt <- if (is.na(alpha_val)) {
+  "tidak diketahui"
+} else {
+  format(alpha_val, nsmall = 2)
+}
+```
+
+## Ringkasan Umum
+
+```{r ringkasan-umum}
+if (!alt_available) {
+  cat("\n*Tidak ada hasil analisis penyusunan alternatif yang tersedia dalam laporan ini.*\n")
+} else {
+  n_cases <- nrow(alt_tbl)
+  n_changed <- if ("recommendation" %in% names(alt_tbl)) {
+    sum(!alt_tbl$recommendation %in% c("Tetap/Koordinasi", "Koordinasi"),
+        na.rm = TRUE)
+  } else NA_integer_
+
+  total_area <- if ("area_ha" %in% names(alt_tbl)) {
+    sum(as.numeric(alt_tbl$area_ha), na.rm = TRUE)
+  } else if ("area_buffer_ha" %in% names(alt_tbl)) {
+    sum(as.numeric(alt_tbl$area_buffer_ha), na.rm = TRUE)
+  } else NA_real_
+
+  summary_stats <- data.frame(
+    Statistik = c(
+      "Kasus yang dianalisis",
+      "Kasus diusulkan perubahan",
+      "Kasus tetap/koordinasi",
+      sprintf("Total luas%s (ha)",
+              if ("area_buffer_ha" %in% names(alt_tbl)) " buffer" else ""),
+      "Alpha (\u03B1) yang digunakan"
+    ),
+    Nilai = c(
+      as.character(n_cases),
+      if (is.na(n_changed)) "tidak tersedia" else as.character(n_changed),
+      if (is.na(n_changed)) "tidak tersedia" else as.character(n_cases - n_changed),
+      if (is.na(total_area)) "tidak tersedia" else fmt2(total_area),
+      alpha_txt
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  DT::datatable(
+    summary_stats,
+    rownames = FALSE,
+    options  = list(dom = 't', pageLength = 10, ordering = FALSE),
+    caption  = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: 600;",
+      sprintf("Ringkasan Kasus Penyusunan Alternatif \u2014 %s", case_label)
+    )
+  )
+}
+```
+
+## Tentang Modul
+
+Modul Penyusunan Alternatif menghasilkan rekomendasi opsi penyelesaian konflik integrasi ruang darat–laut untuk setiap unit perencanaan. Setiap kasus menerima rekomendasi berupa Ubah RTRW, Ubah RZWP3K/RZ, Koordinasi, atau Tetap/Koordinasi, bergantung pada perbandingan indeks PADAN aktual dengan proyeksi indeks PADAN dari masing-masing opsi zona alternatif.
+
+## Data dan Metode
+
+### Data
+
+```{r data}
+if (!alt_available) {
+  cat("\n*Data analisis penyusunan alternatif tidak tersedia.*\n")
+} else {
+  cat("**Kasus:** ", case_label, "\n\n", sep = "")
+  cat("**Jumlah unit perencanaan:** ", nrow(alt_tbl), "\n\n", sep = "")
+  cat("**Alpha (\u03B1):** ", alpha_txt, "\n\n", sep = "")
+
+  if (is_adjacent) {
+    cat("**Ambang batas integrasi:**\n")
+    cat("- Tinggi: ", params$inputs$th_high, "\n")
+    cat("- Sedang: ", params$inputs$th_med, "\n")
+    cat("- Rendah: ", params$inputs$th_low, "\n\n")
+    cat("**NPV dihitung:** ", if (isTRUE(params$inputs$npv_enabled)) "Ya" else "Tidak", "\n\n", sep = "")
+  } else if (is_overlaps) {
+    cat("**Ambang SERASI:** ", params$inputs$threshold_serasi, "\n\n", sep = "")
+    cat("**Ambang PADU:** ", params$inputs$threshold_padu, "\n\n", sep = "")
+  }
+
+  if (!is.null(params$inputs$output_dir)) {
+    cat("**Direktori output:** `", params$inputs$output_dir, "`\n\n", sep = "")
+  }
+}
+```
+
+### Metode
+
+```{r method}
+if (alt_available) {
+  cat("Setiap kasus menerima rekomendasi berdasarkan perbandingan antara ")
+  cat("indeks PADAN aktual (`idx_padan`) dengan proyeksi indeks PADAN bila ")
+  cat("zona RTRW atau RZWP3K diubah menjadi zona alternatif. ")
+  cat("Proyeksi PADAN dihitung sebagai:\n\n")
+  cat("$$\n\\text{idx\\_padan\\_alt} = (\\alpha \\times \\text{idx\\_serasi\\_alt}) + ")
+  cat("((1 - \\alpha) \\times \\text{idx\\_padu\\_final})\n$$\n\n")
+  cat("Aturan keputusan mempertimbangkan status prioritas zona serta ")
+  cat("ambang batas integrasi yang ditetapkan pada modul.\n")
+}
+```
+
+## Hasil Penyusunan Alternatif
+
+```{r results}
+if (!alt_available) {
+  cat("\n*Hasil analisis penyusunan alternatif tidak tersedia.*\n")
+} else {
+  if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+  pacman::p_load(leaflet, htmltools, htmlwidgets, sf, dplyr)
+
+  map_data <- alt_map %>%
+    sf::st_transform(crs = 4326) %>%
+    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+
+  # Categorical palette for recommendation
+  reco_values <- unique(as.character(map_data$recommendation))
+  reco_values <- reco_values[!is.na(reco_values)]
+
+  default_palette <- c(
+    "Ubah RTRW"       = "#1b75ba",
+    "Ubah RZ"         = "#e67e22",
+    "Ubah RZWP3K"     = "#e67e22",
+    "Koordinasi"      = "#8e44ad",
+    "Tetap/Koordinasi" = "#95a5a6"
+  )
+
+  extra <- setdiff(reco_values, names(default_palette))
+  if (length(extra) > 0) {
+    extra_cols <- grDevices::hcl.colors(length(extra), "Dark 3")
+    default_palette <- c(default_palette, setNames(extra_cols, extra))
+  }
+
+  pal <- leaflet::colorFactor(
+    palette  = default_palette[reco_values],
+    domain   = map_data$recommendation,
+    na.color = "#808080"
+  )
+
+  label_html <- paste0(
+    "<b>ID PU:</b> ", map_data$id_pu, "<br>",
+    "<b>RTRW:</b> ",   ifelse(is.na(map_data$RTRW),   "-", map_data$RTRW),   "<br>",
+    "<b>RZWP3K:</b> ", ifelse(is.na(map_data$RZWP3K), "-", map_data$RZWP3K), "<br>",
+    "<b>Rekomendasi:</b> ", ifelse(is.na(map_data$recommendation), "-",
+                                    map_data$recommendation)
+  ) %>% lapply(htmltools::HTML)
+
+  map_widget <- leaflet::leaflet(map_data, elementId = "alternative-map") %>%
+    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
+    leaflet::addPolygons(
+      fillColor   = ~pal(recommendation),
+      fillOpacity = 0.75,
+      color       = "#444",
+      weight      = 0.8,
+      label       = label_html,
+      highlightOptions = leaflet::highlightOptions(
+        color        = "#ff6600",
+        weight       = 3,
+        fillOpacity  = 0.9,
+        bringToFront = TRUE
+      )
+    ) %>%
+    leaflet::addLegend(
+      pal      = pal,
+      values   = ~recommendation,
+      title    = "Rekomendasi",
+      position = "bottomright",
+      opacity  = 0.8
+    )
+
+  htmltools::browsable(
+    htmltools::tags$div(style = "width: 100%; margin-bottom: 20px;", map_widget)
+  )
+}
+```
+
+```{r results2}
+if (alt_available) {
+  preferred_cols <- c(
+    "id_pu", "id_group", "RTRW", "RZWP3K", "admin",
+    "area_ha", "length", "idx_serasi", "idx_padu_final", "idx_padan",
+    "alt_RTRW", "alt_RZWP3K",
+    "recommendation", "decision",
+    "RTRW_new", "RZWP3K_new",
+    "idx_serasi_new", "idx_padan_new", "idx_padan_final",
+    "actual_integration", "recom_integration", "delta_idx_padan"
+  )
+  kept_cols <- intersect(preferred_cols, names(alt_tbl))
+  alt_tbl_view <- alt_tbl[, kept_cols, drop = FALSE]
+
+  display_names <- c(
+    id_pu              = "ID PU",
+    id_group           = "ID Grup",
+    RTRW               = "RTRW Awal",
+    RZWP3K             = "RZWP3K Awal",
+    admin              = "Administrasi",
+    area_ha            = "Luas (ha)",
+    length             = "Panjang Segmen (m)",
+    idx_serasi         = "Indeks SERASI Awal",
+    idx_padu_final     = "Indeks PADU",
+    idx_padan          = "Indeks PADAN Awal",
+    alt_RTRW           = "RTRW Alternatif",
+    alt_RZWP3K         = "RZWP3K Alternatif",
+    recommendation     = "Rekomendasi",
+    decision           = "Keputusan",
+    RTRW_new           = "RTRW Baru",
+    RZWP3K_new         = "RZWP3K Baru",
+    idx_serasi_new     = "Indeks SERASI Baru",
+    idx_padan_new      = "Indeks PADAN Baru",
+    idx_padan_final    = "Indeks PADAN Akhir",
+    actual_integration = "Integrasi Aktual",
+    recom_integration  = "Integrasi Hasil Alternatif",
+    delta_idx_padan    = "Selisih Indeks PADAN"
+  )
+  for (nm in names(display_names)) {
+    if (nm %in% names(alt_tbl_view)) {
+      names(alt_tbl_view)[names(alt_tbl_view) == nm] <- display_names[[nm]]
+    }
+  }
+
+  round_cols <- intersect(
+    c("Luas (ha)", "Panjang Segmen (m)",
+      "Indeks SERASI Awal", "Indeks PADU", "Indeks PADAN Awal",
+      "Indeks SERASI Baru", "Indeks PADAN Baru", "Indeks PADAN Akhir",
+      "Selisih Indeks PADAN"),
+    names(alt_tbl_view)
+  )
+  for (col in round_cols) {
+    alt_tbl_view[[col]] <- suppressWarnings(as.numeric(alt_tbl_view[[col]]))
+  }
+
+  dt <- DT::datatable(
+    alt_tbl_view,
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(
+      pageLength = 10,
+      scrollX    = TRUE,
+      scrollY    = "350px",
+      scroller   = TRUE
+    )
+  )
+  if (length(round_cols) > 0) {
+    dt <- DT::formatRound(dt, columns = round_cols, digits = 2)
+  }
+  dt
+}
+```
