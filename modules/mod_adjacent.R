@@ -730,6 +730,22 @@ adjacent_server <- function(id, output_dir) {
               filepath = file.path(log_dir, "rzwp3k.png")
             )
             
+            tryCatch({
+              viz_res <- write_id_group_bipartite_plots(
+                map     = adjacent_map,
+                out_dir = file.path(log_dir, "bipartite_groups")
+              )
+              append_log(sprintf(
+                "   Diagram bipartit: %d dari %d grup ditulis%s.",
+                viz_res$n_written, viz_res$n_groups,
+                if (viz_res$n_failed > 0)
+                  sprintf(" (%d gagal)", viz_res$n_failed) else ""
+              ))
+            }, error = function(e) {
+              append_log(paste0("   WARNING: Gagal membuat diagram bipartit: ",
+                                conditionMessage(e)))
+            })
+            
             append_log(paste0("   Hasil disimpan di: ", gpkg_path))
             append_log("Analisis bertetangga berhasil diselesaikan.")
             

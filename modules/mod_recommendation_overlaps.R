@@ -572,7 +572,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
               TRUE ~ NA_real_
             )
           )
-          incProgress(0.8, detail = "Menyimpan hasil ke disk...")
+          incProgress(0.8, detail = "Menyimpan hasil...")
           recom_overlaps_dir <- file.path(output_dir(), "Penyusunan Alternatif")
           if (!dir.exists(recom_overlaps_dir)) dir.create(recom_overlaps_dir, recursive = TRUE, showWarnings = FALSE)
           out_gpkg <- file.path(recom_overlaps_dir, "idx_alternatives_overlaps.gpkg")

@@ -278,8 +278,6 @@ padu_kh_server <- function(id, output_dir) {
     
     output$step2_ui <- renderUI({
       tagList(
-        tags$p(tags$i(class = "bi bi-gear me-1"), "Pengaturan Lanjutan",
-               style = "font-weight: 600; margin-bottom: 4px;"),
         accordion(accordion_panel("Pengaturan lanjutan", icon = icon("gear"), open = FALSE,
                                   checkboxInput(ns("parallel"), "Aktifkan pemrosesan paralel", value = FALSE),
                                   numericInput(ns("workers"), "Jumlah kanal komputasi (cores)",

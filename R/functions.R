@@ -4268,62 +4268,87 @@ get_compat <- function(x, y) {
 #' @import sf dplyr rlang
 #' @export
 reconcile_map_step2 <- function(base_map, exclusion_mask, update_layer, layer_name) {
-  col_orig <- layer_name
-  col_new <- tolower(paste0("user_decision_", layer_name))
+  col_orig       <- layer_name
+  col_new        <- tolower(paste0("user_decision_", layer_name))
   col_old_output <- paste0(layer_name, "_old")
   
-  # Columns to preserve
-  id_cols <- c("id_pu")
+  id_cols  <- "id_pu"
   idx_cols <- c("idx_serasi", "idx_padu_final", "idx_padan")
-  all_extra_cols <- c(id_cols, idx_cols)
   
-  for (col in all_extra_cols) {
-    if (!col %in% names(base_map)) base_map[[col]] <- NA
-    if (!col %in% names(update_layer)) update_layer[[col]] <- NA
+  for (col in c(id_cols, idx_cols)) {
+    if (!col %in% names(base_map))      base_map[[col]]      <- NA
+    if (!col %in% names(update_layer))  update_layer[[col]]  <- NA
   }
+  if (!"id" %in% names(base_map)) base_map$id <- seq_len(nrow(base_map))
+
+  normalize_geom <- function(x) {
+    gcol <- attr(x, "sf_column")
+    if (!is.null(gcol) && gcol != "geometry") {
+      names(x)[names(x) == gcol] <- "geometry"
+      sf::st_geometry(x) <- "geometry"
+    }
+    x
+  }
+  base_map       <- normalize_geom(base_map)
+  update_layer   <- normalize_geom(update_layer)
+  exclusion_mask <- normalize_geom(exclusion_mask)
   
-  message(paste("Processing integration for:", layer_name, "..."))
-  max_base_id <- max(base_map$id, na.rm = TRUE)
+  message("Processing integration for: ", layer_name, " ...")
   
-  # Prepare update layer
+  max_base_id <- suppressWarnings(max(base_map$id, na.rm = TRUE))
+  if (!is.finite(max_base_id)) max_base_id <- 0L
+
   update_prep <- update_layer %>%
-    filter(!st_is_empty(geom)) %>%  
-    filter(!is.na(!!sym(col_new))) %>%    
-    select(Old = !!sym(col_orig), New = !!sym(col_new), 
-           all_of(id_cols), all_of(idx_cols)) %>%  
-    mutate(id = as.integer(max_base_id + row_number()),
-           Adjacent = "Yes") %>%
-    rename(geometry = geom) %>%
-    st_make_valid()
-  
-  message("  > Generating exclusion mask...")
-  mask_geom <- st_combine(st_make_valid(exclusion_mask))
-  
-  message("  > Trimming update boundaries...")
-  update_trimmed <- st_difference(update_prep, mask_geom) %>%
-    st_collection_extract("POLYGON")
-  
-  update_footprint <- st_union(update_trimmed)
-  
-  message("  > Updating base geometries...")
-  base_cutout <- st_difference(st_make_valid(base_map), update_footprint) %>%
-    rename(Old = !!sym(col_orig)) %>%
-    mutate(New = Old,
-           Adjacent = "No")
-  
-  message("  > Finalizing attributes...")
-  final_map <- bind_rows(base_cutout, update_trimmed) %>%
-    mutate(
-      Reconcile = if_else(coalesce(Old, "") == coalesce(New, ""), "No", "Yes")
+    dplyr::filter(!sf::st_is_empty(.data$geometry)) %>%
+    dplyr::filter(!is.na(!!rlang::sym(col_new))) %>%
+    dplyr::select(
+      Old = !!rlang::sym(col_orig),
+      New = !!rlang::sym(col_new),
+      dplyr::all_of(id_cols),
+      dplyr::all_of(idx_cols),
+      dplyr::all_of("geometry")
     ) %>%
-    rename(!!sym(col_old_output) := Old,
-           !!sym(col_new) := New) %>%
-    select(id_pu, all_of(id_cols), all_of(col_old_output), all_of(col_new), 
-           Reconcile, Adjacent, all_of(idx_cols), geometry) %>%
-    st_make_valid() %>%
-    st_cast("MULTIPOLYGON")
+    dplyr::mutate(
+      id       = as.integer(max_base_id + dplyr::row_number()),
+      Adjacent = "Yes"
+    ) %>%
+    sf::st_make_valid()
+
+  mask_geom <- sf::st_combine(sf::st_geometry(sf::st_make_valid(exclusion_mask)))
   
-  message(paste("Success! Integrated map for", layer_name, "generated."))
+  update_trimmed <- sf::st_difference(update_prep, mask_geom) %>%
+    sf::st_collection_extract("POLYGON")
+  
+  update_footprint <- sf::st_union(update_trimmed)
+
+  base_cutout <- sf::st_difference(sf::st_make_valid(base_map), update_footprint) %>%
+    dplyr::rename(Old = !!rlang::sym(col_orig)) %>%
+    dplyr::mutate(New = Old, Adjacent = "No")
+
+  final_map <- dplyr::bind_rows(base_cutout, update_trimmed) %>%
+    dplyr::mutate(
+      Reconcile = dplyr::if_else(
+        dplyr::coalesce(as.character(Old), "") ==
+          dplyr::coalesce(as.character(New), ""),
+        "No", "Yes"
+      )
+    ) %>%
+    dplyr::rename(
+      !!rlang::sym(col_old_output) := Old,
+      !!rlang::sym(col_new)        := New
+    ) %>%
+    dplyr::select(
+      dplyr::all_of(id_cols),
+      dplyr::all_of(col_old_output),
+      dplyr::all_of(col_new),
+      "Reconcile", "Adjacent",
+      dplyr::all_of(idx_cols),
+      "geometry"
+    ) %>%
+    sf::st_make_valid() %>%
+    sf::st_cast("MULTIPOLYGON")
+  
+  message("Success! Integrated map for ", layer_name, " generated.")
   return(final_map)
 }
 

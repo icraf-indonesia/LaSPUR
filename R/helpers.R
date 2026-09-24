@@ -44,6 +44,10 @@ if (!exists("render_loaded_file_bar", mode = "function")) {
   source("R/shared_inputs.R")
 }
 
+if (!exists("write_id_group_bipartite_plots", mode = "function")) {
+  source("R/visualisation.R")
+}
+
 # Ensure Pandoc is configured for rmarkdown
 .ensure_pandoc_available <- function() {
   tryCatch({

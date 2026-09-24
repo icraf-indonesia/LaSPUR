@@ -690,7 +690,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
             sf::st_drop_geometry()
           adjacent_recom_map <- adjacent_economy_map %>%
             dplyr::left_join(recommendation_decision_filter, by = "id_pu")
-          incProgress(0.8, detail = "Menyimpan hasil ke disk...")
+          incProgress(0.8, detail = "Menyimpan hasil...")
           recom_adjacent_dir <- file.path(output_dir(), "Penyusunan Alternatif")
           if (!dir.exists(recom_adjacent_dir)) dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
           out_gpkg <- file.path(recom_adjacent_dir, "idx_alternatives_adjacent.gpkg")

@@ -109,15 +109,6 @@ reconcile_ui <- function(id) {
                           accept = ".gpkg"),
                 uiOutput(ns("loaded_file_bar"))
               ),
-              div(style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;",
-                  actionButton(ns("btn_make_template"),
-                               tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"),
-                                       "Buat Templat"),
-                               class = "btn-outline-primary btn-sm"),
-                  downloadButton(ns("dl_template"), "Unduh Templat",
-                                 class = "btn-outline-success btn-sm")),
-              uiOutput(ns("template_status_ui")),
-              hr(),
               fileInput(ns("rtrw_file"), "Peta RTRW (.shp/.gpkg)",
                         accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"),
                         multiple = TRUE),
@@ -373,10 +364,31 @@ reconcile_server <- function(id, output_dir) {
     # ── Template generation ───────────────────────────────
     observeEvent(input$btn_make_template, {
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
-        showNotification("Direktori output belum diatur.", type = "error", duration = 5)
+        showNotification("Direktori output belum diatur. Harap atur direktori output terlebih dahulu.",
+                         type = "error", duration = 6)
         return()
       }
-      req(rv$recon_map, rv$detected_step, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
+
+      missing_items <- character(0)
+      if (is.null(rv$recon_map))        missing_items <- c(missing_items, "Peta Rekomendasi (.gpkg)")
+      if (is.null(rv$detected_step))    missing_items <- c(missing_items, "Deteksi tahap rekonsiliasi (Step 1/Step 2)")
+      if (is.null(rv$rtrw_prioritas))   missing_items <- c(missing_items, "Tabel Acuan Pola RTRW (.xlsx)")
+      if (is.null(rv$rzwp3k_prioritas)) missing_items <- c(missing_items, "Tabel Acuan Pola RZWP3K (.xlsx)")
+      
+      if (length(missing_items) > 0) {
+        showNotification(
+          tagList(
+            tags$strong("Templat belum dapat dibuat. Input berikut belum diunggah:"),
+            tags$ul(style = "margin: 6px 0 0 0; padding-left: 20px;",
+                    lapply(missing_items, function(x) tags$li(x))),
+            tags$div(style = "margin-top: 6px; font-size: 0.85rem;",
+                     "Silakan lengkapi pada Langkah 1 terlebih dahulu.")
+          ),
+          type = "warning", duration = 10
+        )
+        return()
+      }
+      
       rv$template_path <- NULL
       withProgress(message = "Membuat Templat Rekonsiliasi", value = 0, {
         tryCatch({
@@ -466,6 +478,17 @@ reconcile_server <- function(id, output_dir) {
         "background-color: #eef6fc; border-color: #cfe3f5; color: #1b75ba;"
       }
       tagList(
+        tags$h6("Template Tabel Keputusan Rekonsiliasi",
+                style = "font-weight: 600; margin: 0 0 8px 0;"),
+        div(style = "display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;",
+            actionButton(ns("btn_make_template"),
+                         tagList(tags$i(class = "bi bi-file-earmark-spreadsheet me-1"),
+                                 "Buat Templat"),
+                         class = "btn-outline-primary btn-sm"),
+            downloadButton(ns("dl_template"), "Unduh Templat",
+                           class = "btn-outline-success btn-sm")),
+        uiOutput(ns("template_status_ui")),
+        hr(),
         fileInput(ns("recon_table_filled_file"),
                   "Unggah Tabel Keputusan Rekonsiliasi Berisi (.xlsx)",
                   accept = ".xlsx"),
@@ -607,7 +630,7 @@ reconcile_server <- function(id, output_dir) {
               id_pu          = paste0(Source, "_", dplyr::row_number()))
           combined <- tryCatch(sf::st_make_valid(combined), error = function(e) combined)
           
-          incProgress(0.7, detail = "Menyimpan hasil ke disk...")
+          incProgress(0.7, detail = "Menyimpan hasil...")
           case_suffix <- if (rv$detected_step == 1) "overlaps" else "adjacent"
           base_name   <- sprintf("rtrwp_terintegrasi_%s", case_suffix)
           
