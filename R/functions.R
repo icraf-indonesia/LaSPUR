@@ -3862,7 +3862,20 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   else                 "overlaps_alternative_zones_selections.xlsx"
   saveWorkbook(wb, file.path(output_dir, output_filename), overwrite = TRUE)
   
-  invisible(list(workbook = wb, data = df_export_clean))
+  return_data <- df_export_clean
+  alt_cols <- c(grep("^alt_RTRW_[0-9]+$",   names(df_export), value = TRUE),
+                grep("^alt_RZWP3K_[0-9]+$", names(df_export), value = TRUE))
+  if (length(alt_cols) > 0 &&
+      "id_pu" %in% names(df_export) &&
+      "id_pu" %in% names(return_data)) {
+    idx <- match(as.character(return_data$id_pu),
+                 as.character(df_export$id_pu))
+    for (col in alt_cols) {
+      return_data[[col]] <- df_export[[col]][idx]
+    }
+  }
+  
+  invisible(list(workbook = wb, data = return_data))
 }
 
 #' Calculate economic values (NPV) from land use/cover distributions

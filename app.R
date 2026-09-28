@@ -1785,7 +1785,7 @@ $(document).ready(function() {
       var $wrapper = $tabPane.find('.module-panel-wrapper').first();
       if (!$wrapper.length) return;
 
-      var $leftCol = $wrapper.find('> .row > .col-sm-4').first();
+      var $leftCol = $wrapper.find('.col-sm-4').first();
       if (!$leftCol.length) return;
 
       if ($nav.parent()[0] !== $leftCol[0]) {
@@ -1809,7 +1809,10 @@ $(document).ready(function() {
         'width': '100%',
         'box-sizing': 'border-box'
       });
-
+      
+      $leftCol.css({ 'display': 'flex', 'flex-direction': 'column' });
+      $leftCol.children('.card').css({ 'flex': '1 1 auto' });
+      
       $nav.find('.btn').css({
         'flex': '1 1 0',
         'min-width': '0',
@@ -1979,13 +1982,14 @@ $(document).ready(function() {
       var elapsed = Date.now() - lastClickTime;
       if (elapsed < MIN_START_DELAY_MS) return;
 
-      var stillFrozen = $(RUN_BUTTON_SELECTOR + '.laspur-btn-loading').length > 0;
-      if (!stillFrozen) return;
-
       if (!isAnalysisRunning()) {
-        setRunButtonsState(false);
+        $('#laspur-stale-check').remove();
+        var $stale = $('.laspur-btn-loading');
+        if ($stale.length > 0) {
+          $stale.removeClass('laspur-btn-loading').prop('disabled', false);
+        }
       }
-    }, 400);
+    }, 600);
 
     $(document).on('shown.bs.modal hidden.bs.modal', function () {
       if (!isAnalysisRunning()) setRunButtonsState(false);

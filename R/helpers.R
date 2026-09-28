@@ -6,38 +6,11 @@ if (!requireNamespace("pacman", quietly = TRUE)) {
 library(pacman)
 
 pacman::p_load(
-  terra,
-  sf,
-  openxlsx,
-  tibble,
-  dplyr,
-  landscapemetrics,
-  purrr,
-  tidyr,
-  stringr,
-  exactextractr,
-  here,
-  rmarkdown,
-  kableExtra,
-  DT,
-  units,
-  utils,
-  furrr,
-  future,
-  data.table,
-  leaflet,
-  leaflet.extras,
-  htmltools,
-  readxl,
-  shiny,
-  shinyjs,
-  shinyFiles,
-  promises,
-  bslib,
-  base64enc,
-  tidyterra,
-  slickR,
-  igraph
+  terra, sf, openxlsx, tibble, dplyr, landscapemetrics, purrr, tidyr,
+  stringr, exactextractr, here, rmarkdown, kableExtra, DT, units, utils,
+  furrr, future, data.table, leaflet, leaflet.extras, htmltools, readxl,
+  shiny, shinyjs, shinyFiles, promises, bslib, base64enc, tidyterra,
+  slickR, igraph, rhandsontable, visNetwork, reactable
 )
 
 if (!exists("render_loaded_file_bar", mode = "function")) {
