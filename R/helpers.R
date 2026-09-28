@@ -613,8 +613,8 @@ create_result_ui <- function(ns, extra_tab = NULL) {
           column(
             width = 12,
             div(
-              style = "max-height: 400px; overflow-y: auto;",
-              DT::DTOutput(ns("result_table"))
+              style = "max-height: 400px; overflow-y: auto; width: 100%;",
+              DT::DTOutput(ns("result_table"), width = "100%")
             )
           )
         )
@@ -859,14 +859,15 @@ render_result_server <- function(input, output, session, rv, config) {
       selection = "single",
       extensions = c('FixedColumns', 'FixedHeader'),
       options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        scrollY = "400px",
-        dom = 'Bfrtip',
-        fixedColumns = list(
-          leftColumns = 3
-        ),
-        fixedHeader = TRUE
+        pageLength     = 10,
+        autoWidth      = TRUE,
+        scrollX        = TRUE,
+        scrollY        = "400px",
+        scrollCollapse = TRUE,
+        dom            = 'Bfrtip',
+        columnDefs     = list(
+          list(targets = "_all", className = "dt-center")
+        )
       ),
       rownames = FALSE,
       class = "display compact stripe hover"

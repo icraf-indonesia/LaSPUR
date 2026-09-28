@@ -3060,26 +3060,26 @@ calculate_land_distribution <- function(pu, lulc = NULL,
 #' @importFrom purrr pmap_dbl
 #' @export
 calculate_npv_ha_per_unit <- function(land_distribution, npv_lulc) {
-  # Validate npv_lulc
   if (ncol(npv_lulc) < 3) {
     stop("npv_lulc must have at least 3 columns (ID, LC, npv_ha)")
   }
-  lc_vector <- npv_lulc[[2]]
+  lc_vector  <- npv_lulc[[2]]
   npv_vector <- npv_lulc[[3]]
   npv_lookup <- setNames(npv_vector, lc_vector)
   
-  # Identify proportion columns
+  # Identify proportion columns: only columns whose names match LULC
+  # classes in `npv_lookup`. This excludes columns like `recommendation`,
+  # `idx_*`, `econ_*`, etc. that may sit between `alt_RZWP3K` and the
+  # actual LULC proportion columns.
   npv_idx <- grep("^npv_ha_actual", names(land_distribution))
-  
   if (length(npv_idx) > 0) {
     start_idx <- max(npv_idx)
   } else {
     start_idx <- match("alt_RZWP3K", names(land_distribution))
   }
+  candidate_cols <- names(land_distribution)[(start_idx + 1):ncol(land_distribution)]
+  prop_cols <- intersect(candidate_cols, names(npv_lookup))
   
-  prop_cols <- names(land_distribution)[(start_idx + 1):ncol(land_distribution)]
-  
-  # Compute npv_ha and drop the LULC proportion columns
   result <- land_distribution %>%
     mutate(
       npv_ha = pmap_dbl(
@@ -3217,6 +3217,95 @@ get_alternative_zone <- function(pair_zone, current_zone, return_type, df, n_alt
   }
   
   return(selected)
+}
+
+#' Compute system recommendation for adjacent cases
+#'
+#' Uses the top-1 alternatives (`alt_RTRW_1`, `alt_RZWP3K_1`) produced by
+#' `get_alternative_zone()` to derive the projected PADAN deltas `dR`/`dZ`,
+#' then applies the priority-based recommendation rule. Falls back to the
+#' other side (or "Tetap/Koordinasi") when the recommended side has no
+#' alternative.
+#'
+#' @param df Data frame with one row per `id_pu`. Must contain `RTRW`,
+#'   `RZWP3K`; optionally `idx_padan`, `idx_padu_final`, `alt_RTRW_1`,
+#'   `alt_RZWP3K_1`.
+#' @param priority_rtrw Character vector of priority RTRW zones.
+#' @param priority_rzwp3k Character vector of priority RZWP3K zones.
+#' @param matriks_serasi Long-form SERASI matrix (`class1`, `class2`,
+#'   `idx_serasi`).
+#' @param alpha Numeric weight in `[0,1]` (default `0.5`).
+#' @return Character vector of recommendations, one per row of `df`.
+#' @export
+compute_adjacent_recommendation <- function(df, priority_rtrw, priority_rzwp3k,
+                                            matriks_serasi, alpha = 0.5) {
+  if (!all(c("RTRW", "RZWP3K") %in% names(df))) {
+    stop("compute_adjacent_recommendation: df must contain 'RTRW' and 'RZWP3K'.")
+  }
+  
+  n <- nrow(df)
+  if (n == 0) return(character(0))
+  
+  rtrw_v <- as.character(df$RTRW)
+  rz_v   <- as.character(df$RZWP3K)
+  idx_padan_v <- if ("idx_padan"      %in% names(df)) as.numeric(df$idx_padan)      else rep(NA_real_, n)
+  idx_padu_v  <- if ("idx_padu_final" %in% names(df)) as.numeric(df$idx_padu_final) else rep(NA_real_, n)
+  alt_r <- if ("alt_RTRW_1"   %in% names(df)) as.character(df$alt_RTRW_1)   else rep(NA_character_, n)
+  alt_z <- if ("alt_RZWP3K_1" %in% names(df)) as.character(df$alt_RZWP3K_1) else rep(NA_character_, n)
+  
+  alt_r[alt_r %in% c("", "No alternative")] <- NA_character_
+  alt_z[alt_z %in% c("", "No alternative")] <- NA_character_
+  
+  # Vectorised SERASI lookup
+  lookup_keys <- paste(matriks_serasi$class1, matriks_serasi$class2, sep = "||")
+  lookup_vals <- matriks_serasi$idx_serasi
+  lookup <- function(x, y) {
+    lookup_vals[match(paste(x, y, sep = "||"), lookup_keys)]
+  }
+  
+  comp_if_rtrw <- ifelse(!is.na(alt_r) & !is.na(rz_v),   lookup(alt_r, rz_v),   NA_real_)
+  comp_if_rz   <- ifelse(!is.na(alt_z) & !is.na(rtrw_v), lookup(rtrw_v, alt_z), NA_real_)
+  
+  N_if_rtrw <- alpha * comp_if_rtrw + (1 - alpha) * idx_padu_v
+  N_if_rz   <- alpha * comp_if_rz   + (1 - alpha) * idx_padu_v
+  
+  dR <- N_if_rtrw - idx_padan_v
+  dZ <- N_if_rz   - idx_padan_v
+  
+  # Treat missing deltas as "no improvement"
+  dR_v <- ifelse(is.na(dR), 0, dR)
+  dZ_v <- ifelse(is.na(dZ), 0, dZ)
+  
+  rtrw_pri <- rtrw_v %in% priority_rtrw
+  rz_pri   <- rz_v   %in% priority_rzwp3k
+  rtrw_pri[is.na(rtrw_v)] <- FALSE
+  rz_pri[is.na(rz_v)]     <- FALSE
+  
+  rec <- dplyr::case_when(
+    rtrw_pri & rz_pri ~ dplyr::case_when(
+      dZ_v > dR_v ~ "Ubah RZ",
+      dR_v > dZ_v ~ "Ubah RTRW",
+      TRUE        ~ "Tetap/Koordinasi"
+    ),
+    rtrw_pri & dZ_v > 0 ~ "Ubah RZ",
+    rz_pri   & dR_v > 0 ~ "Ubah RTRW",
+    dR_v > 0 | dZ_v > 0 ~ dplyr::if_else(dR_v >= dZ_v, "Ubah RTRW", "Ubah RZ"),
+    TRUE ~ "Tetap/Koordinasi"
+  )
+  
+  no_alt_r <- is.na(alt_r)
+  no_alt_z <- is.na(alt_z)
+  
+  # Fallback if the recommended side has no alternative
+  rec <- dplyr::case_when(
+    rec == "Ubah RTRW" & no_alt_r & !no_alt_z & dZ_v > 0 ~ "Ubah RZ",
+    rec == "Ubah RTRW" & no_alt_r ~ "Tetap/Koordinasi",
+    rec == "Ubah RZ"   & no_alt_z & !no_alt_r & dR_v > 0 ~ "Ubah RTRW",
+    rec == "Ubah RZ"   & no_alt_z ~ "Tetap/Koordinasi",
+    TRUE ~ rec
+  )
+  
+  rec
 }
 
 # determine serasi index for the alternative zones
@@ -3426,18 +3515,31 @@ undissolve_adjacent_pairs <- function(dissolved_df,
 #'   saved. The file will be named "adjacent_alternative_zones_selections.xlsx"
 #'   for step2, or "overlaps_alternative_zones_selections.xlsx" for step1.
 #'   Default = "." (current working directory).
+#' @param dissolve_step2 logical. If TRUE, dissolve paired rows before
+#'   generating alternatives for step2.
+#' @param compute_recommendation logical. If TRUE, compute the system
+#'   recommendation before writing the template and lock the non-changing
+#'   side. Only supported for step = "step2".
+#' @param priority_rtrw character vector. RTRW zones marked as priority.
+#'   Required when `compute_recommendation = TRUE`.
+#' @param priority_rzwp3k character vector. RZWP3K zones marked as priority.
+#'   Required when `compute_recommendation = TRUE`.
+#' @param alpha numeric in `[0,1]`. Weight used in the PADAN formula.
+#'   Required when `compute_recommendation = TRUE`.
 #'
 #' @return A list with two components:
-#'   \item{workbook}{The openxlsx workbook object (for further customization).}
-#'   \item{data}{The final cleaned data frame (without the temporary alternative
-#'      columns).}
-#'
+#'   \item{workbook}{The openxlsx workbook object.}
+#'   \item{data}{The final cleaned data frame.}
 determine_alternative_zones <- function(idx_padan_map_filter,
                                         serasi_matrix,
                                         step = c("step2", "step1"),
                                         n_alt = 5,
                                         output_dir = ".",
-                                        dissolve_step2 = TRUE) {
+                                        dissolve_step2 = TRUE,
+                                        compute_recommendation = FALSE,
+                                        priority_rtrw    = NULL,
+                                        priority_rzwp3k  = NULL,
+                                        alpha = 0.5) {
   
   step <- match.arg(step)
   
@@ -3460,9 +3562,13 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     stop("'serasi_matrix' must be a data.frame or tibble.")
   }
   matriks_serasi <- serasi_matrix
-  
   input_cols <- names(idx_padan_map_filter)
   
+  if (compute_recommendation && step != "step2") {
+    stop("compute_recommendation = TRUE is only supported for step = 'step2'.")
+  }
+  
+  # ── Build df_export (one row per id_pu for step2; original rows for step1)
   if (step == "step2") {
     input_is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% input_cols) &&
       !"id" %in% input_cols
@@ -3502,15 +3608,42 @@ determine_alternative_zones <- function(idx_padan_map_filter,
         rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
                     starts_with("alt_RZWP3K_list_"))
       
-      df_export <- idx_padan_map_alt %>%
-        filter(!is.na(id_pu) & id_pu != "") %>%
-        select(all_of(base_cols),
-               starts_with("alt_RTRW_"),
-               starts_with("alt_RZWP3K_")) %>%
-        mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
-        select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
+      if (compute_recommendation) {
+        if (is.null(priority_rtrw) || is.null(priority_rzwp3k)) {
+          stop("compute_recommendation = TRUE requires non-NULL ",
+               "priority_rtrw and priority_rzwp3k.")
+        }
+        rec_vec <- compute_adjacent_recommendation(
+          df              = idx_padan_map_alt,
+          priority_rtrw   = priority_rtrw,
+          priority_rzwp3k = priority_rzwp3k,
+          matriks_serasi  = matriks_serasi,
+          alpha           = alpha
+        )
+        idx_padan_map_alt$recommendation <- rec_vec
+        idx_padan_map_alt <- idx_padan_map_alt %>%
+          mutate(
+            alt_RTRW   = dplyr::if_else(recommendation == "Ubah RTRW",
+                                        NA_character_, as.character(RTRW)),
+            alt_RZWP3K = dplyr::if_else(recommendation == "Ubah RZ",
+                                        NA_character_, as.character(RZWP3K))
+          )
+        
+        df_export <- idx_padan_map_alt %>%
+          filter(!is.na(id_pu) & id_pu != "") %>%
+          select(all_of(base_cols), recommendation, alt_RTRW, alt_RZWP3K,
+                 starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_"))
+      } else {
+        df_export <- idx_padan_map_alt %>%
+          filter(!is.na(id_pu) & id_pu != "") %>%
+          select(all_of(base_cols),
+                 starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
+          mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
+          select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
+      }
       
     } else {
+      # Non-dissolved step2 path (kept for backward compatibility)
       required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K",
                          "admin", "area_ha", "length", "idx_serasi")
       missing <- setdiff(required_cols, input_cols)
@@ -3525,7 +3658,7 @@ determine_alternative_zones <- function(idx_padan_map_filter,
         mutate(
           alt_RTRW_list   = list(get_alternative_zone(RZWP3K_plus1, RTRW, "RTRW",
                                                       matriks_serasi, n_alt = n_alt)),
-          alt_RZWP3K_list = list(get_alternative_zone(RTRW_minus1,  RZWP3K, "RZWP3K",
+          alt_RZWP3K_list = list(get_alternative_zone(RTRW_minus1, RZWP3K, "RZWP3K",
                                                       matriks_serasi, n_alt = n_alt))
         ) %>%
         ungroup() %>%
@@ -3541,13 +3674,13 @@ determine_alternative_zones <- function(idx_padan_map_filter,
         st_drop_geometry() %>%
         filter(!is.na(id_pu) & id_pu != "") %>%
         select(all_of(base_cols),
-               starts_with("alt_RTRW_"),
-               starts_with("alt_RZWP3K_")) %>%
+               starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
         mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
         select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
     }
     
   } else {
+    # step == "step1"
     required_cols <- c("id_pu", "id_rtrw", "id_rzwp3k", "RTRW", "RZWP3K",
                        "admin", "area_ha", "idx_serasi")
     base_cols     <- required_cols
@@ -3576,12 +3709,12 @@ determine_alternative_zones <- function(idx_padan_map_filter,
       st_drop_geometry() %>%
       filter(!is.na(id_pu) & id_pu != "") %>%
       select(all_of(base_cols),
-             starts_with("alt_RTRW_"),
-             starts_with("alt_RZWP3K_")) %>%
+             starts_with("alt_RTRW_"), starts_with("alt_RZWP3K_")) %>%
       mutate(alt_RTRW = NA_character_, alt_RZWP3K = NA_character_) %>%
       select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
   }
   
+  # ── Validation lists sheet content (candidate pools per row)
   rtrw_cols   <- grep("^alt_RTRW_",   names(df_export), value = TRUE)
   rzwp3k_cols <- grep("^alt_RZWP3K_", names(df_export), value = TRUE)
   
@@ -3595,19 +3728,27 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     as.data.frame(cleaned, stringsAsFactors = FALSE)
   }
   
-  df_lists_rtrw      <- clean_alternatives(df_export, rtrw_cols)
-  df_lists_rzwp3k    <- clean_alternatives(df_export, rzwp3k_cols)
+  df_lists_rtrw   <- clean_alternatives(df_export, rtrw_cols)
+  df_lists_rzwp3k <- clean_alternatives(df_export, rzwp3k_cols)
   df_validation_lists <- cbind(df_lists_rtrw, df_lists_rzwp3k)
-  names(df_validation_lists) <- c(paste0("RTRW_", seq_along(rtrw_cols)),
+  names(df_validation_lists) <- c(paste0("RTRW_",   seq_along(rtrw_cols)),
                                   paste0("RZWP3K_", seq_along(rzwp3k_cols)))
+  
+  # ── Strip the raw candidate columns; add use_recommendation
   df_export_clean <- df_export %>% select(-all_of(c(rtrw_cols, rzwp3k_cols)))
   
+  df_export_clean <- df_export_clean %>%
+    dplyr::mutate(use_recommendation = "Ya") %>%
+    dplyr::relocate(use_recommendation, .after = alt_RZWP3K)
+  
+  # ── Workbook scaffolding
   wb <- createWorkbook()
   addWorksheet(wb, "Data")
   addWorksheet(wb, "Validation_Lists")
   writeData(wb, "Data", df_export_clean, startRow = 1, startCol = 1)
   writeData(wb, "Validation_Lists", df_validation_lists, startRow = 1, startCol = 1)
   
+  # Alternating group colouring
   unique_pu <- unique(df_export_clean$id_pu)
   if (length(unique_pu) > 0) {
     style_group1 <- createStyle(fgFill = "#DCE6F1")
@@ -3631,28 +3772,89 @@ determine_alternative_zones <- function(idx_padan_map_filter,
     if (length(indices) == 0) return(list())
     split(indices, cumsum(c(1, diff(indices) != 1)))
   }
-  valid_rows_rtrw   <- which(df_lists_rtrw[, 1]   != "No alternative") + 1
-  valid_rows_rzwp3k <- which(df_lists_rzwp3k[, 1] != "No alternative") + 1
-  for (block in get_contiguous_blocks(valid_rows_rtrw)) {
-    start_r <- min(block); end_r <- max(block)
-    dataValidation(wb, "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
-                   type = "list",
-                   value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
-                                   rtrw_start, start_r, rtrw_end, start_r))
-  }
-  for (block in get_contiguous_blocks(valid_rows_rzwp3k)) {
-    start_r <- min(block); end_r <- max(block)
-    dataValidation(wb, "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
-                   type = "list",
-                   value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
-                                   rzwp3k_start, start_r, rzwp3k_end, start_r))
+  
+  has_alt_rtrw   <- df_lists_rtrw[, 1]   != "No alternative"
+  has_alt_rzwp3k <- df_lists_rzwp3k[, 1] != "No alternative"
+  
+  # ── Dropdowns for alt_RTRW / alt_RZWP3K
+  if (compute_recommendation && "recommendation" %in% names(df_export_clean)) {
+    rec <- df_export_clean$recommendation
+    
+    rtrw_editable   <- rec == "Ubah RTRW" & has_alt_rtrw
+    rz_editable     <- rec == "Ubah RZ"   & has_alt_rzwp3k
+    valid_rows_rtrw   <- which(rtrw_editable) + 1
+    valid_rows_rzwp3k <- which(rz_editable)   + 1
+    
+    for (block in get_contiguous_blocks(valid_rows_rtrw)) {
+      start_r <- min(block); end_r <- max(block)
+      dataValidation(wb, "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
+                     type = "list",
+                     value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                     rtrw_start, start_r, rtrw_end, start_r))
+    }
+    for (block in get_contiguous_blocks(valid_rows_rzwp3k)) {
+      start_r <- min(block); end_r <- max(block)
+      dataValidation(wb, "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
+                     type = "list",
+                     value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                     rzwp3k_start, start_r, rzwp3k_end, start_r))
+    }
+    
+    gray_style  <- createStyle(fgFill = "#E0E0E0")
+    black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
+    
+    locked_rtrw <- which(rec != "Ubah RTRW") + 1
+    locked_rz   <- which(rec != "Ubah RZ")   + 1
+    if (length(locked_rtrw) > 0)
+      addStyle(wb, "Data", style = gray_style,
+               cols = alt_rtrw_col_idx, rows = locked_rtrw, gridExpand = FALSE)
+    if (length(locked_rz) > 0)
+      addStyle(wb, "Data", style = gray_style,
+               cols = alt_rzwp3k_col_idx, rows = locked_rz, gridExpand = FALSE)
+    
+    for (r in which(rec == "Ubah RTRW" & !has_alt_rtrw) + 1)
+      addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx, rows = r)
+    for (r in which(rec == "Ubah RZ" & !has_alt_rzwp3k) + 1)
+      addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = r)
+    
+  } else {
+    valid_rows_rtrw   <- which(has_alt_rtrw)   + 1
+    valid_rows_rzwp3k <- which(has_alt_rzwp3k) + 1
+    for (block in get_contiguous_blocks(valid_rows_rtrw)) {
+      start_r <- min(block); end_r <- max(block)
+      dataValidation(wb, "Data", cols = alt_rtrw_col_idx, rows = start_r:end_r,
+                     type = "list",
+                     value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                     rtrw_start, start_r, rtrw_end, start_r))
+    }
+    for (block in get_contiguous_blocks(valid_rows_rzwp3k)) {
+      start_r <- min(block); end_r <- max(block)
+      dataValidation(wb, "Data", cols = alt_rzwp3k_col_idx, rows = start_r:end_r,
+                     type = "list",
+                     value = sprintf("'Validation_Lists'!$%s%d:$%s%d",
+                                     rzwp3k_start, start_r, rzwp3k_end, start_r))
+    }
+    
+    black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
+    for (r in which(!has_alt_rtrw) + 1)
+      addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx, rows = r)
+    for (r in which(!has_alt_rzwp3k) + 1)
+      addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = r)
   }
   
-  black_style <- createStyle(fgFill = "#000000", fontColour = "#000000")
-  for (r in which(df_lists_rtrw[, 1]   == "No alternative") + 1)
-    addStyle(wb, "Data", style = black_style, cols = alt_rtrw_col_idx,   rows = r)
-  for (r in which(df_lists_rzwp3k[, 1] == "No alternative") + 1)
-    addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = r)
+  # ── NEW: use_recommendation dropdown ("Ya" / "Tidak"), applies in both cases
+  use_rec_col_idx <- which(names(df_export_clean) == "use_recommendation")
+  if (length(use_rec_col_idx) == 1) {
+    dataValidation(
+      wb, "Data",
+      cols = use_rec_col_idx,
+      rows = 2:(nrow(df_export_clean) + 1),
+      type = "list",
+      value = '"Ya,Tidak"',
+      allowBlank = FALSE,
+      showErrorMsg = TRUE
+    )
+  }
   
   freezePane(wb, "Data", firstRow = TRUE)
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
