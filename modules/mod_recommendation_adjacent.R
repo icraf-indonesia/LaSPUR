@@ -289,6 +289,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       fit_nonce         = 0L,
       map_latch         = FALSE,
       map_ready         = FALSE,
+      map_nonce         = 0L,
       inapp_saved       = NULL
     )
 
@@ -301,6 +302,12 @@ recommendation_adjacent_server <- function(id, output_dir) {
     is_workspace_mode <- reactive({
       identical(rv$current_panel, "step2") && isTRUE(rv$workspace_open)
     })
+    
+    map_trigger <- shiny::debounce(reactive({
+      rv$map_nonce
+      rv$inapp_group_selected
+      rv$selected_pu
+    }), millis = 350)
     
     observeEvent(rv$workspace_open, {
       if (isTRUE(rv$workspace_open)) {
@@ -1205,6 +1212,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       reactable::reactable(
         display,
         columns       = col_defs,
+        pagination    = FALSE,
         outlined      = TRUE,
         bordered      = TRUE,
         compact       = TRUE,
@@ -1242,19 +1250,9 @@ recommendation_adjacent_server <- function(id, output_dir) {
         rv$inapp_decisions$use_recommendation[idx] <- val
       }
 
-      r  <- as.character(rv$inapp_decisions$RTRW)
-      z  <- as.character(rv$inapp_decisions$RZWP3K)
-      ar <- as.character(rv$inapp_decisions$alt_RTRW)
-      az <- as.character(rv$inapp_decisions$alt_RZWP3K)
-      ar[is.na(ar)] <- r[is.na(ar)]
-      az[is.na(az)] <- z[is.na(az)]
-      
-      rv$inapp_decisions$recommendation <- dplyr::case_when(
-        ar != r & az != z ~ "Ubah RTRW & RZ",
-        ar != r           ~ "Ubah RTRW",
-        az != z           ~ "Ubah RZ",
-        TRUE              ~ "Tetap/Koordinasi"
-      )
+      rv$data_nonce  <- isolate(rv$data_nonce) + 1L
+      rv$table_nonce <- isolate(rv$table_nonce) + 1L
+      rv$map_nonce   <- isolate(rv$map_nonce)  + 1L
     })
     
     output$inapp_filter_chip_ui <- renderUI({
@@ -1360,12 +1358,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
                            options = list(maxZoom = 16))
       invisible(NULL)
     }
-    
+
     observe({
-      rv$data_nonce
-      rv$map_ready
-      cur <- rv$inapp_group_selected
-      sel <- rv$selected_pu
+      map_trigger() 
+      rv$map_ready      
+      
+      cur <- isolate(rv$inapp_group_selected)
+      sel <- isolate(rv$selected_pu)
       dec <- isolate(rv$inapp_decisions)
       
       if (!isTRUE(isolate(rv$workspace_open))) return()

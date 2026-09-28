@@ -320,6 +320,7 @@ reconcile_server <- function(id, output_dir) {
       fit_nonce       = 0L,
       map_latch       = FALSE,
       map_ready       = FALSE,
+      map_nonce       = 0L,
       upload_loaded   = FALSE
     )
     
@@ -332,6 +333,12 @@ reconcile_server <- function(id, output_dir) {
     is_workspace_mode <- reactive({
       identical(rv$current_panel, "step2") && isTRUE(rv$workspace_open)
     })
+    
+    map_trigger <- shiny::debounce(reactive({
+      rv$map_nonce
+      rv$group_selected
+      rv$selected_pu
+    }), millis = 350)
     
     bump_table <- function() rv$table_nonce <- isolate(rv$table_nonce) + 1L
     
@@ -822,7 +829,7 @@ reconcile_server <- function(id, output_dir) {
             
             df$user_decision_rtrw   <- default_rtrw
             df$user_decision_rzwp3k <- default_rz
-            df$finalized            <- is_locked
+            df$finalized            <- FALSE
             df$locked               <- is_locked
           } else {
             df <- sf::st_drop_geometry(rv$recon_map)
@@ -849,7 +856,7 @@ reconcile_server <- function(id, output_dir) {
             is_locked <- !is.na(use_rec) & use_rec == "Ya"
             
             df$user_decision <- default_decision
-            df$finalized     <- is_locked
+            df$finalized     <- FALSE
             df$locked        <- is_locked
           }
           
@@ -1191,7 +1198,7 @@ reconcile_server <- function(id, output_dir) {
       }
       
       display$finalized <- vapply(seq_len(nrow(df)), function(i) {
-        make_checkbox_html(df$id_pu[i], df$finalized[i], locked_vec[i])
+        make_checkbox_html(df$id_pu[i], df$finalized[i], FALSE)
       }, character(1))
       
       helper_numerics <- c(
@@ -1311,6 +1318,7 @@ reconcile_server <- function(id, output_dir) {
       reactable::reactable(
         display,
         columns       = col_defs,
+        pagination    = FALSE,
         outlined      = TRUE,
         bordered      = FALSE,
         compact       = TRUE,
@@ -1345,8 +1353,9 @@ reconcile_server <- function(id, output_dir) {
       req(!is.na(idx))
       if (col %in% names(rv$dec_df)) {
         rv$dec_df[[col]][idx] <- val
-        rv$data_nonce <- isolate(rv$data_nonce) + 1L
+        rv$data_nonce  <- isolate(rv$data_nonce) + 1L
         bump_table()
+        rv$map_nonce   <- isolate(rv$map_nonce) + 1L
       }
     })
     
@@ -1360,6 +1369,7 @@ reconcile_server <- function(id, output_dir) {
       rv$dec_df$finalized[idx] <- isTRUE(info$checked)
       rv$data_nonce <- isolate(rv$data_nonce) + 1L
       bump_table()
+      rv$map_nonce  <- isolate(rv$map_nonce) + 1L
     })
     
     observeEvent(input$ws_row_pick, {
@@ -1388,10 +1398,7 @@ reconcile_server <- function(id, output_dir) {
       } else {
         tgt <- seq_len(nrow(df))
       }
-      if ("locked" %in% names(df)) {
-        locked_lgl <- isTRUE_vec(df$locked)
-        tgt <- tgt[!locked_lgl[tgt]]
-      }
+
       if (length(tgt) == 0) {
         showNotification("Tidak ada baris yang dapat difinalisasi di grup ini.",
                          type = "message", duration = 2)
@@ -1407,6 +1414,23 @@ reconcile_server <- function(id, output_dir) {
                 length(tgt)),
         type = "message", duration = 2)
     }
+    
+    observeEvent(list(rv$data_nonce, rv$group_selected), {
+      states <- row_states()
+      df     <- isolate(rv$dec_df)
+      if (is.null(states) || is.null(df)) return()
+      cur <- isolate(rv$group_selected)
+      in_group <- if (is.na(cur) || !"id_group" %in% names(df)) {
+        rep(TRUE, nrow(df))
+      } else {
+        as.integer(df$id_group) == cur
+      }
+      all_final <- all(states[in_group] == "green", na.rm = TRUE)
+      shinyjs::runjs(sprintf(
+        "$('.laspur-header-check').prop('checked', %s);",
+        if (all_final) "true" else "false"
+      ))
+    })
     
     observeEvent(input$ws_finalize_all_btn, { do_finalize_all(TRUE) })
     
@@ -1590,11 +1614,11 @@ reconcile_server <- function(id, output_dir) {
     
     # Redraw polygons
     observe({
-      rv$data_nonce
-      rv$table_nonce
+      map_trigger()
       rv$map_ready
-      cur <- rv$group_selected
-      sel <- rv$selected_pu
+      
+      cur <- isolate(rv$group_selected)
+      sel <- isolate(rv$selected_pu)
       df  <- isolate(rv$dec_df)
       
       if (!isTRUE(isolate(rv$workspace_open))) return()
@@ -1606,6 +1630,10 @@ reconcile_server <- function(id, output_dir) {
       proxy <- leaflet::leafletProxy("ws_map", session = session) %>%
         leaflet::clearGroup("Konteks grup") %>%
         leaflet::clearGroup("Terpilih")
+
+      tryCatch(
+        proxy <- proxy %>% leaflet.extras::removeSearchFeatures(),
+        error = function(e) NULL)
       
       tryCatch({
         m <- recon_map_4326()
@@ -1627,20 +1655,73 @@ reconcile_server <- function(id, output_dir) {
         m$border_color <- unname(state_color[m$row_state])
         m$border_color[is.na(m$border_color)] <- "#FFC107"
         m$fill_color   <- ifelse(is_rtrw, "#1565C0", "#2E7D32")
-        m$label <- sprintf("%s | ID PU: %s | Status: %s",
-                           ifelse(is_rtrw, "RTRW", "RZWP3K"),
-                           m$id_pu, m$row_state)
         m$weight <- ifelse(as.integer(m$id_pu) %in% sel, 4, 2)
+
+        status_label <- c(
+          green  = "Terekonsiliasi",
+          orange = "Belum Terekonsiliasi",
+          red    = "Konflik"
+        )
+        status_text <- unname(status_label[m$row_state])
+        status_text[is.na(status_text)] <- "Belum Terekonsiliasi"
         
-        proxy %>%
+        zone_type <- ifelse(is_rtrw, "RTRW", "RZWP3K")
+        zone_name <- ifelse(is_rtrw,
+                            as.character(m$RTRW),
+                            as.character(m$RZWP3K))
+        zone_id   <- ifelse(is_rtrw,
+                            as.character(m$id_rtrw),
+                            as.character(m$id_rzwp3k))
+        area_val  <- if (is_rtrw[1] || any(is_rtrw)) {
+          ifelse(is_rtrw,
+                 suppressWarnings(as.numeric(m$area_ha_rtrw)),
+                 suppressWarnings(as.numeric(m$area_ha_rzwp3k)))
+        } else NA_real_
+        if (all(is.na(area_val)) && "area_ha" %in% names(m)) {
+          area_val <- suppressWarnings(as.numeric(m$area_ha))
+        }
+        len_val <- if ("length" %in% names(m))
+          suppressWarnings(as.numeric(m$length)) else rep(NA_real_, nrow(m))
+        
+        fmt_num <- function(x) {
+          ifelse(is.na(x), "-", formatC(x, format = "f", digits = 2))
+        }
+        
+        label_txt <- sprintf(
+          "<b>%s</b>: %s<br/><b>ID %s</b>: %s<br/><b>Status</b>: %s<br/><b>Luas</b>: %s ha<br/><b>Panjang Segmen</b>: %s m",
+          zone_type,
+          ifelse(is.na(zone_name) | !nzchar(zone_name), "-", zone_name),
+          zone_type,
+          ifelse(is.na(zone_id)   | !nzchar(zone_id),   "-", zone_id),
+          status_text,
+          fmt_num(area_val),
+          fmt_num(len_val)
+        )
+        m$label <- lapply(label_txt, htmltools::HTML)
+        
+        proxy <- proxy %>%
           leaflet::addPolygons(
             data = m,
             layerId = ~paste0("pu_", id_pu, "_", ifelse(is_rtrw, "R", "Z")),
             color = ~border_color, weight = ~weight, opacity = 1,
             fillColor = ~fill_color, fillOpacity = 0.30,
-            label = ~label, group = "Konteks grup",
+            label = ~label,
+            group = "Konteks grup",
             highlightOptions = leaflet::highlightOptions(
               weight = 4, bringToFront = TRUE))
+        
+        proxy <- proxy %>%
+          leaflet.extras::addSearchFeatures(
+            targetGroups = "Konteks grup",
+            options = leaflet.extras::searchFeaturesOptions(
+              propertyName         = "label",
+              zoom                 = 15,
+              openPopup            = FALSE,
+              firstTipSubmit       = TRUE,
+              autoCollapse         = FALSE,
+              hideMarkerOnCollapse = TRUE
+            )
+          )
       }, error = function(e) {
         message("[reconcile] map proxy error: ", conditionMessage(e))
       })
