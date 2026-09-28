@@ -776,6 +776,18 @@ recommendation_adjacent_server <- function(id, output_dir) {
           init$idx_padan      <- idx_padan_lookup[as.character(init$id_pu)]
           init$idx_padu_final <- idx_padu_lookup[as.character(init$id_pu)]
           
+          sub_padu_cols <- c("idx_padu_ke", "idx_padu_hs", "idx_padu_kl",
+                             "idx_padu_kh", "idx_padu_rtp", "idx_padu_se",
+                             "idx_padu_ki")
+          for (col in sub_padu_cols) {
+            if (col %in% names(rv$idx_padan_map_filter)) {
+              lk <- extract_by_id_pu(rv$idx_padan_map_filter, col)
+              init[[col]] <- lk[as.character(init$id_pu)]
+            } else {
+              init[[col]] <- NA_real_
+            }
+          }
+          
           init$area_ha_total <- ifelse(
             is.na(init$area_ha_rtrw) & is.na(init$area_ha_rzwp3k), NA_real_,
             rowSums(cbind(init$area_ha_rtrw, init$area_ha_rzwp3k), na.rm = TRUE)
@@ -961,23 +973,76 @@ recommendation_adjacent_server <- function(id, output_dir) {
         )
       }
       
+      matriks_serasi <- isolate(rv$matriks_serasi)
+      alpha_val      <- isolate(rv$alpha)
+      if (is.null(alpha_val) || !is.finite(alpha_val)) alpha_val <- 0.5
+      
+      rec_v      <- as.character(df$recommendation)
+      alt_r_v    <- as.character(df$alt_RTRW)
+      alt_z_v    <- as.character(df$alt_RZWP3K)
+      rtrw_v     <- as.character(df$RTRW)
+      rz_v       <- as.character(df$RZWP3K)
+      idx_padu_v <- suppressWarnings(as.numeric(df$idx_padu_final))
+      
+      r_new <- ifelse(!is.na(rec_v) & rec_v == "Ubah RTRW" &
+                        !is.na(alt_r_v) & nzchar(alt_r_v),
+                      alt_r_v, rtrw_v)
+      z_new <- ifelse(!is.na(rec_v) & rec_v == "Ubah RZ" &
+                        !is.na(alt_z_v) & nzchar(alt_z_v),
+                      alt_z_v, rz_v)
+      
+      serasi_lookup <- function(r, z) {
+        if (is.na(r) || is.na(z) || is.null(matriks_serasi)) return(NA_real_)
+        m <- matriks_serasi$idx_serasi[matriks_serasi$class1 == r &
+                                         matriks_serasi$class2 == z]
+        if (length(m) == 0) NA_real_ else as.numeric(m[1])
+      }
+      df$idx_serasi_new <- mapply(serasi_lookup, r_new, z_new, USE.NAMES = FALSE)
+      df$idx_padan_new  <- alpha_val * df$idx_serasi_new +
+        (1 - alpha_val) * idx_padu_v
+      
       keep_cols <- c(
-        "id_rtrw", "id_rzwp3k", "recommendation", "alt_RTRW", "alt_RZWP3K",
-        "use_recommendation", "RTRW", "RZWP3K", "id_pu", "admin",
-        "length", "area_ha_rtrw", "area_ha_rzwp3k",
-        "idx_serasi", "idx_padu_final", "idx_padan"
+        "id_rtrw", "id_rzwp3k", "recommendation",
+        "alt_RTRW", "alt_RZWP3K", "use_recommendation",
+        "RTRW", "RZWP3K", "id_pu", "admin",
+        "length",
+        "area_ha_rtrw", "area_ha_rzwp3k", "area_ha_total",
+        "idx_serasi", "idx_serasi_new",
+        "idx_padu_final",
+        "idx_padan", "idx_padan_new",
+        "idx_padu_ke", "idx_padu_hs", "idx_padu_kl", "idx_padu_kh",
+        "idx_padu_rtp", "idx_padu_se", "idx_padu_ki"
       )
       keep_cols <- intersect(keep_cols, names(df))
       display <- df[, keep_cols, drop = FALSE]
       
       if (!"admin" %in% names(display)) display$admin <- NA_character_
-      if (!"idx_padu_final" %in% names(display)) display$idx_padu_final <- NA_real_
-      if (!"idx_padan" %in% names(display)) display$idx_padan <- NA_real_
       
-      display$area_ha_total <- ifelse(
-        is.na(display$area_ha_rtrw) & is.na(display$area_ha_rzwp3k), NA_real_,
-        rowSums(cbind(display$area_ha_rtrw, display$area_ha_rzwp3k), na.rm = TRUE)
-      )
+      ensure_num <- function(d, col) {
+        if (!col %in% names(d)) d[[col]] <- NA_real_
+        d[[col]] <- suppressWarnings(as.numeric(d[[col]]))
+        d
+      }
+      for (col in c("area_ha_rtrw", "area_ha_rzwp3k",
+                    "idx_serasi", "idx_serasi_new",
+                    "idx_padu_final",
+                    "idx_padan", "idx_padan_new",
+                    "idx_padu_ke", "idx_padu_hs", "idx_padu_kl", "idx_padu_kh",
+                    "idx_padu_rtp", "idx_padu_se", "idx_padu_ki")) {
+        display <- ensure_num(display, col)
+      }
+      
+      if (!"area_ha_total" %in% names(display)) {
+        if (all(c("area_ha_rtrw", "area_ha_rzwp3k") %in% names(display))) {
+          display$area_ha_total <- ifelse(
+            is.na(display$area_ha_rtrw) & is.na(display$area_ha_rzwp3k),
+            NA_real_,
+            rowSums(cbind(display$area_ha_rtrw, display$area_ha_rzwp3k),
+                    na.rm = TRUE))
+        } else {
+          display$area_ha_total <- NA_real_
+        }
+      }
       
       pools   <- isolate(validation_pools())
       opts_df <- isolate(rv$inapp_options_df)
@@ -991,32 +1056,45 @@ recommendation_adjacent_server <- function(id, output_dir) {
       fallback_rtrw <- if (!is.null(ms)) unique(as.character(ms$class1)) else character(0)
       fallback_rz   <- if (!is.null(ms)) unique(as.character(ms$class2)) else character(0)
       
-      build_row_source <- function(pu, side) {
+      build_row_source <- function(pu, side, actual_val) {
         key <- as.character(pu)
+        vals <- character(0)
+        
         row <- pools_by_pu[[key]]
         if (!is.null(row) && nrow(row) > 0) {
           prefix <- if (identical(side, "RTRW")) "^RTRW_" else "^RZWP3K_"
           cols <- grep(prefix, names(row), value = TRUE)
           if (length(cols) > 0) {
-            vals <- unlist(row[, cols, drop = FALSE], use.names = FALSE)
-            vals <- vals[!is.na(vals) & vals != "" & vals != "No alternative"]
-            vals <- unique(as.character(vals))
-            if (length(vals) > 0) return(vals)
+            v <- unlist(row[, cols, drop = FALSE], use.names = FALSE)
+            v <- v[!is.na(v) & v != "" & v != "No alternative"]
+            v <- unique(as.character(v))
+            if (length(v) > 0) vals <- v
           }
         }
-        orow <- opts_by_pu[[key]]
-        if (!is.null(orow) && nrow(orow) > 0) {
-          prefix <- if (identical(side, "RTRW")) "^alt_RTRW_[0-9]+$"
-          else                          "^alt_RZWP3K_[0-9]+$"
-          cols <- grep(prefix, names(orow), value = TRUE)
-          if (length(cols) > 0) {
-            vals <- unlist(orow[, cols, drop = FALSE], use.names = FALSE)
-            vals <- vals[!is.na(vals) & vals != "" & vals != "No alternative"]
-            vals <- unique(as.character(vals))
-            if (length(vals) > 0) return(vals)
+        if (length(vals) == 0) {
+          orow <- opts_by_pu[[key]]
+          if (!is.null(orow) && nrow(orow) > 0) {
+            prefix <- if (identical(side, "RTRW")) "^alt_RTRW_[0-9]+$"
+            else                          "^alt_RZWP3K_[0-9]+$"
+            cols <- grep(prefix, names(orow), value = TRUE)
+            if (length(cols) > 0) {
+              v <- unlist(orow[, cols, drop = FALSE], use.names = FALSE)
+              v <- v[!is.na(v) & v != "" & v != "No alternative"]
+              v <- unique(as.character(v))
+              if (length(v) > 0) vals <- v
+            }
           }
         }
-        if (identical(side, "RTRW")) fallback_rtrw else fallback_rz
+        if (length(vals) == 0) {
+          vals <- if (identical(side, "RTRW")) fallback_rtrw else fallback_rz
+        }
+
+        av <- as.character(actual_val)
+        if (length(av) > 0 && !is.na(av[1]) && nzchar(av[1]) &&
+            !av[1] %in% vals) {
+          vals <- c(vals, av[1])
+        }
+        vals
       }
       
       esc <- function(x) htmltools::htmlEscape(as.character(x), attribute = TRUE)
@@ -1058,7 +1136,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
         locked <- !identical(rec_vec[i], "Ubah RTRW")
         cur    <- display$alt_RTRW[i]
         opts   <- if (locked) cur else {
-          unique(c(cur, build_row_source(display$id_pu[i], "RTRW")))
+          unique(c(cur, build_row_source(display$id_pu[i], "RTRW",
+                                         display$RTRW[i])))
         }
         make_select_html(display$id_pu[i], "RTRW", cur, opts, locked)
       }, character(1))
@@ -1067,7 +1146,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
         locked <- !identical(rec_vec[i], "Ubah RZ")
         cur    <- display$alt_RZWP3K[i]
         opts   <- if (locked) cur else {
-          unique(c(cur, build_row_source(display$id_pu[i], "RZWP3K")))
+          unique(c(cur, build_row_source(display$id_pu[i], "RZWP3K",
+                                         display$RZWP3K[i])))
         }
         make_select_html(display$id_pu[i], "RZWP3K", cur, opts, locked)
       }, character(1))
@@ -1081,8 +1161,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
       final_order <- c("id_rtrw", "id_rzwp3k", "recommendation",
                        "alt_RTRW", "alt_RZWP3K", "use_recommendation",
                        "RTRW", "RZWP3K", "id_pu", "admin",
-                       "length", "area_ha_total",
-                       "idx_serasi", "idx_padu_final", "idx_padan")
+                       "length",
+                       "area_ha_rtrw", "area_ha_rzwp3k", "area_ha_total",
+                       "idx_serasi", "idx_serasi_new",
+                       "idx_padu_final",
+                       "idx_padan", "idx_padan_new",
+                       "idx_padu_ke", "idx_padu_hs", "idx_padu_kl", "idx_padu_kh",
+                       "idx_padu_rtp", "idx_padu_se", "idx_padu_ki")
       final_order <- intersect(final_order, names(display))
       display <- display[, final_order, drop = FALSE]
       
@@ -1099,11 +1184,22 @@ recommendation_adjacent_server <- function(id, output_dir) {
         RZWP3K             = reactable::colDef(name = "RZWP3K Aktual",         minWidth = 190),
         id_pu              = reactable::colDef(name = "ID PU",                 minWidth = 60),
         admin              = reactable::colDef(name = "Wilayah Administratif", minWidth = 140),
-        length             = reactable::colDef(name = "Panjang Segmen (m)",    minWidth = 110, format = num2_fmt),
-        area_ha_total      = reactable::colDef(name = "Luas (ha)",             minWidth = 90,  format = num2_fmt),
-        idx_serasi         = reactable::colDef(name = "Indeks SERASI Aktual",  minWidth = 120, format = num2_fmt),
+        length             = reactable::colDef(name = "Panjang Segmen (m)",    minWidth = 120, format = num2_fmt),
+        area_ha_rtrw       = reactable::colDef(name = "Luas Area RTRW (ha)",  minWidth = 130, format = num2_fmt),
+        area_ha_rzwp3k     = reactable::colDef(name = "Luas Area RZWP3K (ha)", minWidth = 140, format = num2_fmt),
+        area_ha_total      = reactable::colDef(name = "Luas Area Total (ha)",  minWidth = 130, format = num2_fmt),
+        idx_serasi         = reactable::colDef(name = "Indeks SERASI Aktual",  minWidth = 130, format = num2_fmt),
+        idx_serasi_new     = reactable::colDef(name = "Indeks SERASI Baru",    minWidth = 130, format = num2_fmt),
         idx_padu_final     = reactable::colDef(name = "Indeks PADU",           minWidth = 100, format = num2_fmt),
-        idx_padan          = reactable::colDef(name = "Indeks PADAN Aktual",   minWidth = 120, format = num2_fmt)
+        idx_padan          = reactable::colDef(name = "Indeks PADAN Aktual",   minWidth = 130, format = num2_fmt),
+        idx_padan_new      = reactable::colDef(name = "Indeks PADAN Baru",     minWidth = 130, format = num2_fmt),
+        idx_padu_ke        = reactable::colDef(name = "Indeks PADU-KE",        minWidth = 110, format = num2_fmt),
+        idx_padu_hs        = reactable::colDef(name = "Indeks PADU-HS",        minWidth = 110, format = num2_fmt),
+        idx_padu_kl        = reactable::colDef(name = "Indeks PADU-KL",        minWidth = 110, format = num2_fmt),
+        idx_padu_kh        = reactable::colDef(name = "Indeks PADU-KH",        minWidth = 110, format = num2_fmt),
+        idx_padu_rtp       = reactable::colDef(name = "Indeks PADU-RTp",       minWidth = 110, format = num2_fmt),
+        idx_padu_se        = reactable::colDef(name = "Indeks PADU-SE",        minWidth = 110, format = num2_fmt),
+        idx_padu_ki        = reactable::colDef(name = "Indeks PADU-KI",        minWidth = 110, format = num2_fmt)
       )
       
       reactable::reactable(
@@ -1145,6 +1241,20 @@ recommendation_adjacent_server <- function(id, output_dir) {
       } else if (identical(side, "use_recommendation")) {
         rv$inapp_decisions$use_recommendation[idx] <- val
       }
+
+      r  <- as.character(rv$inapp_decisions$RTRW)
+      z  <- as.character(rv$inapp_decisions$RZWP3K)
+      ar <- as.character(rv$inapp_decisions$alt_RTRW)
+      az <- as.character(rv$inapp_decisions$alt_RZWP3K)
+      ar[is.na(ar)] <- r[is.na(ar)]
+      az[is.na(az)] <- z[is.na(az)]
+      
+      rv$inapp_decisions$recommendation <- dplyr::case_when(
+        ar != r & az != z ~ "Ubah RTRW & RZ",
+        ar != r           ~ "Ubah RTRW",
+        az != z           ~ "Ubah RZ",
+        TRUE              ~ "Tetap/Koordinasi"
+      )
     })
     
     output$inapp_filter_chip_ui <- renderUI({

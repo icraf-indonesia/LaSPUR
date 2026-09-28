@@ -3567,8 +3567,7 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   if (compute_recommendation && step != "step2") {
     stop("compute_recommendation = TRUE is only supported for step = 'step2'.")
   }
-  
-  # ── Build df_export (one row per id_pu for step2; original rows for step1)
+
   if (step == "step2") {
     input_is_dissolved <- all(c("id_rtrw", "id_rzwp3k") %in% input_cols) &&
       !"id" %in% input_cols
@@ -3643,7 +3642,6 @@ determine_alternative_zones <- function(idx_padan_map_filter,
       }
       
     } else {
-      # Non-dissolved step2 path (kept for backward compatibility)
       required_cols <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K",
                          "admin", "area_ha", "length", "idx_serasi")
       missing <- setdiff(required_cols, input_cols)
@@ -3714,34 +3712,43 @@ determine_alternative_zones <- function(idx_padan_map_filter,
       select(all_of(base_cols), alt_RTRW, alt_RZWP3K, everything())
   }
   
-  # ── Validation lists sheet content (candidate pools per row)
   rtrw_cols   <- grep("^alt_RTRW_",   names(df_export), value = TRUE)
   rzwp3k_cols <- grep("^alt_RZWP3K_", names(df_export), value = TRUE)
   
-  clean_alternatives <- function(df, cols) {
-    mat <- as.matrix(df[, cols, drop = FALSE])
-    cleaned <- t(apply(mat, 1, function(x) {
-      u <- unique(x[!is.na(x) & x != ""])
+  clean_alternatives <- function(df, cols, actual_col) {
+    mat    <- as.matrix(df[, cols, drop = FALSE])
+    actual <- as.character(df[[actual_col]])
+    
+    cleaned <- t(apply(cbind(mat, actual), 1, function(x) {
+      act  <- x[length(x)]
+      cand <- x[-length(x)]
+      u <- unique(cand[!is.na(cand) & cand != "" & cand != "No alternative"])
       if (length(u) == 0) u <- "No alternative"
-      c(u, rep(NA, length(cols) - length(u)))
+      if (!is.na(act) && nzchar(act) && !act %in% u) {
+        u <- c(u, act)
+      }
+      c(u, rep(NA_character_, length(cols) + 1L - length(u)))
     }))
-    as.data.frame(cleaned, stringsAsFactors = FALSE)
+    
+    out <- as.data.frame(cleaned, stringsAsFactors = FALSE)
+    names(out) <- c(cols, paste0(actual_col, "_actual"))
+    out
   }
   
-  df_lists_rtrw   <- clean_alternatives(df_export, rtrw_cols)
-  df_lists_rzwp3k <- clean_alternatives(df_export, rzwp3k_cols)
+  df_lists_rtrw   <- clean_alternatives(df_export, rtrw_cols,   "RTRW")
+  df_lists_rzwp3k <- clean_alternatives(df_export, rzwp3k_cols, "RZWP3K")
   df_validation_lists <- cbind(df_lists_rtrw, df_lists_rzwp3k)
-  names(df_validation_lists) <- c(paste0("RTRW_",   seq_along(rtrw_cols)),
-                                  paste0("RZWP3K_", seq_along(rzwp3k_cols)))
-  
-  # ── Strip the raw candidate columns; add use_recommendation
+  names(df_validation_lists) <- c(
+    paste0("RTRW_",   seq_len(ncol(df_lists_rtrw))),
+    paste0("RZWP3K_", seq_len(ncol(df_lists_rzwp3k)))
+  )
+
   df_export_clean <- df_export %>% select(-all_of(c(rtrw_cols, rzwp3k_cols)))
   
   df_export_clean <- df_export_clean %>%
     dplyr::mutate(use_recommendation = "Ya") %>%
     dplyr::relocate(use_recommendation, .after = alt_RZWP3K)
-  
-  # ── Workbook scaffolding
+
   wb <- createWorkbook()
   addWorksheet(wb, "Data")
   addWorksheet(wb, "Validation_Lists")
@@ -3764,9 +3771,9 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   alt_rtrw_col_idx   <- which(names(df_export_clean) == "alt_RTRW")
   alt_rzwp3k_col_idx <- which(names(df_export_clean) == "alt_RZWP3K")
   rtrw_start   <- int2col(1)
-  rtrw_end     <- int2col(length(rtrw_cols))
-  rzwp3k_start <- int2col(length(rtrw_cols) + 1)
-  rzwp3k_end   <- int2col(length(rtrw_cols) + length(rzwp3k_cols))
+  rtrw_end     <- int2col(length(rtrw_cols) + 1)
+  rzwp3k_start <- int2col(length(rtrw_cols) + 2)
+  rzwp3k_end   <- int2col(length(rtrw_cols) + 1 + length(rzwp3k_cols) + 1)
   
   get_contiguous_blocks <- function(indices) {
     if (length(indices) == 0) return(list())
@@ -3776,7 +3783,6 @@ determine_alternative_zones <- function(idx_padan_map_filter,
   has_alt_rtrw   <- df_lists_rtrw[, 1]   != "No alternative"
   has_alt_rzwp3k <- df_lists_rzwp3k[, 1] != "No alternative"
   
-  # ── Dropdowns for alt_RTRW / alt_RZWP3K
   if (compute_recommendation && "recommendation" %in% names(df_export_clean)) {
     rec <- df_export_clean$recommendation
     
@@ -3842,7 +3848,6 @@ determine_alternative_zones <- function(idx_padan_map_filter,
       addStyle(wb, "Data", style = black_style, cols = alt_rzwp3k_col_idx, rows = r)
   }
   
-  # ── NEW: use_recommendation dropdown ("Ya" / "Tidak"), applies in both cases
   use_rec_col_idx <- which(names(df_export_clean) == "use_recommendation")
   if (length(use_rec_col_idx) == 1) {
     dataValidation(
