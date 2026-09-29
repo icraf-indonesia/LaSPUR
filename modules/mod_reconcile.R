@@ -96,7 +96,6 @@ reconcile_ui <- function(id) {
              style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;")
     ),
     
-    # ── SETUP VIEW ──
     div(
       id = ns("setup_view"),
       fluidRow(
@@ -154,7 +153,6 @@ reconcile_ui <- function(id) {
       )
     ),
     
-    # ── WORKSPACE VIEW ──
     div(
       id = ns("workspace_view"),
       style = "display:none;",
@@ -178,7 +176,6 @@ reconcile_ui <- function(id) {
         }
         .inapp-table-host .rt-th { font-weight: 600; }
 
-        /* Row state colors */
         .laspur-recon-green  > .rt-tr, .laspur-recon-green  { background-color: #D4EDDA !important; }
         .laspur-recon-orange > .rt-tr, .laspur-recon-orange { background-color: #FFF3CD !important; }
         .laspur-recon-red    > .rt-tr, .laspur-recon-red    { background-color: #F8D7DA !important; }
@@ -304,6 +301,7 @@ reconcile_server <- function(id, output_dir) {
       xlsx_path = NULL,
       log_messages = "",
       final_log = NULL,
+      
       workspace_open  = FALSE,
       current_panel   = "step1",
       dec_df          = NULL,
@@ -314,6 +312,7 @@ reconcile_server <- function(id, output_dir) {
       page            = 1L,
       selected_pu     = integer(0),
       sel_source      = "none",
+      node_filter     = NULL,
       view_filter     = "unresolved",
       table_nonce     = 0L,
       data_nonce      = 0L,
@@ -334,6 +333,11 @@ reconcile_server <- function(id, output_dir) {
       identical(rv$current_panel, "step2") && isTRUE(rv$workspace_open)
     })
     
+    has_unsaved <- reactive({
+      if (is.null(rv$dec_df) || is.null(rv$dec_committed)) return(FALSE)
+      !identical(rv$dec_df, rv$dec_committed)
+    })
+    
     map_trigger <- shiny::debounce(reactive({
       rv$map_nonce
       rv$group_selected
@@ -343,6 +347,7 @@ reconcile_server <- function(id, output_dir) {
     bump_table <- function() rv$table_nonce <- isolate(rv$table_nonce) + 1L
     
     clear_selection <- function() {
+      rv$node_filter <- NULL
       rv$selected_pu <- integer(0)
       rv$sel_source  <- "none"
     }
@@ -456,7 +461,6 @@ reconcile_server <- function(id, output_dir) {
       )
     })
     
-    # ── Manual recon_map upload ──────────────────────────────
     observeEvent(input$recon_map_file, {
       req(input$recon_map_file)
       rv$template_path <- NULL
@@ -494,7 +498,6 @@ reconcile_server <- function(id, output_dir) {
       })
     })
     
-    # ── Supporting inputs ────────────────────────────────────
     observeEvent(input$rtrw_file, {
       req(input$rtrw_file)
       rv$rtrw_vect <- .read_spatial_input(input$rtrw_file)
@@ -517,7 +520,6 @@ reconcile_server <- function(id, output_dir) {
         input$serasi_matrix_file$datapath, title = "serasi")
     })
     
-    # ── Manual template upload → populate workspace ──────────
     observeEvent(input$recon_table_filled_file, {
       req(input$recon_table_filled_file)
       tryCatch({
@@ -772,7 +774,9 @@ reconcile_server <- function(id, output_dir) {
     })
     
     outputOptions(output, "inapp_ready_hint_ui", suspendWhenHidden = FALSE)
+    
     observeEvent(input$btn_reopen_workspace, { rv$workspace_open <- TRUE })
+    
     observeEvent(input$btn_back_2, go_to_panel("step1"))
     
     observeEvent(input$btn_prepare_decisions, {
@@ -1008,6 +1012,8 @@ reconcile_server <- function(id, output_dir) {
           keep <- keep & states %in% c("orange", "red")
         }
       }
+      nf <- rv$node_filter
+      if (!is.null(nf)) keep <- keep & df$id_pu %in% nf$pu
       which(keep)
     })
     
@@ -1044,29 +1050,48 @@ reconcile_server <- function(id, output_dir) {
       states <- row_states()
       if (is.null(states)) return(NULL)
       n_or <- sum(states == "orange"); n_rd <- sum(states == "red")
-      div(class = "d-flex align-items-center gap-2 mb-2",
-          style = "flex-wrap: wrap;",
-          if (identical(rv$view_filter, "unresolved")) {
-            tags$span(class = "badge",
-                      style = "background-color:#FFF3CD; color:#856404; border:1px solid #FFC107; padding:4px 10px; font-weight:600; font-size:0.78rem;",
-                      tags$i(class = "bi bi-funnel-fill me-1"),
-                      sprintf("Hanya belum terekonsiliasi (%d oranye, %d merah)", n_or, n_rd))
-          } else {
-            tags$span(class = "badge",
-                      style = "background-color:#E2E8F0; color:#475569; padding:4px 10px; font-weight:600; font-size:0.78rem;",
-                      tags$i(class = "bi bi-list-ul me-1"),
-                      "Tampilkan semua")
-          },
-          actionButton(ns("ws_toggle_filter"),
-                       if (identical(rv$view_filter, "unresolved"))
-                         "Tampilkan semua" else "Sembunyikan yang terekonsiliasi",
-                       class = "btn-outline-secondary btn-sm py-0"))
+      nf   <- rv$node_filter
+      tagList(
+        div(class = "d-flex align-items-center gap-2 mb-2",
+            style = "flex-wrap: wrap;",
+            if (identical(rv$view_filter, "unresolved")) {
+              tags$span(class = "badge",
+                        style = "background-color:#FFF3CD; color:#856404; border:1px solid #FFC107; padding:4px 10px; font-weight:600; font-size:0.78rem;",
+                        tags$i(class = "bi bi-funnel-fill me-1"),
+                        sprintf("Hanya belum terekonsiliasi (%d oranye, %d merah)", n_or, n_rd))
+            } else {
+              tags$span(class = "badge",
+                        style = "background-color:#E2E8F0; color:#475569; padding:4px 10px; font-weight:600; font-size:0.78rem;",
+                        tags$i(class = "bi bi-list-ul me-1"),
+                        "Tampilkan semua")
+            },
+            actionButton(ns("ws_toggle_filter"),
+                         if (identical(rv$view_filter, "unresolved"))
+                           "Tampilkan semua" else "Sembunyikan yang terekonsiliasi",
+                         class = "btn-outline-secondary btn-sm py-0")),
+        if (!is.null(nf)) {
+          div(class = "alert alert-warning py-1 px-2 mb-2 d-flex justify-content-between align-items-center",
+              style = "font-size: 0.8rem;",
+              tags$span(tags$i(class = "bi bi-geo-alt-fill me-1"),
+                        sprintf("Filter fitur %s (%s) \u2014 %d pasang",
+                                nf$label, nf$side, length(nf$pu))),
+              actionButton(ns("ws_clear_node_filter"), "Hapus filter",
+                           class = "btn-outline-secondary btn-sm py-0"))
+        }
+      )
     })
     
     observeEvent(input$ws_toggle_filter, {
       rv$view_filter <- if (identical(rv$view_filter, "unresolved"))
         "all" else "unresolved"
       rv$page <- 1L
+    })
+    
+    observeEvent(input$ws_clear_node_filter, {
+      rv$page <- 1L
+      rv$node_filter <- NULL
+      rv$selected_pu <- integer(0)
+      rv$sel_source  <- "none"
     })
     
     output$ws_summary_ui <- renderUI({
@@ -1375,6 +1400,11 @@ reconcile_server <- function(id, output_dir) {
     observeEvent(input$ws_row_pick, {
       pu <- suppressWarnings(as.integer(input$ws_row_pick$id_pu))
       req(!is.na(pu))
+      nf <- rv$node_filter
+      if (!is.null(nf) && !(pu %in% nf$pu)) {
+        rv$node_filter <- NULL
+        rv$page        <- 1L
+      }
       rv$selected_pu <- pu
       rv$sel_source  <- "table"
     })
@@ -1398,7 +1428,6 @@ reconcile_server <- function(id, output_dir) {
       } else {
         tgt <- seq_len(nrow(df))
       }
-
       if (length(tgt) == 0) {
         showNotification("Tidak ada baris yang dapat difinalisasi di grup ini.",
                          type = "message", duration = 2)
@@ -1414,23 +1443,6 @@ reconcile_server <- function(id, output_dir) {
                 length(tgt)),
         type = "message", duration = 2)
     }
-    
-    observeEvent(list(rv$data_nonce, rv$group_selected), {
-      states <- row_states()
-      df     <- isolate(rv$dec_df)
-      if (is.null(states) || is.null(df)) return()
-      cur <- isolate(rv$group_selected)
-      in_group <- if (is.na(cur) || !"id_group" %in% names(df)) {
-        rep(TRUE, nrow(df))
-      } else {
-        as.integer(df$id_group) == cur
-      }
-      all_final <- all(states[in_group] == "green", na.rm = TRUE)
-      shinyjs::runjs(sprintf(
-        "$('.laspur-header-check').prop('checked', %s);",
-        if (all_final) "true" else "false"
-      ))
-    })
     
     observeEvent(input$ws_finalize_all_btn, { do_finalize_all(TRUE) })
     
@@ -1453,6 +1465,10 @@ reconcile_server <- function(id, output_dir) {
     })
     
     observeEvent(input$ws_run_reconcile, {
+      req(rv$dec_df)
+      rv$dec_committed <- rv$dec_df
+      rv$dec_saved     <- rv$dec_df
+      
       rv$workspace_open <- FALSE
       shinyjs::delay(300, {
         shinyjs::click(ns("btn_run_reconcile"))
@@ -1594,6 +1610,16 @@ reconcile_server <- function(id, output_dir) {
         leaflet::addProviderTiles("Esri.WorldImagery",    group = "Citra Satelit") %>%
         leaflet::addLayersControl(baseGroups = c("Peta Dasar", "Citra Satelit"),
                                   options = leaflet::layersControlOptions(collapsed = TRUE)) %>%
+        leaflet::addLegend(
+          position = "bottomright", opacity = 0.9,
+          title = "Tipe Zona",
+          colors = c("#1565C0", "#2E7D32"),
+          labels = c("RTRW", "RZWP3K")) %>%
+        leaflet::addLegend(
+          position = "bottomleft", opacity = 0.9,
+          title = "Status Rekonsiliasi",
+          colors = c("#28A745", "#FFC107", "#DC3545"),
+          labels = c("Terekonsiliasi", "Belum Terekonsiliasi", "Konflik")) %>%
         leaflet::setView(lng = 118, lat = -2, zoom = 5)
     })
     
@@ -1612,7 +1638,6 @@ reconcile_server <- function(id, output_dir) {
       invisible(NULL)
     }
     
-    # Redraw polygons
     observe({
       map_trigger()
       rv$map_ready
@@ -1630,7 +1655,7 @@ reconcile_server <- function(id, output_dir) {
       proxy <- leaflet::leafletProxy("ws_map", session = session) %>%
         leaflet::clearGroup("Konteks grup") %>%
         leaflet::clearGroup("Terpilih")
-
+      
       tryCatch(
         proxy <- proxy %>% leaflet.extras::removeSearchFeatures(),
         error = function(e) NULL)
@@ -1638,93 +1663,194 @@ reconcile_server <- function(id, output_dir) {
       tryCatch({
         m <- recon_map_4326()
         
-        # Join state by id_pu
         idx <- match(as.integer(m$id_pu), as.integer(df$id_pu))
         m$row_state <- states[idx]
         m$row_state[is.na(m$row_state)] <- "orange"
         
-        # Group filter
-        if (!is.na(cur) && "id_group" %in% names(m)) {
-          m <- m[as.integer(m$id_group) == cur, ]
-        }
-        if (nrow(m) == 0) return(invisible())
-        
         state_color <- c(green = "#28A745", orange = "#FFC107", red = "#DC3545")
-        is_rtrw <- !is.na(m$RTRW)
-        
-        m$border_color <- unname(state_color[m$row_state])
-        m$border_color[is.na(m$border_color)] <- "#FFC107"
-        m$fill_color   <- ifelse(is_rtrw, "#1565C0", "#2E7D32")
-        m$weight <- ifelse(as.integer(m$id_pu) %in% sel, 4, 2)
-
         status_label <- c(
           green  = "Terekonsiliasi",
           orange = "Belum Terekonsiliasi",
           red    = "Konflik"
         )
-        status_text <- unname(status_label[m$row_state])
-        status_text[is.na(status_text)] <- "Belum Terekonsiliasi"
+        
+        m$status_text <- unname(status_label[m$row_state])
+        m$status_text[is.na(m$status_text)] <- "Belum Terekonsiliasi"
+        
+        m$state_col <- unname(state_color[m$row_state])
+        m$state_col[is.na(m$state_col)] <- "#FFC107"
+        
+        is_rtrw <- !is.na(m$RTRW)
+        m$side_col <- ifelse(is_rtrw, "#1565C0", "#2E7D32")
         
         zone_type <- ifelse(is_rtrw, "RTRW", "RZWP3K")
         zone_name <- ifelse(is_rtrw,
                             as.character(m$RTRW),
                             as.character(m$RZWP3K))
-        zone_id   <- ifelse(is_rtrw,
-                            as.character(m$id_rtrw),
-                            as.character(m$id_rzwp3k))
-        area_val  <- if (is_rtrw[1] || any(is_rtrw)) {
+        
+        zone_id_col <- if ("id_rtrw" %in% names(m) && "id_rzwp3k" %in% names(m)) {
+          ifelse(is_rtrw,
+                 as.character(m$id_rtrw),
+                 as.character(m$id_rzwp3k))
+        } else if ("id" %in% names(m)) {
+          as.character(m$id)
+        } else {
+          rep(NA_character_, nrow(m))
+        }
+        
+        area_val <- if ("area_ha_rtrw" %in% names(m) &&
+                        "area_ha_rzwp3k" %in% names(m)) {
           ifelse(is_rtrw,
                  suppressWarnings(as.numeric(m$area_ha_rtrw)),
                  suppressWarnings(as.numeric(m$area_ha_rzwp3k)))
-        } else NA_real_
-        if (all(is.na(area_val)) && "area_ha" %in% names(m)) {
-          area_val <- suppressWarnings(as.numeric(m$area_ha))
+        } else if ("area_ha" %in% names(m)) {
+          suppressWarnings(as.numeric(m$area_ha))
+        } else {
+          rep(NA_real_, nrow(m))
         }
         len_val <- if ("length" %in% names(m))
           suppressWarnings(as.numeric(m$length)) else rep(NA_real_, nrow(m))
         
-        fmt_num <- function(x) {
-          ifelse(is.na(x), "-", formatC(x, format = "f", digits = 2))
-        }
+        fmt_num <- function(x) ifelse(is.na(x), "-",
+                                      formatC(x, format = "f", digits = 2))
+        .dash <- function(x) ifelse(is.na(x) | !nzchar(as.character(x)),
+                                    "-", as.character(x))
         
-        label_txt <- sprintf(
-          "<b>%s</b>: %s<br/><b>ID %s</b>: %s<br/><b>Status</b>: %s<br/><b>Luas</b>: %s ha<br/><b>Panjang Segmen</b>: %s m",
+        m$label <- sprintf(
+          "%s | %s | %s | %s | id_pu %s",
+          .dash(zone_id_col),
+          .dash(zone_name),
+          m$status_text,
           zone_type,
-          ifelse(is.na(zone_name) | !nzchar(zone_name), "-", zone_name),
+          m$id_pu
+        )
+        
+        popup_txt <- sprintf(
+          "<b>%s</b><br/>ID: %s<br/>Zona: %s<br/>Status: %s<br/>id_pu: %s<br/>Luas: %s ha<br/>Panjang Segmen: %s m",
           zone_type,
-          ifelse(is.na(zone_id)   | !nzchar(zone_id),   "-", zone_id),
-          status_text,
+          .dash(zone_id_col),
+          .dash(zone_name),
+          m$status_text,
+          m$id_pu,
           fmt_num(area_val),
           fmt_num(len_val)
         )
-        m$label <- lapply(label_txt, htmltools::HTML)
+        m$popup <- lapply(popup_txt, htmltools::HTML)
         
-        proxy <- proxy %>%
-          leaflet::addPolygons(
-            data = m,
-            layerId = ~paste0("pu_", id_pu, "_", ifelse(is_rtrw, "R", "Z")),
-            color = ~border_color, weight = ~weight, opacity = 1,
-            fillColor = ~fill_color, fillOpacity = 0.30,
-            label = ~label,
+        if (!is.na(cur) && "id_group" %in% names(m)) {
+          m <- m[as.integer(m$id_group) == cur, ]
+        }
+        if (nrow(m) == 0) return(invisible())
+        
+        m_sel_flag <- as.integer(m$id_pu) %in% sel
+        ctx <- m[!m_sel_flag, , drop = FALSE]
+        slc <- m[m_sel_flag,  , drop = FALSE]
+        
+        build_polys <- function(x, id_prefix, weight, opacity, fill_op) {
+          if (is.null(x) || nrow(x) == 0) return(NULL)
+          is_r <- !is.na(x$RTRW)
+          list(
+            data    = x,
+            layerId = paste0(id_prefix, "_", x$id_pu, "_",
+                             ifelse(is_r, "R", "Z")),
+            fillColor   = x$state_col,
+            color       = x$side_col,
+            weight      = weight,
+            opacity     = opacity,
+            fillOpacity = fill_op,
+            label       = x$label,
+            popup       = x$popup
+          )
+        }
+        
+        ctx_p <- build_polys(ctx, "ctx", 1.5, 0.85, 0.20)
+        slc_p <- build_polys(slc, "sel", 3.5, 1.00, 0.55)
+        
+        if (!is.null(ctx_p)) {
+          proxy <- proxy %>% leaflet::addPolygons(
+            data = ctx_p$data, layerId = ctx_p$layerId,
+            color = ctx_p$color, weight = ctx_p$weight,
+            opacity = ctx_p$opacity, fillColor = ctx_p$fillColor,
+            fillOpacity = ctx_p$fillOpacity,
+            label = ctx_p$label, popup = ctx_p$popup,
             group = "Konteks grup",
             highlightOptions = leaflet::highlightOptions(
-              weight = 4, bringToFront = TRUE))
+              weight = 3, bringToFront = TRUE))
+        }
+        if (!is.null(slc_p)) {
+          proxy <- proxy %>% leaflet::addPolygons(
+            data = slc_p$data, layerId = slc_p$layerId,
+            color = slc_p$color, weight = slc_p$weight,
+            opacity = slc_p$opacity, fillColor = slc_p$fillColor,
+            fillOpacity = slc_p$fillOpacity,
+            label = slc_p$label, popup = slc_p$popup,
+            group = "Terpilih")
+        }
         
-        proxy <- proxy %>%
-          leaflet.extras::addSearchFeatures(
-            targetGroups = "Konteks grup",
+        if (!is.null(ctx_p) || !is.null(slc_p)) {
+          proxy %>% leaflet.extras::addSearchFeatures(
+            targetGroups = c("Konteks grup", "Terpilih"),
             options = leaflet.extras::searchFeaturesOptions(
               propertyName         = "label",
               zoom                 = 15,
-              openPopup            = FALSE,
+              openPopup            = TRUE,
               firstTipSubmit       = TRUE,
               autoCollapse         = FALSE,
               hideMarkerOnCollapse = TRUE
             )
           )
+        }
       }, error = function(e) {
         message("[reconcile] map proxy error: ", conditionMessage(e))
       })
+    })
+    
+    observeEvent(input$ws_map_shape_click, {
+      id <- input$ws_map_shape_click$id
+      req(id, grepl("^(ctx|sel)_[0-9]+_[RZ]$", id))
+      
+      pu   <- as.integer(sub("^(ctx|sel)_([0-9]+)_([RZ])$", "\\2", id))
+      side <-                sub("^(ctx|sel)_([0-9]+)_([RZ])$", "\\3", id)
+      
+      m <- rv$recon_map
+      req(inherits(m, "sf"), "id_pu" %in% names(m))
+      
+      feature_col <- if (identical(side, "R")) "id_rtrw" else "id_rzwp3k"
+      if (!feature_col %in% names(m)) {
+        if ("id" %in% names(m)) feature_col <- "id" else return()
+      }
+      
+      row_match <- as.integer(m$id_pu) == pu
+      if (identical(side, "R")) {
+        row_match <- row_match & !is.na(m$RTRW)
+      } else {
+        row_match <- row_match & !is.na(m$RZWP3K)
+      }
+      
+      candidate_vals <- as.character(m[[feature_col]][row_match])
+      candidate_vals <- candidate_vals[!is.na(candidate_vals) &
+                                         nzchar(candidate_vals)]
+      if (length(candidate_vals) == 0) return()
+      feature_id <- candidate_vals[1]
+      
+      all_pairs <- unique(as.integer(
+        m$id_pu[!is.na(m[[feature_col]]) &
+                  as.character(m[[feature_col]]) == feature_id]
+      ))
+      if (length(all_pairs) == 0) return()
+      
+      nf <- rv$node_filter
+      if (!is.null(nf) &&
+          identical(as.character(nf$node), feature_id) &&
+          identical(as.character(nf$side), side)) return()
+      
+      rv$node_filter <- list(node  = feature_id,
+                             side  = side,
+                             label = feature_id,
+                             pu    = all_pairs)
+      rv$page        <- 1L
+      rv$selected_pu <- integer(0)
+      rv$sel_source  <- "map"
     })
     
     observeEvent(
@@ -1752,22 +1878,7 @@ reconcile_server <- function(id, output_dir) {
       }, error = function(e) message("[reconcile] fit selection error: ", conditionMessage(e)))
     }, ignoreInit = TRUE)
     
-    observeEvent(input$btn_run_reconcile, {
-      if (is.null(output_dir()) || !nzchar(output_dir()) ||
-          !validate_output_dir(output_dir())) {
-        showNotification("Direktori output belum diatur.", type = "error", duration = 5)
-        return()
-      }
-      req(rv$recon_map, rv$rtrw_vect, rv$rzwp3k_vect)
-      req(rv$rtrw_prioritas, rv$rzwp3k_prioritas, rv$serasi_matrix)
-      
-      if (is.null(rv$dec_committed)) {
-        showNotification(
-          "Keputusan belum tersedia. Siapkan keputusan (in-app atau unggah templat) terlebih dahulu.",
-          type = "warning", duration = 8)
-        return()
-      }
-      
+    run_reconciliation <- function() {
       rv$resolved_rtrw <- NULL; rv$resolved_rzwp3k <- NULL
       rv$resolved_integrated <- NULL
       rv$analysis_result <- NULL; rv$gpkg_path <- NULL; rv$xlsx_path <- NULL
@@ -1913,6 +2024,66 @@ reconcile_server <- function(id, output_dir) {
                            type = "error", duration = NULL)
         })
       })
+    }
+    
+    observeEvent(input$btn_run_reconcile, {
+      if (is.null(output_dir()) || !nzchar(output_dir()) ||
+          !validate_output_dir(output_dir())) {
+        showNotification("Direktori output belum diatur.",
+                         type = "error", duration = 5)
+        return()
+      }
+      req(rv$recon_map, rv$rtrw_vect, rv$rzwp3k_vect)
+      req(rv$rtrw_prioritas, rv$rzwp3k_prioritas, rv$serasi_matrix)
+      
+      if (is.null(rv$dec_committed)) {
+        showNotification(
+          "Keputusan belum tersedia. Siapkan keputusan (in-app atau unggah templat) terlebih dahulu.",
+          type = "warning", duration = 8)
+        return()
+      }
+      
+      if (isTRUE(has_unsaved())) {
+        showModal(modalDialog(
+          title = "Ada Perubahan yang Belum Disimpan",
+          tagList(
+            tags$p("Keputusan di Halaman Kerja telah berubah sejak penyimpanan terakhir."),
+            tags$p(style = "font-size: 0.9rem; color: #6c757d;",
+                   "Simpan terlebih dahulu agar perubahan tersebut dipakai pada ",
+                   "proses rekonsiliasi, atau batalkan untuk kembali ke Halaman Kerja ",
+                   "dan meninjau kembali keputusan Anda.")
+          ),
+          easyClose = FALSE,
+          footer = tagList(
+            actionButton(ns("btn_recon_cancel"), "Batal",
+                         class = "btn-outline-secondary"),
+            actionButton(ns("btn_recon_save_run"),
+                         tagList(tags$i(class = "bi bi-save me-1"),
+                                 "Simpan & Lanjutkan"),
+                         class = "btn-primary")
+          )
+        ))
+        return()
+      }
+      
+      run_reconciliation()
+    })
+    
+    observeEvent(input$btn_recon_cancel, {
+      removeModal()
+      rv$workspace_open <- TRUE
+    })
+    
+    observeEvent(input$btn_recon_save_run, {
+      removeModal()
+      req(rv$dec_df)
+      rv$dec_committed <- rv$dec_df
+      rv$dec_saved     <- rv$dec_df
+      bump_table()
+      showNotification(
+        sprintf("Keputusan tersimpan: %d baris.", nrow(rv$dec_df)),
+        type = "message", duration = 3)
+      run_reconciliation()
     })
     
     output$status_box <- renderUI({
