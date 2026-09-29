@@ -1655,6 +1655,46 @@ server <- function(input, output, session) {
 }
 
 jsCode <- "
+window.laspurAutoSizeReactable = function(widgetId, capPx, retries) {
+  retries = (typeof retries === 'number') ? retries : 25;
+  (function attempt() {
+    try {
+      var widget = document.getElementById(widgetId);
+      if (!widget) { if (retries-- > 0) setTimeout(attempt, 200); return; }
+
+      var probe = widget.querySelector('.rt-table');
+      if (!probe) { if (retries-- > 0) setTimeout(attempt, 200); return; }
+      if (widget._laspurAttached) return;
+      widget._laspurAttached = true;
+
+      function doResize() {
+        try {
+          var tblEl = widget.querySelector('.rt-table');
+          var thead = widget.querySelector('.rt-thead');
+          if (!tblEl) return;
+          var total  = tblEl.scrollHeight;
+          var target = Math.min(capPx, total + 2);
+          widget.style.height = target + 'px';
+          if (thead) {
+            thead.style.position   = 'sticky';
+            thead.style.top        = '0';
+            thead.style.zIndex     = '5';
+            thead.style.background = '#F8FAFC';
+          }
+        } catch (e) {}
+      }
+
+      doResize();
+
+      widget._laspurMo = new MutationObserver(function() {
+        if (widget._laspurDebounce) clearTimeout(widget._laspurDebounce);
+        widget._laspurDebounce = setTimeout(doResize, 30);
+      });
+      widget._laspurMo.observe(widget, { childList: true, subtree: true });
+    } catch (e) { console.warn('laspurAutoSizeReactable:', e); }
+  })();
+};
+
 $(document).ready(function() {
   $('body').addClass('sidebar-mini');
 

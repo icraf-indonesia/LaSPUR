@@ -160,6 +160,17 @@ recommendation_adjacent_ui <- function(id) {
           vertical-align: middle;
         }
         .inapp-table-host .rt-th { font-weight: 600; }
+        
+        .inapp-table-host .rt-thead {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          background: #F8FAFC;
+        }
+        .inapp-table-host .rt-thead .rt-th {
+          background: #F8FAFC;
+          border-bottom: 2px solid #E2E8F0;
+        }
 
         .laspur-cell-select {
           width: 100%;
@@ -176,6 +187,16 @@ recommendation_adjacent_ui <- function(id) {
           background-color: #F1F5F9;
           color: #94A3B8;
           cursor: not-allowed;
+        }
+
+        .inapp-table-host .rt-thead {
+          position: sticky;
+          top: 0;
+          z-index: 5;
+        }
+        .inapp-table-host .rt-thead .rt-th {
+          background: #F8FAFC !important;
+          border-bottom: 2px solid #E2E8F0;
         }
       ")),
       fluidRow(
@@ -205,7 +226,6 @@ recommendation_adjacent_ui <- function(id) {
             uiOutput(ns("inapp_summary_ui")),
             div(class = "inapp-table-host",
                 reactable::reactableOutput(ns("inapp_table"))),
-            uiOutput(ns("inapp_pagination_ui")),
             div(
               style = paste("display: flex; justify-content: space-between;",
                             "align-items: center; margin-top: 8px; gap: 8px; flex-wrap: wrap;"),
@@ -324,6 +344,10 @@ recommendation_adjacent_server <- function(id, output_dir) {
             try { var lf = HTMLWidgets.find('#%s'); if (lf && lf.resize) lf.resize(); } catch(e) {}
             setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 60);
           ", ns("inapp_table"), ns("group_map")))
+          shinyjs::runjs(sprintf(
+            "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
+            ns("inapp_table")
+          ))
         })
       } else {
         shinyjs::runjs(sprintf("$('#%s').show(); $('#%s').hide();",
@@ -859,6 +883,49 @@ recommendation_adjacent_server <- function(id, output_dir) {
     PAGE_SIZE <- 25L
     
     bump_table <- function() rv$table_nonce <- isolate(rv$table_nonce) + 1L
+
+    apply_padu_row_scale <- function(display, padu_cols) {
+      n_disp <- nrow(display)
+      if (n_disp == 0 || length(padu_cols) == 0) return(display)
+      
+      mat <- as.matrix(display[, padu_cols, drop = FALSE])
+      storage.mode(mat) <- "double"
+      
+      row_mins <- apply(mat, 1, function(x) {
+        x <- x[is.finite(x)]
+        if (length(x) == 0) NA_real_ else min(x)
+      })
+      row_maxs <- apply(mat, 1, function(x) {
+        x <- x[is.finite(x)]
+        if (length(x) == 0) NA_real_ else max(x)
+      })
+      
+      ramp <- grDevices::colorRamp(c("#EAF2FB", "#08519C"))
+      
+      for (j in seq_along(padu_cols)) {
+        col    <- padu_cols[j]
+        vals   <- mat[, j]
+        out    <- character(n_disp)
+        for (i in seq_len(n_disp)) {
+          v <- vals[i]
+          if (!is.finite(v)) { out[i] <- ""; next }
+          mn <- row_mins[i]; mx <- row_maxs[i]
+          nv <- if (!is.finite(mn) || !is.finite(mx) || mx == mn) 0.5
+          else (v - mn) / (mx - mn)
+          nv <- max(0, min(1, nv))
+          rgb <- ramp(nv)
+          bg  <- grDevices::rgb(rgb[1, 1], rgb[1, 2], rgb[1, 3],
+                                maxColorValue = 255)
+          tx  <- if (nv > 0.65) "#FFFFFF" else "#1E293B"
+          out[i] <- sprintf(
+            '<span style="display:block; margin:-3px -5px; padding:3px 5px; background:%s; color:%s;">%s</span>',
+            bg, tx, formatC(v, format = "f", digits = 2)
+          )
+        }
+        display[[col]] <- out
+      }
+      display
+    }
     
     clear_selection <- function() {
       rv$node_filter <- NULL
@@ -961,10 +1028,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       dec <- isolate(rv$inapp_decisions)
       req(dec)
       if (length(idx) == 0) return(dec[0, , drop = FALSE])
-      total_pages <- max(1L, ceiling(length(idx) / PAGE_SIZE))
-      page <- min(max(1L, rv$inapp_page), total_pages)
-      rows <- idx[seq.int((page - 1L) * PAGE_SIZE + 1L, min(page * PAGE_SIZE, length(idx)))]
-      dec[rows, , drop = FALSE]
+      dec[idx, , drop = FALSE]
     })
     
     output$inapp_table <- reactable::renderReactable({
@@ -1178,6 +1242,12 @@ recommendation_adjacent_server <- function(id, output_dir) {
       final_order <- intersect(final_order, names(display))
       display <- display[, final_order, drop = FALSE]
       
+      padu_sub_cols <- c("idx_padu_ke", "idx_padu_hs", "idx_padu_kl",
+                         "idx_padu_kh", "idx_padu_rtp", "idx_padu_se",
+                         "idx_padu_ki")
+      padu_sub_cols <- intersect(padu_sub_cols, names(display))
+      display <- apply_padu_row_scale(display, padu_sub_cols)
+      
       num2_fmt <- reactable::colFormat(digits = 2)
       
       col_defs <- list(
@@ -1196,23 +1266,24 @@ recommendation_adjacent_server <- function(id, output_dir) {
         area_ha_rzwp3k     = reactable::colDef(name = "Luas Area RZWP3K (ha)", minWidth = 140, format = num2_fmt),
         area_ha_total      = reactable::colDef(name = "Luas Area Total (ha)",  minWidth = 130, format = num2_fmt),
         idx_serasi         = reactable::colDef(name = "Indeks SERASI Aktual",  minWidth = 130, format = num2_fmt),
-        idx_serasi_new     = reactable::colDef(name = "Indeks SERASI Baru",    minWidth = 130, format = num2_fmt),
-        idx_padu_final     = reactable::colDef(name = "Indeks PADU",           minWidth = 100, format = num2_fmt),
-        idx_padan          = reactable::colDef(name = "Indeks PADAN Aktual",   minWidth = 130, format = num2_fmt),
-        idx_padan_new      = reactable::colDef(name = "Indeks PADAN Baru",     minWidth = 130, format = num2_fmt),
-        idx_padu_ke        = reactable::colDef(name = "Indeks PADU-KE",        minWidth = 110, format = num2_fmt),
-        idx_padu_hs        = reactable::colDef(name = "Indeks PADU-HS",        minWidth = 110, format = num2_fmt),
-        idx_padu_kl        = reactable::colDef(name = "Indeks PADU-KL",        minWidth = 110, format = num2_fmt),
-        idx_padu_kh        = reactable::colDef(name = "Indeks PADU-KH",        minWidth = 110, format = num2_fmt),
-        idx_padu_rtp       = reactable::colDef(name = "Indeks PADU-RTp",       minWidth = 110, format = num2_fmt),
-        idx_padu_se        = reactable::colDef(name = "Indeks PADU-SE",        minWidth = 110, format = num2_fmt),
-        idx_padu_ki        = reactable::colDef(name = "Indeks PADU-KI",        minWidth = 110, format = num2_fmt)
+        idx_serasi_new     = reactable::colDef(name = "Potensi Indeks SERASI Baru", minWidth = 140, format = num2_fmt),
+        idx_padu_final     = reactable::colDef(name = "Indeks PADU Kombinasi",      minWidth = 130, format = num2_fmt),
+        idx_padan          = reactable::colDef(name = "Indeks PADAN Aktual",        minWidth = 130, format = num2_fmt),
+        idx_padan_new      = reactable::colDef(name = "Potensi Indeks PADAN Baru",  minWidth = 140, format = num2_fmt),
+        idx_padu_ke        = reactable::colDef(name = "Indeks PADU-KE",  html = TRUE, minWidth = 110),
+        idx_padu_hs        = reactable::colDef(name = "Indeks PADU-HS",  html = TRUE, minWidth = 110),
+        idx_padu_kl        = reactable::colDef(name = "Indeks PADU-KL",  html = TRUE, minWidth = 110),
+        idx_padu_kh        = reactable::colDef(name = "Indeks PADU-KH",  html = TRUE, minWidth = 110),
+        idx_padu_rtp       = reactable::colDef(name = "Indeks PADU-RTp", html = TRUE, minWidth = 110),
+        idx_padu_se        = reactable::colDef(name = "Indeks PADU-SE",  html = TRUE, minWidth = 110),
+        idx_padu_ki        = reactable::colDef(name = "Indeks PADU-KI",  html = TRUE, minWidth = 110)
       )
       
       reactable::reactable(
         display,
         columns       = col_defs,
         pagination    = FALSE,
+        height        = 620,
         outlined      = TRUE,
         bordered      = TRUE,
         compact       = TRUE,
@@ -1289,25 +1360,25 @@ recommendation_adjacent_server <- function(id, output_dir) {
                            n_ubah_r, n_ubah_z)))
     })
     
-    output$inapp_pagination_ui <- renderUI({
-      n <- length(inapp_filtered_idx())
-      total_pages <- max(1L, ceiling(n / PAGE_SIZE))
-      page <- min(max(1L, rv$inapp_page), total_pages)
-      div(
-        style = "display:flex; justify-content:space-between; align-items:center; margin-top:4px;",
-        actionButton(ns("inapp_prev"), "\u2039 Prev", class = "btn-outline-secondary btn-sm"),
-        tags$span(sprintf("Halaman %d / %d (%d baris)", page, total_pages, n),
-                  style = "font-size:0.8rem; color:#495057;"),
-        actionButton(ns("inapp_next"), "Next \u203a", class = "btn-outline-secondary btn-sm")
-      )
-    })
-    observeEvent(input$inapp_prev, {
-      rv$inapp_page <- max(1L, rv$inapp_page - 1L)
-    })
-    observeEvent(input$inapp_next, {
-      total_pages <- max(1L, ceiling(length(inapp_filtered_idx()) / PAGE_SIZE))
-      rv$inapp_page <- min(total_pages, rv$inapp_page + 1L)
-    })
+    # output$inapp_pagination_ui <- renderUI({
+    #   n <- length(inapp_filtered_idx())
+    #   total_pages <- max(1L, ceiling(n / PAGE_SIZE))
+    #   page <- min(max(1L, rv$inapp_page), total_pages)
+    #   div(
+    #     style = "display:flex; justify-content:space-between; align-items:center; margin-top:4px;",
+    #     actionButton(ns("inapp_prev"), "\u2039 Prev", class = "btn-outline-secondary btn-sm"),
+    #     tags$span(sprintf("Halaman %d / %d (%d baris)", page, total_pages, n),
+    #               style = "font-size:0.8rem; color:#495057;"),
+    #     actionButton(ns("inapp_next"), "Next \u203a", class = "btn-outline-secondary btn-sm")
+    #   )
+    # })
+    # observeEvent(input$inapp_prev, {
+    #   rv$inapp_page <- max(1L, rv$inapp_page - 1L)
+    # })
+    # observeEvent(input$inapp_next, {
+    #   total_pages <- max(1L, ceiling(length(inapp_filtered_idx()) / PAGE_SIZE))
+    #   rv$inapp_page <- min(total_pages, rv$inapp_page + 1L)
+    # })
     
     observeEvent(input$inapp_reset_all, {
       req(rv$inapp_committed)
@@ -2165,15 +2236,15 @@ recommendation_adjacent_server <- function(id, output_dir) {
         "RZWP3K"             = "RZWP3K Awal",
         "area_ha"            = "Luas (ha)",
         "length"             = "Panjang Segmen (m)",
-        "idx_padan"          = "PADAN Awal",
+        "idx_padan"          = "Indeks PADAN Awal",
         "recommendation"     = "Alternatif",
         "use_recommendation" = "Gunakan Alternatif?",
         "alt_RTRW"           = "RTRW Alternatif",
         "alt_RZWP3K"         = "RZWP3K Alternatif",
         "RTRW_new"           = "RTRW Baru",
         "RZWP3K_new"         = "RZWP3K Baru",
-        "idx_padan_new"      = "PADAN Baru",
-        "idx_padan_delta"    = "Δ PADAN",
+        "idx_padan_new"      = "Potensi Indeks PADAN Baru",
+        "idx_padan_delta"    = "Δ Indeks PADAN",
         "actual_integration" = "Integrasi Aktual",
         "recom_integration"  = "Integrasi Alternatif",
         "econ_rtrw_delta"    = "Δ Ekonomi RTRW",
@@ -2182,12 +2253,19 @@ recommendation_adjacent_server <- function(id, output_dir) {
       ),
       table_round_cols = c(
         "Luas (ha)", "Panjang Segmen (m)",
-        "PADAN Awal", "PADAN Baru", "Δ PADAN"
+        "Indeks PADAN Awal", "Potensi Indeks PADAN Baru", "Δ Indeks PADAN"
       ),
       table_optional_cols = c(
         "econ_rtrw_delta", "econ_rzwp3k_delta", "econ_delta"
       )
     )
+    
+    session$onFlushed(function() {
+      shinyjs::runjs(sprintf(
+        "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
+        ns("inapp_table")
+      ))
+    }, once = TRUE)
     
     render_result_server(input, output, session, rv, recom_adjacent_config)
   })
