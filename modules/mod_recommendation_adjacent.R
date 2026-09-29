@@ -201,6 +201,50 @@ recommendation_adjacent_ui <- function(id) {
           background: #F8FAFC !important;
           border-bottom: 2px solid #E2E8F0;
         }
+        
+        .laspur-summary-row {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8px;
+          flex-wrap: wrap;
+        }
+        .laspur-summary-row > .laspur-summary-box {
+          flex: 1 1 0;
+          min-width: 180px;
+          border-radius: 8px;
+          padding: 8px 12px;
+          border: 1px solid;
+          box-sizing: border-box;
+        }
+        .laspur-summary-box .laspur-summary-title {
+          font-size: 0.75rem;
+          font-weight: 700;
+          margin-bottom: 2px;
+          opacity: 0.75;
+        }
+        .laspur-summary-box.box-outcome {
+          flex: 2 1 0;
+        }
+        .laspur-summary-box .laspur-summary-value {
+          font-size: 0.85rem;
+          font-weight: 600;
+          line-height: 1.35;
+        }
+        .laspur-summary-box.box-total {
+          background-color: #eef6fc;
+          border-color: #cfe3f5;
+          color: #1b75ba;
+        }
+        .laspur-summary-box.box-usage {
+          background-color: #F8FAFC;
+          border-color: #E2E8F0;
+          color: #334155;
+        }
+        .laspur-summary-box.box-outcome {
+          background-color: #e6f2f2;
+          border-color: #c9e4e4;
+          color: #106665;
+        }
       ")),
       fluidRow(
         class = "g-3",
@@ -209,10 +253,11 @@ recommendation_adjacent_ui <- function(id) {
           width = 8,
           card(
             card_header(
-              div(
-                class = "d-flex justify-content-between align-items-center",
-                tagList(tags$i(class = "bi bi-table me-1"), "Keputusan Pasangan "),
-                uiOutput(ns("inapp_group_label_short"), inline = TRUE)
+              tags$div(
+                class = "d-flex align-items-center",
+                style = "gap: 6px;",
+                tags$i(class = "bi bi-table"),
+                "Keputusan Alternatif"
               )
             ),
             div(
@@ -257,7 +302,14 @@ recommendation_adjacent_ui <- function(id) {
         column(
           width = 4,
           card(
-            card_header(tagList(tags$i(class = "bi bi-map me-1"), "Peta")),
+            card_header(
+              tags$div(
+                class = "d-flex align-items-center",
+                style = "gap: 6px;",
+                tags$i(class = "bi bi-map"),
+                "Peta"
+              )
+            ),
             leaflet::leafletOutput(ns("group_map"), height = "600px")
           )
         )
@@ -1353,11 +1405,27 @@ recommendation_adjacent_server <- function(id, output_dir) {
       n_ubah_z <- sum(rv$inapp_decisions$recommendation == "Ubah RZ" &
                         rv$inapp_decisions$use_recommendation == "Ya", na.rm = TRUE)
       
-      div(class = "alert alert-info mb-2", style = "font-size: 0.8rem; padding: 6px 10px;",
-          tags$div(sprintf("Total: %d \u00b7 Ditampilkan: %d", n_total, n_visible)),
-          tags$div(sprintf("Ya: %d \u00b7 Tidak: %d", n_ya, n_tidak)),
-          tags$div(sprintf("Akan Ubah RTRW: %d \u00b7 Akan Ubah RZWP3K: %d",
-                           n_ubah_r, n_ubah_z)))
+      div(
+        class = "laspur-summary-row",
+        div(
+          class = "laspur-summary-box box-total",
+          tags$div(class = "laspur-summary-title", "Total kasus"),
+          tags$div(class = "laspur-summary-value",
+                   sprintf("%d pasang \u00b7 Ditampilkan: %d", n_total, n_visible))
+        ),
+        div(
+          class = "laspur-summary-box box-usage",
+          tags$div(class = "laspur-summary-title", "Opsi yang dikunci"),
+          tags$div(class = "laspur-summary-value",
+                   sprintf("Ya: %d \u00b7 Tidak: %d", n_ya, n_tidak))
+        ),
+        div(
+          class = "laspur-summary-box box-outcome",
+          tags$div(class = "laspur-summary-title", "Keputusan alternatif"),
+          tags$div(class = "laspur-summary-value",
+                   sprintf("Ubah RTRW: %d \u00b7 Ubah RZWP3K: %d", n_ubah_r, n_ubah_z))
+        )
+      )
     })
     
     # output$inapp_pagination_ui <- renderUI({
