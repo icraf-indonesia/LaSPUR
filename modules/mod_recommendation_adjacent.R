@@ -150,6 +150,9 @@ recommendation_adjacent_ui <- function(id) {
         .inapp-toolbar-row .inapp-btn .btn { height: 100%; }
         .inapp-table-host { padding-bottom: 0 !important; margin-bottom: 0 !important; }
         .inapp-table-host .html-widget { margin-bottom: 0 !important; }
+        .inapp-table-host { --inapp-table-max: 620px; }
+        .inapp-table-host .reactable { height: auto !important; }
+        .inapp-table-host .rt-table { max-height: var(--inapp-table-max); overflow: auto; }
 
         .inapp-table-host .rt-table { font-size: 0.72rem; }
         .inapp-table-host .rt-th,
@@ -201,6 +204,7 @@ recommendation_adjacent_ui <- function(id) {
       ")),
       fluidRow(
         class = "g-3",
+        style = "align-items: flex-start;",
         column(
           width = 8,
           card(
@@ -312,13 +316,13 @@ recommendation_adjacent_server <- function(id, output_dir) {
       map_nonce         = 0L,
       inapp_saved       = NULL
     )
-
+    
     go_to_panel <- function(value) {
       rv$workspace_open <- FALSE
       rv$current_panel  <- value
       bslib::accordion_panel_set(id = "wizard", values = value, session = session)
     }
-
+    
     is_workspace_mode <- reactive({
       identical(rv$current_panel, "step2") && isTRUE(rv$workspace_open)
     })
@@ -334,7 +338,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         shinyjs::runjs(sprintf("$('#%s').hide(); $('#%s').show();",
                                ns("setup_view"), ns("workspace_view")))
         if (!isTRUE(rv$map_latch)) rv$map_latch <- TRUE
-
+        
         shinyjs::delay(450, {
           rv$table_nonce <- isolate(rv$table_nonce) + 1L
           rv$data_nonce  <- isolate(rv$data_nonce)  + 1L
@@ -344,10 +348,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
             try { var lf = HTMLWidgets.find('#%s'); if (lf && lf.resize) lf.resize(); } catch(e) {}
             setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 60);
           ", ns("inapp_table"), ns("group_map")))
-          shinyjs::runjs(sprintf(
-            "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
-            ns("inapp_table")
-          ))
         })
       } else {
         shinyjs::runjs(sprintf("$('#%s').show(); $('#%s').hide();",
@@ -648,7 +648,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         NULL
       }
     })
-
+    
     outputOptions(output, "inapp_ready_hint_ui", suspendWhenHidden = FALSE)
     
     observeEvent(input$btn_reopen_workspace, {
@@ -695,7 +695,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat Matriks Serasi:", e$message), type = "error", duration = 8)
       })
     })
-
+    
     observeEvent(input$btn_prepare_options, {
       if (is.null(output_dir()) || !nzchar(output_dir()) || !validate_output_dir(output_dir())) {
         showNotification("Direktori output belum diatur.", type = "error", duration = 5)
@@ -883,7 +883,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
     PAGE_SIZE <- 25L
     
     bump_table <- function() rv$table_nonce <- isolate(rv$table_nonce) + 1L
-
+    
     apply_padu_row_scale <- function(display, padu_cols) {
       n_disp <- nrow(display)
       if (n_disp == 0 || length(padu_cols) == 0) return(display)
@@ -1159,7 +1159,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         if (length(vals) == 0) {
           vals <- if (identical(side, "RTRW")) fallback_rtrw else fallback_rz
         }
-
+        
         av <- as.character(actual_val)
         if (length(av) > 0 && !is.na(av[1]) && nzchar(av[1]) &&
             !av[1] %in% vals) {
@@ -1283,7 +1283,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
         display,
         columns       = col_defs,
         pagination    = FALSE,
-        height        = 620,
+        height        = "auto",
         outlined      = TRUE,
         bordered      = TRUE,
         compact       = TRUE,
@@ -1320,7 +1320,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       } else if (identical(side, "use_recommendation")) {
         rv$inapp_decisions$use_recommendation[idx] <- val
       }
-
+      
       rv$data_nonce  <- isolate(rv$data_nonce) + 1L
       rv$table_nonce <- isolate(rv$table_nonce) + 1L
       rv$map_nonce   <- isolate(rv$map_nonce)  + 1L
@@ -1402,7 +1402,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       }
       m
     })
-
+    
     output$group_map <- leaflet::renderLeaflet({
       req(rv$map_latch)
       leaflet::leaflet(options = leaflet::leafletOptions(preferCanvas = TRUE)) %>%
@@ -1415,7 +1415,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           colors = c("#1565C0", "#2E7D32"), labels = c("RTRW", "RZWP3K")) %>%
         leaflet::setView(lng = 118, lat = -2, zoom = 5)
     })
-
+    
     observeEvent(input$group_map_bounds, {
       if (!isTRUE(rv$map_ready)) rv$map_ready <- TRUE
     })
@@ -1429,7 +1429,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
                            options = list(maxZoom = 16))
       invisible(NULL)
     }
-
+    
     observe({
       map_trigger() 
       rv$map_ready      
@@ -1499,7 +1499,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
             fillOpacity = slc$fill, label = slc$label, popup = slc$popup,
             group = "Terpilih")
         }
-
+        
         if (!is.null(ctx) || !is.null(slc)) {
           proxy %>% leaflet.extras::addSearchFeatures(
             targetGroups = c("Konteks grup", "Terpilih"),
@@ -1585,7 +1585,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       if (identical(as.integer(rv$selected_pu), pu)) return()
       select_pair(pu, "table")
     })
-
+    
     commit_decisions <- function() {
       if (is.null(rv$inapp_decisions) || is.null(rv$idx_padan_map_filter)) return(FALSE)
       
@@ -1705,7 +1705,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       removeModal()
       if (isTRUE(commit_decisions())) go_to_step3()
     })
-
+    
     observe({
       req(input$alt_upload)
       
@@ -1981,7 +1981,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
       rv$unlocked <- max(rv$unlocked, 4)
       go_to_panel("step4")
     })
-
+    
     output$step4_ui <- renderUI({
       tagList(
         tags$p(style = "color:#6c757d; font-size:0.85rem; margin-bottom: 8px;",
@@ -2259,13 +2259,6 @@ recommendation_adjacent_server <- function(id, output_dir) {
         "econ_rtrw_delta", "econ_rzwp3k_delta", "econ_delta"
       )
     )
-    
-    session$onFlushed(function() {
-      shinyjs::runjs(sprintf(
-        "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
-        ns("inapp_table")
-      ))
-    }, once = TRUE)
     
     render_result_server(input, output, session, rv, recom_adjacent_config)
   })

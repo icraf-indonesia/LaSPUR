@@ -165,6 +165,9 @@ reconcile_ui <- function(id) {
         .inapp-toolbar-row .inapp-btn .btn { height: 100%; }
         .inapp-table-host { padding-bottom: 0 !important; margin-bottom: 0 !important; }
         .inapp-table-host .html-widget { margin-bottom: 0 !important; }
+        .inapp-table-host { --inapp-table-max: 620px; }
+        .inapp-table-host .reactable { height: auto !important; }
+        .inapp-table-host .rt-table { max-height: var(--inapp-table-max); overflow: auto; }
 
         .inapp-table-host .rt-table { font-size: 0.72rem; }
         .inapp-table-host .rt-th,
@@ -233,6 +236,7 @@ reconcile_ui <- function(id) {
       
       fluidRow(
         class = "g-3",
+        style = "align-items: flex-start;",
         column(
           width = 8,
           card(
@@ -378,7 +382,7 @@ reconcile_server <- function(id, output_dir) {
       x[is.na(x)] <- FALSE
       x
     }
-
+    
     apply_padu_row_scale <- function(display, padu_cols) {
       n_disp <- nrow(display)
       if (n_disp == 0 || length(padu_cols) == 0) return(display)
@@ -973,10 +977,6 @@ reconcile_server <- function(id, output_dir) {
             try { var lf = HTMLWidgets.find('#%s'); if (lf && lf.resize) lf.resize(); } catch(e) {}
             setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 60);
           ", ns("ws_table"), ns("ws_map")))
-          shinyjs::runjs(sprintf(
-            "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
-            ns("ws_table")
-          ))
         })
       } else {
         shinyjs::runjs(sprintf("$('#%s').show(); $('#%s').hide();",
@@ -1414,7 +1414,7 @@ reconcile_server <- function(id, output_dir) {
         display,
         columns       = col_defs,
         pagination    = FALSE,
-        height        = 620,
+        height        = "auto",
         outlined      = TRUE,
         bordered      = FALSE,
         compact       = TRUE,
@@ -2222,13 +2222,6 @@ reconcile_server <- function(id, output_dir) {
         "Indeks SERASI", "Indeks PADU", "Indeks PADAN",
         "Potensi Indeks SERASI Baru", "Potensi Indeks PADAN Baru", "Selisih Indeks PADAN")
     )
-    
-    session$onFlushed(function() {
-      shinyjs::runjs(sprintf(
-        "if (window.laspurAutoSizeReactable) window.laspurAutoSizeReactable('%s', 620);",
-        ns("ws_table")
-      ))
-    }, once = TRUE)
     
     render_result_server(input, output, session, rv, reconcile_config)
   })
