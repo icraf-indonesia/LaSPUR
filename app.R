@@ -348,7 +348,8 @@ ui <- page_sidebar(
     aside .accordion-item { border: none !important; background: transparent !important; }
 
     aside #btn_home,
-    aside #btn_generate_report {
+    aside #btn_generate_report,
+    aside #btn_open_report {
       display: flex !important;
       flex-direction: row !important;
       flex-wrap: nowrap !important;
@@ -359,34 +360,44 @@ ui <- page_sidebar(
     }
     aside #btn_home .menu-icon,
     aside #btn_generate_report .menu-icon,
+    aside #btn_open_report .menu-icon,
     aside #btn_home .menu-text,
-    aside #btn_generate_report .menu-text {
+    aside #btn_generate_report .menu-text,
+    aside #btn_open_report .menu-text {
       display: inline-flex !important;
       align-items: center !important;
       margin: 0 !important;
       white-space: nowrap !important;
     }
     body:not(.sidebar-mini) aside #btn_home .menu-icon,
-    body:not(.sidebar-mini) aside #btn_generate_report .menu-icon {
+    body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
+    body:not(.sidebar-mini) aside #btn_open_report .menu-icon {
       margin-right: 0 !important;
     }
 
     body.sidebar-mini aside #btn_home,
-    body.sidebar-mini aside #btn_generate_report {
+    body.sidebar-mini aside #btn_generate_report,
+    body.sidebar-mini aside #btn_open_report {
       flex-direction: row !important;
       justify-content: center !important;
       gap: 0 !important;
       padding: 14px 0 !important;
     }
     body.sidebar-mini aside #btn_home .menu-text,
-    body.sidebar-mini aside #btn_generate_report .menu-text {
+    body.sidebar-mini aside #btn_generate_report .menu-text,
+    body.sidebar-mini aside #btn_open_report .menu-text {
       display: none !important;
     }
     body.sidebar-mini aside #btn_home .menu-icon,
-    body.sidebar-mini aside #btn_generate_report .menu-icon {
+    body.sidebar-mini aside #btn_generate_report .menu-icon,
+    body.sidebar-mini aside #btn_open_report .menu-icon {
       display: flex !important;
       margin: 0 !important;
     }
+
+    /* keep the icon white on the teal Buka Laporan button (incl. mini sidebar) */
+    aside #btn_open_report .menu-icon,
+    body.sidebar-mini aside #btn_open_report .menu-icon { color: #FFFFFF !important; }
 
     aside .accordion-button {
       background-color: transparent !important; color: #475569 !important; font-size: 0.95rem;
@@ -1313,11 +1324,15 @@ server <- function(input, output, session) {
       style = "margin-top: 8px;",
       actionButton(
         "btn_open_report",
-        tagList(icon("folder-open", class = "me-2"), "Buka Laporan"),
-        class = "btn w-100",
+        tagList(
+          icon("folder-open", class = "menu-icon fa-fw"),
+          tags$span(class = "menu-text", "Buka Laporan")
+        ),
+        title = "Buka Laporan",
+        class = "btn w-100 d-flex align-items-center",
         style = paste(
-          "text-align: center; color: #FFFFFF; background-color: #106665;",
-          "border: none; padding: 12px 16px; font-weight: 600; border-radius: 8px;"
+          "text-align: left; color: #FFFFFF; background-color: #106665;",
+          "border: none; padding: 14px 16px; font-weight: 600; border-radius: 8px;"
         )
       )
     )
@@ -1565,6 +1580,15 @@ server <- function(input, output, session) {
           }
         } else {
           showNotification("Modul Penyusunan Alternatif tidak siap. Dilewati.",
+                           type = "warning")
+        }
+      } else if (sel == "reconcile") {
+        info <- module_ready_and_data("reconcile", output_dir(), session)
+        if (info$ready) {
+          master_params$reconcile <- info$data
+          any_ready <- TRUE
+        } else {
+          showNotification("Modul Rekonsiliasi tidak siap. Dilewati.",
                            type = "warning")
         }
       }

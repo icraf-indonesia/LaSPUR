@@ -5,7 +5,7 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-    theme: united
+    theme: bootstrap
     highlight: tango
     df_print: kable
   pdf_document: default
@@ -21,24 +21,15 @@ params:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
 
-plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
-  width <- start_cm
-  repeat {
-    result <- tryCatch(
-      {
-        plot(
-          obj,
-          key.pos   = 4,        
-          key.width = lcm(width) 
-        )
-        "ok"
-      },
-      error = function(e) "retry"
-    )
-    if (result == "ok" || width >= max_cm) break
-    width <- width + step
-  }
+# Safety check for params
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
 }
+
 ```
 
 ```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
@@ -48,30 +39,6 @@ source(here::here("R/helpers.R"))
 
 # Analisis SERASI
 
-<details>
-
-<summary>Klik disini untuk membuka log analisis</summary>
-
-```{r analysis-log, echo=FALSE}
-analysis_log <- tribble(
-  ~Category,                         ~Details,
-  "1. Peta RTRW",                    params$inputs$rtrw_path,
-  "2. Peta RZWP3K",                  params$inputs$rzwp3k_path,
-  "3. Peta Wilayah Administrasi",    params$inputs$admin_path,
-  "4. Tabel Acuan Pola RTRW",        params$inputs$rtrw_prioritas_path,
-  "5. Tabel Acuan Pola RZWP3K",      params$inputs$rzwp3k_prioritas_path,
-  "6. Tabel Matriks SERASI",         params$inputs$matriks_serasi_path,
-  "7. Direktori output",             params$inputs$output_dir,
-)
-
-# Render the formatted table
-analysis_log %>% 
-  kbl(caption = "Analysis Log", escape = FALSE) %>%
-  kable_paper("hover", full_width = FALSE)
-```
-
-</details>
-
 ## Ringkasan Umum
 
 ```{r summary-calculation}
@@ -79,7 +46,14 @@ analysis_log %>%
 #| warning: false
 #| message: false
 
+if (!exists("params")) {
+  params <- list(inputs = list(case = "overlaps"), result = list())
+}
+
 idx_serasi_tbl <- params$result$idx_serasi_map %>% st_drop_geometry()
+
+# Define case label for the header
+case_label <- if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"
 
 summary <- list(
   overall = idx_serasi_tbl %>%
@@ -252,7 +226,7 @@ if (!is.null(params$result$matriks_serasi)) {
 
 Metodologi analisis SERASI menggunakan matriks kompatibilitas untuk mengevaluasi keserasian antar pola ruang darat (RTRW) dan laut (RZWP3K) pada setiap unit perencanaan.
 
-## Hasil Analisi SERASI `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
+## Hasil Analisi SERASI `r case_label`
 
 ```{r interactive-map-serasi}
 #| echo: false
@@ -273,208 +247,181 @@ pacman::p_load(
 
 idx_serasi_map <- params$result$idx_serasi_map
 
-map_data <- idx_serasi_map |>
-  st_transform(crs = 4326) |>
-  mutate(
-    .row_id = row_number() - 1L
-  )
+is_adjacent <- identical(params$inputs$case, "adjacent")
 
-pal <- colorNumeric(
-  palette = "RdYlGn",
-  domain  = map_data$idx_serasi,
-  na.color = "#808080"
-)
-
-tbl_cols <- c(
-  "id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi"
-)
-
-tbl_data <- map_data |>
-  st_drop_geometry() |>
-  select(all_of(tbl_cols)) |>
-  mutate(
-    area_ha    = as.numeric(area_ha),
-    idx_serasi = as.numeric(idx_serasi)
-  )
-
-leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
-  addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas, group = "Basemap") |>
-  addPolygons(
-    layerId     = ~.row_id,       
-    fillColor   = ~pal(idx_serasi),
-    fillOpacity = 0.7,
-    color       = "#444",
-    weight      = 0.8,
-    opacity     = 1,
-    highlightOptions = highlightOptions(
-      color        = "#ff6600",
-      weight       = 3,
-      fillOpacity  = 0.9,
-      bringToFront = TRUE
-    ),
-    label = ~paste0(
-      "<b>PU ", id_pu, "</b><br>",
-      "RTRW: ", RTRW, "<br>",
-      "RZWP3K: ", RZWP3K, "<br>",
-      "Indeks SERASI: ", fmt2(idx_serasi)
-    ) |> lapply(HTML),
-    popup = ~paste0(
-      "<b>Planning Unit ", id_pu, "</b><hr>",
-      "<b>RTRW:</b> ", RTRW, "<br>",
-      "<b>RZWP3K:</b> ", RZWP3K, "<br>",
-      "<b>Area (ha):</b> ", fmt2(area_ha), "<br>",
-      "<hr>",
-      "<b>idx_serasi:</b> ", fmt2(idx_serasi), "<br>"
-    ) |> lapply(HTML),
-    group = "SERASI"
-  ) |>
-  addLegend(
-    pal      = pal,
-    values   = ~idx_serasi,
-    title    = "Indeks SERASI",
-    position = "bottomright",
-    opacity  = 0.8
-  ) |>
-  addLayersControl(
-    baseGroups    = "Basemap",
-    overlayGroups = "SERASI",
-    options       = layersControlOptions(collapsed = FALSE)
-  )
-
-dt_table <- datatable(
-  tbl_data,
-  elementId  = "serasi-table",
-  rownames   = FALSE,
-  filter     = "top",
-  extensions = c("Buttons", "Scroller"),
-  options    = list(
-    pageLength  = 10,
-    scrollX     = TRUE,
-    scrollY     = "300px",
-    scroller    = TRUE,
-    dom         = "Bfrtip",
-    buttons     = list(
-      list(extend = "copy",  className = "btn btn-light btn-sm"),
-      list(extend = "csv",   className = "btn btn-light btn-sm"),
-      list(extend = "excel", className = "btn btn-light btn-sm")
-    ),
-    rowCallback = JS("
-      function(row, data, index) {
-        $(row).attr('data-row-id', index);
-      }
-    ")
-  )
-) |>
-  DT::formatRound(
-    columns = c("area_ha", "idx_serasi"),
-    digits  = 2
-  )
-
-sync_js <- HTML("
-<script>
-(function() {
-  function init() {
-    var mapEl  = document.getElementById('serasi-map');
-    var tblEl  = document.getElementById('serasi-table');
-    if (!mapEl || !tblEl) { setTimeout(init, 300); return; }
-
-    var leafMap = null;
-    // Retrieve the Leaflet map instance
-    Object.keys(mapEl._leaflet_events || {});
-    try { leafMap = mapEl._leaflet_id ? L.map(mapEl) : null; } catch(e) {}
-    if (!leafMap) {
-      // HTMLWidget approach
-      if (window.HTMLWidgets) {
-        var instances = HTMLWidgets.getInstance(mapEl);
-        if (instances) leafMap = instances.getMap();
-      }
-    }
-    if (!leafMap) { setTimeout(init, 300); return; }
-
-    var dtApi = null;
-    if (window.$) {
-      try { dtApi = $('#serasi-table table').DataTable(); } catch(e) {}
-    }
-    if (!dtApi) { setTimeout(init, 300); return; }
-
-    var lastHighlighted = null;
-
-    // Map hover → highlight table row
-    leafMap.eachLayer(function(layer) {
-      if (layer.feature) {
-        layer.on('mouseover', function(e) {
-          var rowId = layer.feature.properties['.row_id'];
-          highlightRow(rowId);
-        });
-        layer.on('mouseout', function(e) {
-          clearHighlight();
-        });
-      }
-    });
-
-    function highlightRow(rowId) {
-      if (lastHighlighted !== null) {
-        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
-      }
-      lastHighlighted = rowId;
-      var row = $('tr[data-row-id=\"' + rowId + '\"]');
-      if (row.length) {
-        row.css('background-color', '#fff3cd');
-        // scroll the table to the highlighted row
-        var tblWrapper = document.getElementById('serasi-table_wrapper');
-        if (tblWrapper) {
-          var rowTop = row.position() ? row.position().top : 0;
-          var scroller = tblWrapper.querySelector('.dataTables_scrollBody');
-          if (scroller) scroller.scrollTop = rowTop - 50;
+if (is_adjacent) {
+  log_dir <- if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+    file.path(params$inputs$output_dir, "Analisis SERASI", "log")
+  } else {
+    file.path(getwd(), "Analisis SERASI", "log")
+  }
+  png_path <- file.path(log_dir, "idx_serasi.png")
+  
+  if (file.exists(png_path) && file.size(png_path) > 0) {
+    map_ui <- png_to_img_tag(normalizePath(png_path, mustWork = FALSE))
+  } else {
+    map_data_static <- idx_serasi_map %>% sf::st_transform(crs = 4326)
+    p <- ggplot2::ggplot(map_data_static) +
+      ggplot2::geom_sf(ggplot2::aes(fill = idx_serasi), color = "#444", linewidth = 0.1) +
+      ggplot2::scale_fill_gradient(low = "red", high = "lightgreen", na.value = "#808080") +
+      ggplot2::labs(title = "Peta Indeks SERASI", fill = "Indeks") +
+      ggplot2::theme_minimal()
+    
+    tmp_png <- tempfile(fileext = ".png")
+    ggplot2::ggsave(tmp_png, p, width = 10, height = 6, dpi = 96)
+    map_ui <- png_to_img_tag(tmp_png)
+  }
+  
+  map_data <- idx_serasi_map |>
+    st_transform(crs = 4326) |>
+    mutate(.row_id = row_number() - 1L)
+  
+  tbl_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+  tbl_data <- map_data |>
+    st_drop_geometry() |>
+    select(all_of(tbl_cols)) |>
+    mutate(area_ha = as.numeric(area_ha), idx_serasi = as.numeric(idx_serasi))
+  
+  dt_table <- datatable(
+    tbl_data,
+    rownames = FALSE,
+    filter = "top",
+    options = list(pageLength = 10, scrollX = TRUE, scrollY = "300px", scroller = TRUE)
+  ) |> DT::formatRound(columns = c("area_ha", "idx_serasi"), digits = 2)
+  
+  tagList(map_ui, dt_table)
+  
+} else {
+  map_data <- idx_serasi_map |>
+    st_transform(crs = 4326) |>
+    mutate(.row_id = row_number() - 1L)
+  
+  pal <- colorNumeric(palette = "RdYlGn", domain = map_data$idx_serasi, na.color = "#808080")
+  
+  tbl_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+  tbl_data <- map_data |>
+    st_drop_geometry() |>
+    select(all_of(tbl_cols)) |>
+    mutate(area_ha = as.numeric(area_ha), idx_serasi = as.numeric(idx_serasi))
+  
+  leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
+    addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Basemap") |>
+    addPolygons(
+      layerId     = ~.row_id,       
+      fillColor   = ~pal(idx_serasi),
+      fillOpacity = 0.7,
+      color       = "#444",
+      weight      = 0.8,
+      opacity     = 1,
+      highlightOptions = highlightOptions(color = "#ff6600", weight = 3, fillOpacity = 0.9, bringToFront = TRUE),
+      label = ~paste0("<b>PU ", id_pu, "</b><br>", "RTRW: ", RTRW, "<br>", "RZWP3K: ", RZWP3K, "<br>", "Indeks SERASI: ", fmt2(idx_serasi)) |> lapply(HTML),
+      popup = ~paste0("<b>Planning Unit ", id_pu, "</b><hr>", "<b>RTRW:</b> ", RTRW, "<br>", "<b>RZWP3K:</b> ", RZWP3K, "<br>", "<b>Area (ha):</b> ", fmt2(area_ha), "<br>", "<hr>", "<b>idx_serasi:</b> ", fmt2(idx_serasi), "<br>") |> lapply(HTML),
+      group = "SERASI"
+    ) |>
+    addLegend(pal = pal, values = ~idx_serasi, title = "Indeks SERASI", position = "bottomright", opacity = 0.8) |>
+    addLayersControl(baseGroups = "Basemap", overlayGroups = "SERASI", options = layersControlOptions(collapsed = FALSE))
+  
+  dt_table <- datatable(
+    tbl_data,
+    elementId  = "serasi-table",
+    rownames   = FALSE,
+    filter     = "top",
+    extensions = c("Buttons", "Scroller"),
+    options    = list(
+      pageLength  = 10,
+      scrollX     = TRUE,
+      scrollY     = "300px",
+      scroller    = TRUE,
+      dom         = "Bfrtip",
+      buttons     = list(
+        list(extend = "copy",  className = "btn btn-light btn-sm"),
+        list(extend = "csv",   className = "btn btn-light btn-sm"),
+        list(extend = "excel", className = "btn btn-light btn-sm")
+      ),
+      rowCallback = JS("function(row, data, index) { $(row).attr('data-row-id', index); }")
+    )
+  ) |> DT::formatRound(columns = c("area_ha", "idx_serasi"), digits = 2)
+  
+  sync_js <- HTML("
+  <script>
+  (function() {
+    function init() {
+      var mapEl  = document.getElementById('serasi-map');
+      var tblEl  = document.getElementById('serasi-table');
+      if (!mapEl || !tblEl) { setTimeout(init, 300); return; }
+      var leafMap = null;
+      try { leafMap = mapEl._leaflet_id ? L.map(mapEl) : null; } catch(e) {}
+      if (!leafMap) {
+        if (window.HTMLWidgets) {
+          var instances = HTMLWidgets.getInstance(mapEl);
+          if (instances) leafMap = instances.getMap();
         }
       }
-    }
-
-    function clearHighlight() {
-      if (lastHighlighted !== null) {
-        $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', '');
-        lastHighlighted = null;
-      }
-    }
-
-    // Table row hover → flash map polygon
-    $('#serasi-table tbody').on('mouseenter', 'tr', function() {
-      var rowId = parseInt($(this).attr('data-row-id'));
-      if (isNaN(rowId)) return;
-      leafMap.eachLayer(function(layer) {
-        if (layer.feature && layer.feature.properties['.row_id'] === rowId) {
-          layer.setStyle({ color: '#ff6600', weight: 3, fillOpacity: 0.9 });
-          layer.bringToFront();
-        }
-      });
-    }).on('mouseleave', 'tr', function() {
+      if (!leafMap) { setTimeout(init, 300); return; }
+      var dtApi = null;
+      if (window.$) { try { dtApi = $('#serasi-table table').DataTable(); } catch(e) {} }
+      if (!dtApi) { setTimeout(init, 300); return; }
+      var lastHighlighted = null;
       leafMap.eachLayer(function(layer) {
         if (layer.feature) {
-          layer.setStyle({ color: '#444', weight: 0.8, fillOpacity: 0.7 });
+          layer.on('mouseover', function(e) {
+            var rowId = layer.feature.properties['.row_id'];
+            highlightRow(rowId);
+          });
+          layer.on('mouseout', function(e) { clearHighlight(); });
         }
       });
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(init, 800);
-  });
-})();
-</script>
-")
-
-tagList(
-  tags$style("
-    #serasi-map    { height: 500px; width: 100%; margin-bottom: 0; }
-    #serasi-table_wrapper { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 10px; }
-    #serasi-map    { border-radius: 5px 5px 0 0; border: 1px solid #dee2e6; }
-    .dataTables_scrollBody tr[data-row-id]:hover { background-color: #e8f4f8 !important; cursor: pointer; }
-  "),
-  leaf_map,
-  dt_table,
-  sync_js
-)
+      function highlightRow(rowId) {
+        if (lastHighlighted !== null) { $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', ''); }
+        lastHighlighted = rowId;
+        var row = $('tr[data-row-id=\"' + rowId + '\"]');
+        if (row.length) {
+          row.css('background-color', '#fff3cd');
+          var tblWrapper = document.getElementById('serasi-table_wrapper');
+          if (tblWrapper) {
+            var rowTop = row.position() ? row.position().top : 0;
+            var scroller = tblWrapper.querySelector('.dataTables_scrollBody');
+            if (scroller) scroller.scrollTop = rowTop - 50;
+          }
+        }
+      }
+      function clearHighlight() {
+        if (lastHighlighted !== null) { $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', ''); lastHighlighted = null; }
+      }
+      $('#serasi-table tbody').on('mouseenter', 'tr', function() {
+        var rowId = parseInt($(this).attr('data-row-id'));
+        if (isNaN(rowId)) return;
+        leafMap.eachLayer(function(layer) {
+          if (layer.feature && layer.feature.properties['.row_id'] === rowId) {
+            layer.setStyle({ color: '#ff6600', weight: 3, fillOpacity: 0.9 });
+            layer.bringToFront();
+          }
+        });
+      }).on('mouseleave', 'tr', function() {
+        leafMap.eachLayer(function(layer) {
+          if (layer.feature) { layer.setStyle({ color: '#444', weight: 0.8, fillOpacity: 0.7 }); }
+        });
+      });
+    }
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 800); });
+  })();
+  </script>
+  ")
+  
+  tagList(
+    tags$style("
+      #serasi-map    { height: 500px; width: 100%; margin-bottom: 0; }
+      #serasi-table_wrapper { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 10px; }
+      #serasi-map    { border-radius: 5px 5px 0 0; border: 1px solid #dee2e6; }
+      .dataTables_scrollBody tr[data-row-id]:hover { background-color: #e8f4f8 !important; cursor: pointer; }
+    "),
+    leaf_map,
+    dt_table,
+    sync_js
+  )
+}
 ```
+
 
 
 

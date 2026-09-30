@@ -5,7 +5,7 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-    theme: united
+    theme: bootstrap
     highlight: tango
     df_print: kable
   pdf_document: default
@@ -37,14 +37,7 @@ report_progress <- function(module_name) {
 }
 
 # Custom css style
-custom_assets <- htmltools::htmlDependency(
-  name = "laspur-custom-assets",
-  version = "1.0.0",
-  src = here::here("www"), 
-  stylesheet = "custom_style.css",
-  all_files = TRUE 
-)
-knitr::knit_meta_add(list(custom_assets))
+custom_assets <- NULL
 
 module_available <- function(x) {
   tryCatch(is.list(x), error = function(e) FALSE)
@@ -56,13 +49,14 @@ safe_child_knit <- function(template_path, module_params, module_name = "unknown
     if (is.null(module_params$start_time)) module_params$start_time <- Sys.time()
     if (is.null(module_params$end_time))   module_params$end_time   <- Sys.time()
     if (is.null(module_params$module_name)) module_params$module_name <- module_name
-    knit_child_module(template_path, module_params, envir = environment())
+    out <- knit_child_module(template_path, module_params, envir = environment())
+    report_progress(module_name)   # only advance progress on success
+    out
   }, error = function(e) {
     paste0("\n\n**Error knitting module '", module_name, "':** ",
            conditionMessage(e), "\n\n")
   })
 
-  report_progress(module_name)  
   res
 }
 ```

@@ -18,3 +18,22 @@ table,
 
 details > summary::-webkit-details-marker { display: none; }
 details > summary { list-style: none; }
+
+#btn_buat_laporan,
+#btn_buka_laporan {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;   
+  gap: 16px;                    
+  width: 100%;
+  padding-left: 36px;          
+  text-align: left;
+}
+
+#btn_buat_laporan i,
+#btn_buat_laporan .fa,
+#btn_buka_laporan i,
+#btn_buka_laporan .fa {
+  width: 24px;
+  text-align: center;
+}

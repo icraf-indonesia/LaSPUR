@@ -13,6 +13,19 @@ pacman::p_load(
   slickR, igraph, rhandsontable, visNetwork, reactable
 )
 
+laspur_render <- function(...) {
+  if (requireNamespace("shiny", quietly = TRUE)) {
+    shiny::withReactiveDomain(NULL, rmarkdown::render(...))
+  } else {
+    rmarkdown::render(...)
+  }
+}
+
+laspur_report_theme <- function() {
+  return("bootstrap")
+}
+
+
 if (!exists("render_loaded_file_bar", mode = "function")) {
   source("R/shared_inputs.R")
 }
@@ -1996,12 +2009,13 @@ module_ready_and_data <- function(module_id, output_dir, session) {
 #'
 #' @keywords internal
 knit_child_module <- function(template_path, module_params, envir = parent.frame()) {
-  if (!file.exists(template_path)) {
-    return(paste0("\n\n*Template tidak ditemukan: ", template_path, "*\n\n"))
+  abs_path <- here::here(template_path)
+  if (!file.exists(abs_path)) {
+    return(paste0("\n\n*Template tidak ditemukan: ", template_path, " (at ", abs_path, ")*\n\n"))
   }
   
   # Read the template file
-  lines <- readLines(template_path, warn = FALSE)
+  lines <- readLines(abs_path, warn = FALSE)
   
   # Find the YAML front matter (between --- lines)
   yaml_start <- which(lines == "---")[1]
@@ -2085,14 +2099,12 @@ generate_report <- function(output, dir, module_name = NULL,
     timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
     output_file <- paste0("LaSPUR_Master_Report_", timestamp, ".html")
     
-    rmarkdown::render(
+    laspur_render(
       input         = template_path,
-      output_format = "html_document",
       output_file   = output_file,
       output_dir    = dir,
       params        = master_params,
-      knit_root_dir = getwd(),
-      quiet         = TRUE
+      output_options = list(theme = laspur_report_theme())
     )
     return(invisible())
   }
@@ -2151,7 +2163,7 @@ generate_report <- function(output, dir, module_name = NULL,
   
   output_file <- paste0(base_name, ".html")
   
-  rmarkdown::render(
+  laspur_render(
     input         = template_path,
     output_format = "html_document",
     output_file   = output_file,
@@ -2171,6 +2183,54 @@ fmt2 <- function(x) {
     NA_character_,
     formatC(x, format = "f", digits = 2)
   )
+}
+
+laspur_rename_cols <- function(df) {
+  mapping <- c(
+    "id_pu" = "ID PU",
+    "RTRW" = "RTRW",
+    "RZWP3K" = "RZWP3K",
+    "area_ha" = "Luas (ha)",
+    "idx_serasi" = "Indeks SERASI",
+    "idx_padu_final" = "Indeks PADU",
+    "idx_padan" = "Indeks PADAN",
+    "recommendation" = "Rekomendasi",
+    "idx_padan_new" = "PADAN Proyeksi",
+    "delta_idx_padan" = "Kenaikan (Delta)"
+  )
+  
+  current_names <- names(df)
+  new_names <- current_names
+  
+  for (i in seq_along(current_names)) {
+    if (current_names[i] %in% names(mapping)) {
+      new_names[i] <- mapping[current_names[i]]
+    }
+  }
+  
+  names(df) <- new_names
+  df
+}
+
+laspur_format_numbers <- function(df, numeric_cols = NULL, integer_cols = NULL) {
+  if (is.null(df)) return(NULL)
+  
+  if (!is.null(numeric_cols)) {
+    for (col in numeric_cols) {
+      if (col %in% names(df)) {
+        df[[col]] <- fmt2(as.numeric(df[[col]]))
+      }
+    }
+  }
+  
+  if (!is.null(integer_cols)) {
+    for (col in integer_cols) {
+      if (col %in% names(df)) {
+        df[[col]] <- as.character(as.integer(df[[col]]))
+      }
+    }
+  }
+  df
 }
 
 # open folder helper
@@ -2202,4 +2262,60 @@ open_folder_crossplatform <- function(path) {
                      type = "error", duration = 5)
     invisible(FALSE)
   })
+}
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(obj, key.pos = 4, key.width = lcm(width))
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+
+png_to_img_tag <- function(path, max_width = "100%") {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  src <- tryCatch({
+    if (requireNamespace("base64enc", quietly = TRUE)) {
+      paste0("data:image/png;base64,", base64enc::base64encode(path))
+    } else {
+      path
+    }
+  }, error = function(e) path)
+  htmltools::tags$img(
+    src = src,
+    style = paste0("max-width: ", max_width,
+                   "; height: auto; display: block; margin: 0 auto;")
+  )
+}
+
+css_carousel <- function(paths) {
+  enc_ok <- requireNamespace("base64enc", quietly = TRUE)
+  imgs <- lapply(paths, function(p) {
+    src <- if (enc_ok) {
+      paste0("data:image/png;base64,", base64enc::base64encode(p))
+    } else {
+      p
+    }
+    htmltools::tags$img(
+      src = src,
+      style = paste(
+        "width: 100%; height: auto; display: block;",
+        "scroll-snap-align: center; border-radius: 4px;"
+      )
+    )
+  })
+  htmltools::tags$div(
+    style = paste(
+      "display: flex; overflow-x: auto;",
+      "scroll-snap-type: x mandatory; gap: 12px; padding: 8px 0;"
+    ),
+    imgs
+  )
 }

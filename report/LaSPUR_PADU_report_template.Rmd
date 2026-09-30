@@ -5,7 +5,7 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-    theme: united
+    theme: bootstrap
     highlight: tango
     df_print: kable
   pdf_document: default
@@ -21,19 +21,13 @@ params:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
 
-plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
-  width <- start_cm
-  repeat {
-    result <- tryCatch(
-      {
-        plot(obj, key.pos = 4, key.width = lcm(width))
-        "ok"
-      },
-      error = function(e) "retry"
-    )
-    if (result == "ok" || width >= max_cm) break
-    width <- width + step
-  }
+# Safety check for params
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
 }
 
 # Resolve output_dir from params 
@@ -47,7 +41,7 @@ resolve_padu_output_dir <- function() {
     if (is.null(c) || length(c) == 0) next
     c <- c[1]
     if (is.na(c) || !nzchar(c)) next
-    return(c)
+    return(normalizePath(c, mustWork = FALSE))
   }
   NULL
 }
@@ -64,38 +58,11 @@ find_padu_log_dir <- function(output_dir, module_dir) {
   for (p in candidates) if (dir.exists(p)) return(p)
 
   hits <- list.files(output_dir,
-                     pattern = "^idx_padu_.+\\.png$",
+                     pattern = "\\.png$",
                      recursive = TRUE, full.names = TRUE)
   hits <- hits[grepl(module_dir, hits, fixed = TRUE)]
   if (length(hits) > 0) return(dirname(hits[1]))
   NULL
-}
-
-# Carousel fallback 
-css_carousel <- function(paths) {
-  enc_ok <- requireNamespace("base64enc", quietly = TRUE)
-  imgs <- lapply(paths, function(p) {
-    src <- if (enc_ok) {
-      paste0("data:image/png;base64,",
-             base64enc::base64encode(p))
-    } else {
-      p
-    }
-    htmltools::tags$img(
-      src = src,
-      style = paste(
-        "width: 100%; height: auto; display: block;",
-        "scroll-snap-align: center; border-radius: 4px;"
-      )
-    )
-  })
-  htmltools::tags$div(
-    style = paste(
-      "display: flex; overflow-x: auto;",
-      "scroll-snap-type: x mandatory; gap: 12px; padding: 8px 0;"
-    ),
-    imgs
-  )
 }
 
 # Renders PADU input figures 
@@ -118,7 +85,7 @@ render_padu_data_toggle <- function(output_dir, module_dir, title, figure_files)
         style = "color: #6c757d; font-style: italic; margin: 0;",
         "Tidak ada data tersedia."
       ),
-      htmltools::tags$p(
+      if (isTRUE(getOption("laspur_report_debug"))) htmltools::tags$p(
         style = "color: #adb5bd; font-size: 0.78em; margin: 4px 0 0 0;",
         paste0(
           "output_dir = ", if (is.null(output_dir)) "<NULL>" else output_dir,
@@ -324,8 +291,6 @@ render_padu_data_toggle(
 )
 ```
 
-### Metode
-
 ## Hasil Analisis PADU
 
 ```{r check-results, results='asis'}
@@ -336,14 +301,14 @@ if (available_count == 0) {
 
 ```{r padu-toggle-function, include=FALSE}
 render_padu_toggle <- function(data, id, title, description, index_col,
-                                legend_title) {
+                                legend_title, module_dir) {
   if (is.null(data)) return(invisible(NULL))
-
+  
   if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
   pacman::p_load(leaflet, htmltools, htmlwidgets, DT, RColorBrewer, sf, dplyr)
-
+  
   idx_tbl <- sf::st_drop_geometry(data)
-
+  
   summary_stats <- data.frame(
     Statistik = c(
       "Jumlah Unit Perencanaan", "Indeks Rata-rata",
@@ -358,43 +323,51 @@ render_padu_toggle <- function(data, id, title, description, index_col,
     ),
     stringsAsFactors = FALSE
   )
-
+  
   stats_table <- DT::datatable(
     summary_stats, rownames = FALSE,
     options = list(dom = 't', pageLength = 10)
   )
 
-  map_data <- data %>%
-    sf::st_transform(crs = 4326) %>%
-    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+  log_dir <- find_padu_log_dir(resolve_padu_output_dir(), module_dir)
+  png_path <- if (!is.null(log_dir)) file.path(log_dir, paste0(index_col, ".png")) else NA_character_
 
-  values_vec <- map_data[[index_col]]
+  if (!is.na(png_path) && file.exists(png_path) && file.size(png_path) > 0) {
+    map_ui <- png_to_img_tag(png_path)
+  } else {
+    tmp_png <- tryCatch({
+      m <- data
+      if (!is.na(sf::st_crs(m)) && !sf::st_is_longlat(m)) m <- sf::st_transform(m, 4326)
+      p <- ggplot2::ggplot(m) +
+        ggplot2::geom_sf(ggplot2::aes(fill = .data[[index_col]]), color = "#444", linewidth = 0.1) +
+        ggplot2::scale_fill_gradient(low = "red", high = "lightgreen", na.value = "#808080") +
+        ggplot2::labs(title = title, fill = legend_title) +
+        ggplot2::theme_minimal(base_size = 11)
+      tf <- tempfile(fileext = ".png")
+      ggplot2::ggsave(tf, p, width = 10, height = 6, dpi = 96)
+      tf
+    }, error = function(e) NULL)
+    map_ui <- if (!is.null(tmp_png)) png_to_img_tag(tmp_png) else htmltools::tags$p("Peta tidak tersedia.")
+  }
 
-  pal <- leaflet::colorNumeric(
-    palette = "RdYlGn",
-    domain = values_vec,
-    na.color = "#808080"
-  )
+  # Value Distribution Histogram
+  values <- idx_tbl[[index_col]]
+  values <- values[!is.na(values)]
+  
+  if (length(values) > 0) {
+    hist_plot <- ggplot2::ggplot(data.frame(val = values), ggplot2::aes(x = val)) +
+      ggplot2::geom_histogram(binwidth = 0.1, fill = "#17a2b8", color = "white") +
+      ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+      ggplot2::labs(title = "Distribusi Nilai Indeks", x = "Nilai Indeks", y = "Frekuensi") +
+      ggplot2::theme_minimal()
 
-  map_widget <- leaflet::leaflet(map_data, elementId = paste0("padu-", id, "-map")) %>%
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
-    leaflet::addPolygons(
-      fillColor = pal(values_vec),
-      fillOpacity = 0.7,
-      color = "#444",
-      weight = 0.8,
-      label = lapply(
-        paste0("PU ", map_data$id_pu, " - Indeks: ", fmt2(values_vec)),
-        htmltools::HTML
-      )
-    ) %>%
-    leaflet::addLegend(
-      pal = pal,
-      values = values_vec,
-      title = legend_title,
-      position = "bottomright"
-    )
-
+    tmp_hist <- tempfile(fileext = ".png")
+    ggplot2::ggsave(tmp_hist, hist_plot, width = 6, height = 4, dpi = 100)
+    hist_ui <- png_to_img_tag(tmp_hist)
+  } else {
+    hist_ui <- htmltools::tags$p("Data distribusi tidak tersedia.")
+  }
+  
   htmltools::tags$details(
     style = "margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;",
     htmltools::tags$summary(
@@ -407,8 +380,10 @@ render_padu_toggle <- function(data, id, title, description, index_col,
     htmltools::tags$p(description),
     htmltools::tags$h3("Ringkasan Statistik"),
     stats_table,
-    htmltools::tags$h3("Peta Interaktif"),
-    map_widget
+    htmltools::tags$h3("Distribusi Nilai"),
+    hist_ui,
+    htmltools::tags$h3("Peta"),
+    map_ui
   )
 }
 ```
@@ -420,7 +395,8 @@ render_padu_toggle(
   title = "PADU-KE (Keterpaduan Penggunaan Lahan dan Lautan)",
   description = "Menilai kepaduan lingkungan berdasarkan keterpaduan penggunaan lahan dan lautan.",
   index_col = "idx_padu_ke",
-  legend_title = "Indeks PADU-KE"
+  legend_title = "Indeks PADU-KE",
+  module_dir = "Analisis PADU-KE"
 )
 ```
 
@@ -431,7 +407,8 @@ render_padu_toggle(
   title = "PADU-HS (Hidrologi dan Sedimentasi)",
   description = "Menilai kepaduan lingkungan berdasarkan kondisi hidrologis dan sedimentasi.",
   index_col = "idx_padu_hs",
-  legend_title = "Indeks PADU-HS"
+  legend_title = "Indeks PADU-HS",
+  module_dir = "Analisis PADU-HS"
 )
 ```
 
@@ -442,7 +419,8 @@ render_padu_toggle(
   title = "PADU-KL (Kawasan Lindung)",
   description = "Menilai kepaduan lingkungan berdasarkan komposisi kawasan lindung.",
   index_col = "idx_padu_kl",
-  legend_title = "Indeks PADU-KL"
+  legend_title = "Indeks PADU-KL",
+  module_dir = "Analisis PADU-KL"
 )
 ```
 
@@ -453,7 +431,8 @@ render_padu_toggle(
   title = "PADU-KH (Komposisi Habitat)",
   description = "Menilai kepaduan lingkungan berdasarkan komposisi habitat pesisir.",
   index_col = "idx_padu_kh",
-  legend_title = "Indeks PADU-KH"
+  legend_title = "Indeks PADU-KH",
+  module_dir = "Analisis PADU-KH"
 )
 ```
 
@@ -464,7 +443,8 @@ render_padu_toggle(
   title = "PADU-RTp (Risiko dan Tekanan)",
   description = "Menilai kepaduan lingkungan berdasarkan potensi risiko dan tekanan pembangunan.",
   index_col = "idx_padu_rtp",
-  legend_title = "Indeks PADU-RTp"
+  legend_title = "Indeks PADU-RTp",
+  module_dir = "Analisis PADU-RTp"
 )
 ```
 
@@ -475,7 +455,8 @@ render_padu_toggle(
   title = "PADU-SE (Sosial & Ekonomi)",
   description = "Menilai kepaduan wilayah berdasarkan aktivitas sosial dan ekonomi.",
   index_col = "idx_padu_se",
-  legend_title = "Indeks PADU-SE"
+  legend_title = "Indeks PADU-SE",
+  module_dir = "Analisis PADU-SE"
 )
 ```
 
@@ -486,7 +467,8 @@ render_padu_toggle(
   title = "PADU-KI (Ketahanan Iklim)",
   description = "Menilai kepaduan lingkungan berdasarkan ketahanan iklim suatu daerah.",
   index_col = "idx_padu_ki",
-  legend_title = "Indeks PADU-KI"
+  legend_title = "Indeks PADU-KI",
+  module_dir = "Analisis PADU-KI"
 )
 ```
 
@@ -497,6 +479,7 @@ render_padu_toggle(
   title = "PADU-Kombinasi",
   description = "Mengombinasikan hasil analisis PADU dari semua modul yang tersedia.",
   index_col = "idx_padu_final",
-  legend_title = "Indeks PADU Final"
+  legend_title = "Indeks PADU Final",
+  module_dir = "Analisis PADU-Kombinasi"
 )
 ```

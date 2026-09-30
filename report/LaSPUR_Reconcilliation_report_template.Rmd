@@ -5,7 +5,7 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-    theme: united
+    theme: bootstrap
     highlight: tango
     df_print: kable
   pdf_document: default
@@ -21,6 +21,14 @@ params:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
 
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
+}
+
 source(here::here("R/functions.R"))
 source(here::here("R/helpers.R"))
 ```
@@ -30,12 +38,19 @@ source(here::here("R/helpers.R"))
 ```{r prepare}
 recon_map <- params$result$idx_reconcile_map
 recon_tbl <- params$result$idx_reconcile_table
-recon_available <- !is.null(recon_map) && inherits(recon_map, "sf")
+
+recon_available <- (!is.null(recon_map) && inherits(recon_map, "sf")) || !is.null(recon_tbl)
 
 if (recon_available && is.null(recon_tbl)) {
   recon_tbl <- sf::st_drop_geometry(recon_map)
 } else if (!is.null(recon_tbl)) {
   recon_tbl <- as.data.frame(recon_tbl)
+}
+
+status_col <- if (!is.null(recon_tbl)) {
+  intersect(c("Reconcile", "reconcile", "status", "Status", "Adjacent", "adjacent"), names(recon_tbl))[1]
+} else {
+  NA_character_
 }
 
 recon_step <- tryCatch(as.integer(params$inputs$recon_step[1]),
@@ -74,32 +89,88 @@ if (!recon_available) {
   n_no   <- if ("Reconcile" %in% names(recon_tbl)) {
     sum(recon_tbl$Reconcile == "No", na.rm = TRUE)
   } else NA_integer_
-
+  
   total_area <- if ("area_ha" %in% names(recon_tbl)) {
     sum(as.numeric(recon_tbl$area_ha), na.rm = TRUE)
   } else NA_real_
-
+  
+  if (!is.na(status_col) && "Yes" %in% recon_tbl[[status_col]]) {
+    adj_tbl <- recon_tbl[recon_tbl[[status_col]] == "Yes", ]
+    wt <- if ("area_ha" %in% names(adj_tbl)) adj_tbl$area_ha else rep(1, nrow(adj_tbl))
+    wtsum <- sum(wt, na.rm = TRUE)
+    wavg <- function(col) sum(adj_tbl[[col]] * wt, na.rm = TRUE) / wtsum
+  } else {
+    wt <- if ("area_ha" %in% names(recon_tbl)) recon_tbl$area_ha else rep(1, nrow(recon_tbl))
+    wtsum <- sum(wt, na.rm = TRUE)
+    wavg <- function(col) sum(recon_tbl[[col]] * wt, na.rm = TRUE) / wtsum
+  }
+  
+  padan_old <- if ("idx_padan" %in% names(recon_tbl)) wavg("idx_padan") else NA
+  padan_new <- if ("idx_padan_new" %in% names(recon_tbl)) wavg("idx_padan_new") else NA
+  inc_padan <- if (!is.na(padan_old) && !is.na(padan_new)) padan_new - padan_old else NA
+  
+  serasi_old <- if ("idx_serasi" %in% names(recon_tbl)) wavg("idx_serasi") else NA
+  serasi_new <- if ("idx_serasi_new" %in% names(recon_tbl)) wavg("idx_serasi_new") else NA
+  inc_serasi <- if (!is.na(serasi_old) && !is.na(serasi_new)) serasi_new - serasi_old else NA
+  
+  padu_col_new <- if ("idx_padu_new" %in% names(recon_tbl)) "idx_padu_new" else
+                  if ("idx_padu_final" %in% names(recon_tbl)) "idx_padu_final" else NA_character_
+  padu_old <- if ("idx_padu_final" %in% names(recon_tbl)) wavg("idx_padu_final") else NA
+  padu_new <- if (!is.na(padu_col_new)) wavg(padu_col_new) else NA
+  inc_padu <- if (!is.na(padu_old) && !is.na(padu_new)) padu_new - padu_old else NA
+  
+  format_inc <- function(val) {
+    if (is.na(val) || is.null(val)) return("N/A")
+    if (val > 0) paste0("<span style='color:#27ae60;'>&#9650; +", fmt2(val), "</span>")
+    else if (val < 0) paste0("<span style='color:#e74c3c;'>&#9660; ", fmt2(val), "</span>")
+    else paste0("<span style='color:#7f8c8d;'>= ", fmt2(val), "</span>")
+  }
+  
+  make_card <- function(label, old_val, new_val, inc) {
+    paste0(
+      "<div style='flex:1; text-align:center; padding:0 15px;'>",
+      "<div style='font-size:13px; color:#7f8c8d; text-transform:uppercase; letter-spacing:.5px;'>",
+      label, "</div>",
+      "<div style='font-size:22px; font-weight:bold; margin:8px 0;'>",
+      fmt2(old_val), " &rarr; ", fmt2(new_val), "</div>",
+      "<div style='font-size:15px;'>", format_inc(inc), "</div>",
+      "</div>"
+    )
+  }
+  
   summary_stats <- data.frame(
     Statistik = c(
       "Kasus rekonsiliasi",
-      "Jumlah fitur hasil",
-      "Fitur direkonsiliasi (Yes)",
-      "Fitur tetap (No)",
-      "Total luas (ha)",
+      "Kawasan direkonsiliasi",
+      "Kawasan tetap",
       "Alpha (\u03B1) yang digunakan"
     ),
     Nilai = c(
       case_label,
-      as.character(n_feat),
       if (is.na(n_yes)) "tidak tersedia" else as.character(n_yes),
       if (is.na(n_no))  "tidak tersedia" else as.character(n_no),
-      if (is.na(total_area)) "tidak tersedia" else fmt2(total_area),
       alpha_txt
     ),
     stringsAsFactors = FALSE
   )
 
-  DT::datatable(
+   summary_ui <- htmltools::div(
+     style = "background:#fff; border:1px solid #ddd; border-radius:8px; padding:20px; margin-bottom:25px; box-shadow:0 4px 6px rgba(0,0,0,0.05);",
+     htmltools::h3(
+       style = "margin-top:0; color:#2c3e50; text-align:center;",
+       "Peningkatan Nilai Indeks (Agregat)"
+     ),
+     htmltools::div(
+       style = "display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; border-top:1px solid #eee; padding-top:15px;",
+       htmltools::HTML(make_card("Indeks SERASI", serasi_old, serasi_new, inc_serasi)),
+       htmltools::div(style = "border-right:1px solid #eee;"),
+       htmltools::HTML(make_card("Indeks PADU",   padu_old,   padu_new,   inc_padu)),
+       htmltools::div(style = "border-right:1px solid #eee;"),
+       htmltools::HTML(make_card("Indeks PADAN",  padan_old,  padan_new,  inc_padan))
+     )
+   )
+   
+  summary_dt <- DT::datatable(
     summary_stats,
     rownames = FALSE,
     options  = list(dom = 't', pageLength = 10, ordering = FALSE),
@@ -108,52 +179,15 @@ if (!recon_available) {
       "Ringkasan Hasil Rekonsiliasi"
     )
   )
+
+  htmltools::tagList(summary_ui, summary_dt)
 }
 ```
+
 
 ## Tentang Modul
 
-Modul Rekonsiliasi menyinkronkan peta RTRW dan RZWP3K dengan menerapkan keputusan pengguna pada setiap kasus konflik integrasi. Hasilnya adalah peta gabungan yang menandai fitur mana yang direkonsiliasi (Reconcile = Yes) dan mana yang tetap seperti semula (Reconcile = No).
-
-## Data dan Metode
-
-### Data
-
-```{r data}
-if (!recon_available) {
-  cat("\n*Data analisis rekonsiliasi tidak tersedia.*\n")
-} else {
-  cat("**Kasus:** ", case_label, "\n\n", sep = "")
-  cat("**Alpha (\u03B1):** ", alpha_txt,
-      if (!is.na(alpha_src) && nzchar(alpha_src))
-        paste0(" *(sumber: ", alpha_src, ")*") else "",
-      "\n\n", sep = "")
-  cat("**Jumlah fitur hasil:** ", nrow(recon_tbl), "\n\n", sep = "")
-  if (!is.null(params$inputs$recon_map_file)) {
-    cat("**Berkas peta rekomendasi:** `",
-        params$inputs$recon_map_file, "`\n\n", sep = "")
-  }
-  if (!is.null(params$inputs$recon_table_filled)) {
-    cat("**Berkas tabel keputusan:** `",
-        params$inputs$recon_table_filled, "`\n\n", sep = "")
-  }
-  if (!is.null(params$inputs$output_dir)) {
-    cat("**Direktori output:** `", params$inputs$output_dir, "`\n\n", sep = "")
-  }
-}
-```
-
-### Metode
-
-```{r method}
-if (recon_available) {
-  cat("Rekonsiliasi menerapkan keputusan pengguna per unit perencanaan ")
-  cat("(`user_decision`) ke peta dasar RTRW dan RZWP3K, memotong bagian ")
-  cat("yang dikuasai satu layer dari layer lainnya, dan menandai setiap ")
-  cat("fitur hasil dengan status `Reconcile = Yes` bila kelola zona berubah ")
-  cat("atau `No` bila tetap.\n")
-}
-```
+Modul Rekonsiliasi menerapkan keputusan pengguna pada setiap kasus konflik integrasi untuk diimplementasikan pada peta RTRWP terintegrasi. Peta gabungan yang dihasilkan menandai kawasan yang direkonsiliasi dan kawasan yang tetap seperti semula.
 
 ## Hasil Rekonsiliasi
 
@@ -161,97 +195,121 @@ if (recon_available) {
 if (!recon_available) {
   cat("\n*Hasil analisis rekonsiliasi tidak tersedia.*\n")
 } else {
-  if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
-  pacman::p_load(leaflet, htmltools, htmlwidgets, sf, dplyr)
-
-  map_data <- recon_map %>%
-    sf::st_transform(crs = 4326) %>%
-    dplyr::mutate(.row_id = dplyr::row_number() - 1L)
-
-  # Reconcile palette (Yes / No)
-  pal <- leaflet::colorFactor(
-    palette  = c("Yes" = "#2B8CBE", "No" = "#BDBDBD"),
-    domain   = map_data$Reconcile,
-    na.color = "#808080"
-  )
-
-  label_html <- paste0(
-    "<b>ID PU:</b> ",   map_data$original_id_pu, "<br>",
-    "<b>Sumber:</b> ",  map_data$Source,          "<br>",
-    "<b>Kelas Lama:</b> ", ifelse(is.na(map_data$Zoning_Old), "-",
-                                   map_data$Zoning_Old), "<br>",
-    "<b>Kelas Baru:</b> ", ifelse(is.na(map_data$Zoning_New), "-",
-                                   map_data$Zoning_New), "<br>",
-    "<b>Rekonsiliasi:</b> ", map_data$Reconcile
-  ) %>% lapply(htmltools::HTML)
-
-  map_widget <- leaflet::leaflet(map_data, elementId = "reconcile-map") %>%
-    leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>%
-    leaflet::addPolygons(
-      fillColor   = ~pal(Reconcile),
-      fillOpacity = 0.75,
-      color       = "#444",
-      weight      = 0.8,
-      label       = label_html,
-      highlightOptions = leaflet::highlightOptions(
-        color        = "#ff6600",
-        weight       = 3,
-        fillOpacity  = 0.9,
-        bringToFront = TRUE
-      )
-    ) %>%
-    leaflet::addLegend(
-      pal      = pal,
-      values   = ~Reconcile,
-      title    = "Status Rekonsiliasi",
-      position = "bottomright",
-      opacity  = 0.8
+    is_adjacent <- identical(params$inputs$case, "adjacent") ||
+                   (!is.na(recon_step) && recon_step == 2L)
+    case_suffix <- if (is_adjacent) "adjacent" else "overlaps"
+    
+    log_dir <- if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+      file.path(params$inputs$output_dir, "Rekonsiliasi", "log")
+    } else {
+      file.path(getwd(), "Rekonsiliasi", "log")
+    }
+    
+    png_candidates <- c(
+      file.path(log_dir, sprintf("reconcile_map_%s.png", case_suffix)),
+      file.path(log_dir, "recon_status.png")
     )
-
-  htmltools::browsable(
-    htmltools::tags$div(style = "width: 100%; margin-bottom: 20px;", map_widget)
-  )
+    png_path <- png_candidates[file.exists(png_candidates)][1]
+    
+    if (!is.na(png_path) && file.size(png_path) > 0) {
+      knitr::include_graphics(png_path)
+    } else if (is_adjacent) {
+      if (!is.na(status_col) && !is.null(recon_map)) {
+        static_plot <- tryCatch(
+          plot_categorical_map(
+            map    = recon_map,
+            column = status_col,
+            title  = "Peta Status Rekonsiliasi",
+            legend = "Status Rekonsiliasi",
+            colors = c("Yes" = "#2B8CBE", "No" = "#BDBDBD")
+          ),
+          error = function(e) NULL
+        )
+        if (!is.null(static_plot)) print(static_plot) else cat("Peta statis tidak tersedia.")
+      } else {
+        cat("Peta statis tidak tersedia.")
+      }
+    } else {
+      if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+      pacman::p_load(leaflet, htmltools, htmlwidgets, sf, dplyr)
+      
+      map_data <- recon_map %>%
+        sf::st_transform(crs = 4326) %>%
+        dplyr::mutate(.row_id = dplyr::row_number() - 1L)
+      
+      pal <- leaflet::colorFactor(
+        palette  = c("Yes" = "#2B8CBE", "No" = "#BDBDBD"),
+        domain   = map_data$Reconcile,
+        na.color = "#808080"
+      )
+      
+      leaflet::leaflet(map_data) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addPolygons(
+          fillColor = pal(map_data$Reconcile), 
+          fillOpacity = 0.7, color = "#444", weight = 0.8,
+          label = ~paste0("<b>ID PU:</b> ", original_id_pu, "<br>", "<b>Rekonsiliasi:</b> ", Reconcile) |> lapply(HTML)
+        ) %>%
+        leaflet::addLegend(pal = pal, values = ~Reconcile, title = "Status Rekonsiliasi", position = "bottomright")
+    }
 }
 ```
 
+
 ```{r result2}
 if (recon_available) {
-  preferred_cols <- c(
-    "original_id_pu", "Source",
-    "Zoning_Old", "Zoning_New",
-    "Reconcile", "Overlap", "Overlap_Pair", "Adjacent",
-    "idx_serasi", "idx_padu_final", "idx_padan",
-    "idx_serasi_new", "idx_padan_new", "delta_idx_padan",
-    "area_ha"
-  )
-  kept_cols <- intersect(preferred_cols, names(recon_tbl))
-  recon_tbl_view <- recon_tbl[, kept_cols, drop = FALSE]
-
-  display_names <- c(
-    original_id_pu = "ID PU",
-    Source         = "Sumber",
-    Zoning_Old     = "Kelas Lama",
-    Zoning_New     = "Kelas Baru",
-    Reconcile      = "Rekonsiliasi?",
-    Overlap        = "Tumpang Tindih?",
-    Overlap_Pair   = "Pasangan Tumpang Tindih",
-    Adjacent       = "Bertetangga?",
-    idx_serasi     = "Indeks SERASI",
-    idx_padu_final = "Indeks PADU",
-    idx_padan      = "Indeks PADAN",
-    idx_serasi_new = "Indeks SERASI Baru",
-    idx_padan_new  = "Indeks PADAN Baru",
-    delta_idx_padan = "Selisih Indeks PADAN",
-    area_ha        = "Luas (ha)"
-  )
-  for (nm in names(display_names)) {
-    if (nm %in% names(recon_tbl_view)) {
-      names(recon_tbl_view)[names(recon_tbl_view) == nm] <- display_names[[nm]]
-    }
+  tbl <- recon_tbl
+  
+  pick_col <- function(df, candidates) {
+    nm <- names(df)
+    hit <- nm[match(tolower(candidates), tolower(nm))]
+    hit <- hit[!is.na(hit)]
+    if (length(hit)) hit[1] else NA_character_
   }
 
+  pick_col_rx <- function(df, pattern) {
+    hit <- grep(pattern, names(df), ignore.case = TRUE, value = TRUE)
+    if (length(hit)) hit[1] else NA_character_
+  }
+  
+  col_rtrw      <- pick_col(tbl, c("RTRW", "rtrw"))
+  col_rzwp      <- pick_col(tbl, c("RZWP3K", "rzwp3k"))
+  col_zone_old  <- pick_col(tbl, c("zoning_old", "zoning old", "zoning_lama", "zone_old", "old_zoning", "zona_lama", "kawasan_lama"))
+  if (is.na(col_zone_old)) col_zone_old <- pick_col_rx(tbl, "(zon|kawasan).*(old|lama|aktual)|(old|lama|aktual).*(zon|kawasan)")
+  col_zone_new  <- pick_col(tbl, c("zoning_new", "zoning new", "zoning_baru", "zone_new", "new_zoning", "zona_baru", "kawasan_baru"))
+  if (is.na(col_zone_new)) col_zone_new <- pick_col_rx(tbl, "(zon|kawasan).*(new|baru)|(new|baru).*(zon|kawasan)")
+  adjacent_col  <- pick_col(tbl, c("Adjacent", "adjacent"))
+
+  sort_col <- if (!is.na(adjacent_col)) adjacent_col else status_col
+  if (!is.na(sort_col)) {
+    ord <- order(as.character(tbl[[sort_col]]) != "Yes", na.last = TRUE)
+    tbl <- tbl[ord, , drop = FALSE]
+  }
+
+  col_map <- c(
+    "RTRW"                 = col_rtrw,
+    "RZWP3K"               = col_rzwp,
+    "Kawasan Lama"         = col_zone_old,
+    "Kawasan Baru"         = col_zone_new,
+    "Bertetangga?"         = adjacent_col,
+    "Sumber"               = pick_col(tbl, "Source"),
+    "Rekonsiliasi?"        = pick_col(tbl, "Reconcile"),
+    "Luas (ha)"            = pick_col(tbl, "area_ha"),
+    "Indeks PADAN"         = pick_col(tbl, "idx_padan"),
+    "Indeks PADAN Baru"    = pick_col(tbl, "idx_padan_new"),
+    "Selisih Indeks PADAN" = pick_col(tbl, "delta_idx_padan"),
+    "Indeks SERASI"        = pick_col(tbl, "idx_serasi"),
+    "Indeks SERASI Baru"   = pick_col(tbl, "idx_serasi_new")
+  )
+  col_map <- col_map[!is.na(col_map)]
+  col_map <- col_map[!duplicated(unname(col_map))]  
+  
+  recon_tbl_view <- as.data.frame(tbl[, unname(col_map), drop = FALSE])
+  if (inherits(recon_tbl_view, "sf")) recon_tbl_view <- sf::st_drop_geometry(recon_tbl_view)
+  names(recon_tbl_view) <- names(col_map)
+
   round_cols <- intersect(
-    c("Luas (ha)", "Indeks SERASI", "Indeks PADU", "Indeks PADAN",
+    c("Luas (ha)", "Indeks SERASI", "Indeks PADAN",
       "Indeks SERASI Baru", "Indeks PADAN Baru", "Selisih Indeks PADAN"),
     names(recon_tbl_view)
   )
