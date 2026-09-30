@@ -2213,6 +2213,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
               alpha                = rv$alpha,
               priority_rtrw        = rv$priority_rtrw,
               priority_rzwp3k      = rv$priority_rzwp3k,
+              matriks_serasi       = rv$matriks_serasi,
               th_high              = input$th_high,
               th_med               = input$th_med,
               th_low               = input$th_low,

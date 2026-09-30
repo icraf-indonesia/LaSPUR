@@ -123,12 +123,26 @@ reconcile_ui <- function(id) {
                 fileInput(ns("rzwp3k_file"), "Peta RZWP3K (.shp/.gpkg)",
                           accept = c(".gpkg", ".shp", ".shx", ".dbf", ".prj"),
                           multiple = TRUE),
-                fileInput(ns("rtrw_priority_file"), "Tabel Acuan Pola RTRW (.xlsx)",
-                          accept = ".xlsx"),
-                fileInput(ns("rzwp3k_priority_file"), "Tabel Acuan Pola RZWP3K (.xlsx)",
-                          accept = ".xlsx"),
-                fileInput(ns("serasi_matrix_file"), "Matriks SERASI (.xlsx)",
-                          accept = ".xlsx"),
+                div(
+                  class = "laspur-fileinput-with-bar",
+                  fileInput(ns("rtrw_priority_file"),
+                            "Tabel Acuan Pola RTRW (.xlsx)",
+                            accept = ".xlsx"),
+                  uiOutput(ns("rtrw_prior_file_bar"))
+                ),
+                div(
+                  class = "laspur-fileinput-with-bar",
+                  fileInput(ns("rzwp3k_priority_file"),
+                            "Tabel Acuan Pola RZWP3K (.xlsx)",
+                            accept = ".xlsx"),
+                  uiOutput(ns("rzwp3k_prior_file_bar"))
+                ),
+                div(
+                  class = "laspur-fileinput-with-bar",
+                  fileInput(ns("serasi_matrix_file"), "Matriks SERASI (.xlsx)",
+                            accept = ".xlsx"),
+                  uiOutput(ns("serasi_matrix_file_bar"))
+                ),
                 .step_nav(ns, back_id = NULL, next_id = "btn_next_1",
                           next_label = "Lanjut ke Langkah 2")
               ),
@@ -316,6 +330,9 @@ reconcile_server <- function(id, output_dir) {
       rzwp3k_vect = NULL,
       rtrw_prioritas = NULL,
       rzwp3k_prioritas = NULL,
+      rtrw_prior_source = NULL,
+      rzwp3k_prior_source = NULL,
+      serasi_matrix_source = NULL,
       serasi_matrix = NULL,
       template_path = NULL,
       resolved_rtrw = NULL,
@@ -514,6 +531,171 @@ reconcile_server <- function(id, output_dir) {
       .load_recon_from_discovery()
     }, ignoreNULL = FALSE, ignoreInit = FALSE)
     
+    discovered_priority_key <- reactive({
+      rec_res <- tryCatch(session$userData$module_results$recommendation,
+                          error = function(e) NULL)
+      if (!is.null(rec_res) && !is.null(rec_res$inputs)) {
+        pr <- rec_res$inputs$priority_rtrw
+        pz <- rec_res$inputs$priority_rzwp3k
+        if (!is.null(pr) && length(pr) > 0 &&
+            !is.null(pz) && length(pz) > 0) return("session")
+      }
+      if (!is.null(output_dir()) && nzchar(output_dir())) {
+        rda_candidates <- c(
+          file.path(output_dir(), "Penyusunan Alternatif", "log",
+                    "idx_alternatives_overlaps.rda"),
+          file.path(output_dir(), "Penyusunan Alternatif", "log",
+                    "idx_alternatives_adjacent.rda")
+        )
+        rda_existing <- rda_candidates[file.exists(rda_candidates)]
+        if (length(rda_existing) > 0) {
+          rda_path <- rda_existing[
+            order(file.info(rda_existing)$mtime, decreasing = TRUE)][1]
+          return(paste0("file|", rda_path, "|",
+                        as.numeric(file.mtime(rda_path))))
+        }
+      }
+      "none"
+    })
+    
+    discovered_serasi_key <- reactive({
+      rec_res <- tryCatch(session$userData$module_results$recommendation,
+                          error = function(e) NULL)
+      if (!is.null(rec_res) && !is.null(rec_res$inputs) &&
+          !is.null(rec_res$inputs$matriks_serasi) &&
+          is.data.frame(rec_res$inputs$matriks_serasi)) return("session")
+      
+      if (!is.null(output_dir()) && nzchar(output_dir())) {
+        rda_candidates <- c(
+          file.path(output_dir(), "Penyusunan Alternatif", "log",
+                    "idx_alternatives_overlaps.rda"),
+          file.path(output_dir(), "Penyusunan Alternatif", "log",
+                    "idx_alternatives_adjacent.rda")
+        )
+        rda_existing <- rda_candidates[file.exists(rda_candidates)]
+        if (length(rda_existing) > 0) {
+          rda_path <- rda_existing[
+            order(file.info(rda_existing)$mtime, decreasing = TRUE)][1]
+          return(paste0("file|", rda_path, "|",
+                        as.numeric(file.mtime(rda_path))))
+        }
+      }
+      "none"
+    })
+    
+    .load_priority_from_discovery <- function() {
+      key <- discovered_priority_key()
+      if (identical(key, "none")) {
+        if (!identical(rv$rtrw_prior_source, "manual")) {
+          rv$rtrw_prioritas    <- NULL
+          rv$rtrw_prior_source <- NULL
+        }
+        if (!identical(rv$rzwp3k_prior_source, "manual")) {
+          rv$rzwp3k_prioritas    <- NULL
+          rv$rzwp3k_prior_source <- NULL
+        }
+        return(invisible(NULL))
+      }
+      
+      if (identical(key, "session")) {
+        rec_res <- tryCatch(session$userData$module_results$recommendation,
+                            error = function(e) NULL)
+        if (is.null(rec_res) || is.null(rec_res$inputs)) return(invisible(NULL))
+        
+        if (!identical(rv$rtrw_prior_source, "manual") &&
+            !is.null(rec_res$inputs$priority_rtrw) &&
+            length(rec_res$inputs$priority_rtrw) > 0) {
+          rv$rtrw_prioritas    <- data.frame(
+            RTRW = rec_res$inputs$priority_rtrw, Prioritas = 1)
+          rv$rtrw_prior_source <- "session"
+        }
+        if (!identical(rv$rzwp3k_prior_source, "manual") &&
+            !is.null(rec_res$inputs$priority_rzwp3k) &&
+            length(rec_res$inputs$priority_rzwp3k) > 0) {
+          rv$rzwp3k_prioritas    <- data.frame(
+            RZWP3K = rec_res$inputs$priority_rzwp3k, Prioritas = 1)
+          rv$rzwp3k_prior_source <- "session"
+        }
+      } else {
+        parts    <- strsplit(key, "\\|")[[1]]
+        rda_path <- parts[2]
+        env <- new.env(); load(rda_path, envir = env); inputs <- env$inputs
+        
+        if (!identical(rv$rtrw_prior_source, "manual") &&
+            !is.null(inputs$priority_rtrw) &&
+            length(inputs$priority_rtrw) > 0) {
+          rv$rtrw_prioritas    <- data.frame(
+            RTRW = inputs$priority_rtrw, Prioritas = 1)
+          rv$rtrw_prior_source <- "file"
+        }
+        if (!identical(rv$rzwp3k_prior_source, "manual") &&
+            !is.null(inputs$priority_rzwp3k) &&
+            length(inputs$priority_rzwp3k) > 0) {
+          rv$rzwp3k_prioritas    <- data.frame(
+            RZWP3K = inputs$priority_rzwp3k, Prioritas = 1)
+          rv$rzwp3k_prior_source <- "file"
+        }
+      }
+      invisible(NULL)
+    }
+    
+    .load_serasi_from_discovery <- function() {
+      key <- discovered_serasi_key()
+      if (identical(key, "none")) {
+        if (!identical(rv$serasi_matrix_source, "manual")) {
+          rv$serasi_matrix        <- NULL
+          rv$serasi_matrix_source <- NULL
+        }
+        return(invisible(NULL))
+      }
+      
+      if (identical(key, "session")) {
+        if (identical(rv$serasi_matrix_source, "manual")) return(invisible(NULL))
+        rec_res <- tryCatch(session$userData$module_results$recommendation,
+                            error = function(e) NULL)
+        if (is.null(rec_res) || is.null(rec_res$inputs)) return(invisible(NULL))
+        m <- rec_res$inputs$matriks_serasi
+        if (is.data.frame(m) &&
+            all(c("class1", "class2", "idx_serasi") %in% names(m))) {
+          rv$serasi_matrix        <- m
+          rv$serasi_matrix_source <- "session"
+        }
+      } else {
+        if (identical(rv$serasi_matrix_source, "manual")) return(invisible(NULL))
+        parts    <- strsplit(key, "\\|")[[1]]
+        rda_path <- parts[2]
+        env <- new.env(); load(rda_path, envir = env)
+        inputs <- env$inputs
+        if (!is.null(inputs$matriks_serasi) &&
+            is.data.frame(inputs$matriks_serasi) &&
+            all(c("class1", "class2", "idx_serasi") %in%
+                names(inputs$matriks_serasi))) {
+          rv$serasi_matrix        <- inputs$matriks_serasi
+          rv$serasi_matrix_source <- "file"
+        } else if (!identical(rv$serasi_matrix_source, "manual")) {
+          rv$serasi_matrix        <- NULL
+          rv$serasi_matrix_source <- NULL
+        }
+      }
+      invisible(NULL)
+    }
+    
+    observeEvent(discovered_serasi_key(), {
+      .load_serasi_from_discovery()
+    }, ignoreNULL = FALSE, ignoreInit = FALSE)
+    
+    output$serasi_matrix_file_bar <- renderUI({
+      render_loaded_file_bar(
+        state    = rv$serasi_matrix_source,
+        input_id = ns("serasi_matrix_file"),
+        filename = "matriks_serasi.xlsx"
+      )
+    })
+    
+    observeEvent(discovered_priority_key(), {
+      .load_priority_from_discovery()
+    }, ignoreNULL = FALSE, ignoreInit = FALSE)
+    
     output$loaded_file_bar <- renderUI({
       detected_name <- if (identical(rv$detected_step, 1L)) {
         "idx_alternatives_overlaps.gpkg"
@@ -526,6 +708,22 @@ reconcile_server <- function(id, output_dir) {
         state    = rv$recon_map_source,
         input_id = ns("recon_map_file"),
         filename = detected_name
+      )
+    })
+    
+    output$rtrw_prior_file_bar <- renderUI({
+      render_loaded_file_bar(
+        state    = rv$rtrw_prior_source,
+        input_id = ns("rtrw_priority_file"),
+        filename = "prioritas_rtrw.xlsx"
+      )
+    })
+    
+    output$rzwp3k_prior_file_bar <- renderUI({
+      render_loaded_file_bar(
+        state    = rv$rzwp3k_prior_source,
+        input_id = ns("rzwp3k_priority_file"),
+        filename = "prioritas_rzwp3k.xlsx"
       )
     })
     
@@ -574,18 +772,36 @@ reconcile_server <- function(id, output_dir) {
       req(input$rzwp3k_file)
       rv$rzwp3k_vect <- .read_spatial_input(input$rzwp3k_file)
     })
+    
     observeEvent(input$rtrw_priority_file, {
       req(input$rtrw_priority_file)
-      rv$rtrw_prioritas <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
+      rv$rtrw_prioritas    <- openxlsx::read.xlsx(input$rtrw_priority_file$datapath)
+      rv$rtrw_prior_source <- "manual"
+      fname <- input$rtrw_priority_file$name
+      fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+      session$sendCustomMessage("set_fileinput_text", list(
+        input_id = ns("rtrw_priority_file"), filename = fname))
     })
     observeEvent(input$rzwp3k_priority_file, {
       req(input$rzwp3k_priority_file)
-      rv$rzwp3k_prioritas <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
+      rv$rzwp3k_prioritas    <- openxlsx::read.xlsx(input$rzwp3k_priority_file$datapath)
+      rv$rzwp3k_prior_source <- "manual"
+      fname <- input$rzwp3k_priority_file$name
+      fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+      session$sendCustomMessage("set_fileinput_text", list(
+        input_id = ns("rzwp3k_priority_file"), filename = fname))
     })
+    
     observeEvent(input$serasi_matrix_file, {
       req(input$serasi_matrix_file)
       rv$serasi_matrix <- load_validate_matrix_table(
         input$serasi_matrix_file$datapath, title = "serasi")
+      rv$serasi_matrix_source <- "manual"
+      
+      fname <- input$serasi_matrix_file$name
+      fname <- if (length(fname) > 1) sprintf("%d files", length(fname)) else fname[1]
+      session$sendCustomMessage("set_fileinput_text", list(
+        input_id = ns("serasi_matrix_file"), filename = fname))
     })
     
     observeEvent(input$recon_table_filled_file, {
@@ -686,7 +902,10 @@ reconcile_server <- function(id, output_dir) {
             rzwp3k_prioritas = rv$rzwp3k_prioritas,
             output_dir       = module_dir,
             step             = rv$detected_step,
-            file_name        = file_name)
+            file_name        = file_name,
+            matriks_serasi   = rv$serasi_matrix,
+            narrow_options   = TRUE,
+            n_alt            = 5L)
           incProgress(0.8, detail = "Verifikasi berkas templat...")
           generated_path <- file.path(module_dir, file_name)
           if (!file.exists(generated_path)) stop("File templat gagal dibuat.")
@@ -862,6 +1081,10 @@ reconcile_server <- function(id, output_dir) {
                          type = "warning")
         return()
       }
+      if (is.null(rv$serasi_matrix)) {
+        showNotification("Matriks SERASI belum diunggah.", type = "warning")
+        return()
+      }
       
       btn_sel <- sprintf("#%s", ns("btn_prepare_decisions"))
       shinyjs::runjs(sprintf("$('%s').addClass('laspur-btn-loading').prop('disabled', true);",
@@ -930,6 +1153,18 @@ reconcile_server <- function(id, output_dir) {
             df$user_decision <- default_decision
             df$finalized     <- FALSE
             df$locked        <- is_locked
+          }
+          
+          if (!is.null(rv$serasi_matrix) && nrow(df) > 0) {
+            df <- tryCatch(
+              compute_alternative_options(df, rv$serasi_matrix, n_alt = 5L),
+              error = function(e) {
+                showNotification(
+                  paste("Gagal menghitung opsi alternatif:", e$message),
+                  type = "warning", duration = 8)
+                df
+              }
+            )
           }
           
           rv$dec_df        <- df
@@ -1093,22 +1328,6 @@ reconcile_server <- function(id, output_dir) {
       df[idx, , drop = FALSE]
     })
     
-    # output$ws_pagination_ui <- renderUI({
-    #   n <- length(ws_filtered_idx())
-    #   total_pages <- max(1L, ceiling(n / .RECON_PAGE_SIZE))
-    #   page <- min(max(1L, rv$page), total_pages)
-    #   div(style = "display:flex; justify-content:space-between; align-items:center; margin-top:4px;",
-    #       actionButton(ns("ws_prev"), "\u2039 Prev", class = "btn-outline-secondary btn-sm"),
-    #       tags$span(sprintf("Halaman %d / %d (%d baris)", page, total_pages, n),
-    #                 style = "font-size:0.8rem; color:#495057;"),
-    #       actionButton(ns("ws_next"), "Next \u203a", class = "btn-outline-secondary btn-sm"))
-    # })
-    # observeEvent(input$ws_prev, { rv$page <- max(1L, rv$page - 1L) })
-    # observeEvent(input$ws_next, {
-    #   total_pages <- max(1L, ceiling(length(ws_filtered_idx()) / .RECON_PAGE_SIZE))
-    #   rv$page <- min(total_pages, rv$page + 1L)
-    # })
-    
     output$ws_filter_chip_ui <- renderUI({
       rv$data_nonce; rv$table_nonce
       states <- row_states()
@@ -1217,11 +1436,7 @@ reconcile_server <- function(id, output_dir) {
                           as.integer(isolate(rv$dec_df)$id_pu))
       row_state  <- states_all[row_idx]
       
-      rtrw_pool <- unique(as.character(isolate(rv$rtrw_prioritas)$RTRW))
-      rz_pool   <- unique(as.character(isolate(rv$rzwp3k_prioritas)$RZWP3K))
-      rtrw_pool <- rtrw_pool[!is.na(rtrw_pool) & nzchar(rtrw_pool)]
-      rz_pool   <- rz_pool[!is.na(rz_pool)     & nzchar(rz_pool)]
-      combined_pool <- unique(c(rtrw_pool, rz_pool))
+      matriks_serasi <- isolate(rv$serasi_matrix)
       
       esc <- function(x) htmltools::htmlEscape(as.character(x), attribute = TRUE)
       
@@ -1266,22 +1481,100 @@ reconcile_server <- function(id, output_dir) {
       locked_vec <- isTRUE_vec(df$locked)
       locked_vec[row_state == "red"] <- FALSE
       
+      serasi_lookup <- function(r, z) {
+        if (is.na(r) || is.na(z) || is.null(matriks_serasi)) return(NA_real_)
+        r <- trimws(as.character(r)); z <- trimws(as.character(z))
+        m <- matriks_serasi$idx_serasi[
+          trimws(as.character(matriks_serasi$class1)) == r &
+            trimws(as.character(matriks_serasi$class2)) == z]
+        if (length(m) == 0) NA_real_ else as.numeric(m[1])
+      }
+      
+      alpha_live <- isolate(rv$alpha)
+      if (is.null(alpha_live) || !is.finite(alpha_live)) alpha_live <- 0.5
+      idx_padu_v <- suppressWarnings(as.numeric(df$idx_padu_final))
+      
+      if (identical(step, 2L)) {
+        df$idx_serasi_new <- mapply(
+          function(r, z) serasi_lookup(r, z),
+          df$user_decision_rtrw, df$user_decision_rzwp3k,
+          USE.NAMES = FALSE)
+      } else {
+        rtrw_set <- unique(trimws(as.character(isolate(rv$rtrw_prioritas)$RTRW)))
+        rz_set   <- unique(trimws(as.character(isolate(rv$rzwp3k_prioritas)$RZWP3K)))
+        df$idx_serasi_new <- mapply(
+          function(ud, r, z) {
+            if (is.na(ud)) return(NA_real_)
+            ud <- trimws(as.character(ud))
+            if (ud %in% rtrw_set) return(serasi_lookup(ud, z))
+            if (ud %in% rz_set)   return(serasi_lookup(r, ud))
+            NA_real_
+          },
+          df$user_decision, df$RTRW, df$RZWP3K, USE.NAMES = FALSE)
+      }
+      df$idx_padan_new <- alpha_live * df$idx_serasi_new +
+        (1 - alpha_live) * idx_padu_v
+      
+      alt_cols_r <- grep("^alt_RTRW_[0-9]+$",   names(df), value = TRUE)
+      alt_cols_z <- grep("^alt_RZWP3K_[0-9]+$", names(df), value = TRUE)
+      
+      collect_pool <- function(row_df, alt_cols, actual_col) {
+        pool <- as.character(row_df[[actual_col]])
+        for (col in alt_cols) {
+          v <- as.character(row_df[[col]])
+          if (!is.na(v) && nzchar(v) && v != "No alternative") pool <- c(pool, v)
+        }
+        unique(pool[!is.na(pool) & nzchar(pool)])
+      }
+      
       display <- df
-      if (step == 2L) {
+      
+      if (identical(step, 2L)) {
+        rtrw_pool_per_row <- lapply(seq_len(nrow(df)), function(i) {
+          collect_pool(df[i, , drop = FALSE], alt_cols_r, "RTRW")
+        })
+        rz_pool_per_row <- lapply(seq_len(nrow(df)), function(i) {
+          collect_pool(df[i, , drop = FALSE], alt_cols_z, "RZWP3K")
+        })
+        
+        if (all(c("id_rtrw", "id_rzwp3k") %in% names(df))) {
+          id_r <- as.character(df$id_rtrw)
+          id_z <- as.character(df$id_rzwp3k)
+          for (f in unique(id_r)) {
+            idx <- which(id_r == f)
+            if (length(idx) > 1) {
+              common <- Reduce(intersect, rtrw_pool_per_row[idx])
+              for (j in idx) rtrw_pool_per_row[[j]] <- common
+            }
+          }
+          for (f in unique(id_z)) {
+            idx <- which(id_z == f)
+            if (length(idx) > 1) {
+              common <- Reduce(intersect, rz_pool_per_row[idx])
+              for (j in idx) rz_pool_per_row[[j]] <- common
+            }
+          }
+        }
+        
         display$user_decision_rtrw <- vapply(seq_len(nrow(df)), function(i) {
           make_select_html(df$id_pu[i], "user_decision_rtrw",
-                           df$user_decision_rtrw[i], rtrw_pool,
+                           df$user_decision_rtrw[i], rtrw_pool_per_row[[i]],
                            locked_vec[i])
         }, character(1))
         display$user_decision_rzwp3k <- vapply(seq_len(nrow(df)), function(i) {
           make_select_html(df$id_pu[i], "user_decision_rzwp3k",
-                           df$user_decision_rzwp3k[i], rz_pool,
+                           df$user_decision_rzwp3k[i], rz_pool_per_row[[i]],
                            locked_vec[i])
         }, character(1))
       } else {
+        combined_pool_per_row <- lapply(seq_len(nrow(df)), function(i) {
+          unique(c(collect_pool(df[i, , drop = FALSE], alt_cols_r, "RTRW"),
+                   collect_pool(df[i, , drop = FALSE], alt_cols_z, "RZWP3K"),
+                   as.character(df$RTRW[i]), as.character(df$RZWP3K[i])))
+        })
         display$user_decision <- vapply(seq_len(nrow(df)), function(i) {
           make_select_html(df$id_pu[i], "user_decision",
-                           df$user_decision[i], combined_pool,
+                           df$user_decision[i], combined_pool_per_row[[i]],
                            locked_vec[i])
         }, character(1))
       }

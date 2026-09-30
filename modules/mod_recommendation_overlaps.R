@@ -1807,6 +1807,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
               rtrw_priority_file   = input$rtrw_priority_file$name,
               rzwp3k_priority_file = input$rzwp3k_priority_file$name,
               alpha                = alpha,
+              matriks_serasi       = rv$matriks_serasi,
               threshold_serasi     = threshold_serasi,
               threshold_padu       = threshold_padu,
               decision_mode        = input$decision_mode %||% "inapp",

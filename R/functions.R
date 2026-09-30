@@ -3354,6 +3354,67 @@ get_alternative_serasi <- function(class_a, class_b, serasi_df) {
   return(NA_real_)
 }
 
+#' Compute top-N alternative zone candidates per row (shared across modules)
+#'
+#' @description
+#' Central helper used by every "Penyusunan Alternatif" module and by the
+#' Rekonsiliasi module so the option pools offered to the user are computed
+#' exactly the same way. For each row, asks \code{\link{get_alternative_zone}}
+#' for better RTRW classes (given the current RZWP3K) and better RZWP3K classes
+#' (given the current RTRW), capped at \code{n_alt} per side. Results are
+#' widened into \code{alt_RTRW_1..N} and \code{alt_RZWP3K_1..N}.
+#'
+#' @param df data.frame / tibble / sf with at least columns \code{RTRW},
+#'   \code{RZWP3K}. sf input is dropped to geometry internally and the result
+#'   is re-attached as sf so downstream \code{st_drop_geometry()} calls still
+#'   work.
+#' @param matriks_serasi Long-form SERASI matrix: data.frame with
+#'   \code{class1}, \code{class2}, \code{idx_serasi}.
+#' @param n_alt Integer, max candidates per side (default 5).
+#' @return \code{df} augmented with \code{alt_RTRW_1..n_alt},
+#'   \code{alt_RZWP3K_1..n_alt}. Short rows are NA-padded.
+#' @export
+compute_alternative_options <- function(df, matriks_serasi, n_alt = 5L) {
+  if (!is.data.frame(df))
+    stop("compute_alternative_options: df must be a data.frame.")
+  if (!all(c("RTRW", "RZWP3K") %in% names(df)))
+    stop("compute_alternative_options: df must contain 'RTRW' and 'RZWP3K'.")
+  if (!is.data.frame(matriks_serasi) ||
+      !all(c("class1", "class2", "idx_serasi") %in% names(matriks_serasi)))
+    stop("compute_alternative_options: matriks_serasi must have class1, class2, idx_serasi.")
+  n_alt <- as.integer(n_alt)
+  if (is.na(n_alt) || n_alt < 1L)
+    stop("compute_alternative_options: n_alt must be a positive integer.")
+  
+  was_sf   <- inherits(df, "sf")
+  geom_col <- if (was_sf) attr(df, "sf_column") else NULL
+  
+  df_work <- if (was_sf) sf::st_drop_geometry(df) else df
+  df_work <- tibble::as_tibble(df_work)
+  
+  out <- df_work %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      alt_RTRW_list   = list(get_alternative_zone(
+        RZWP3K, RTRW, "RTRW", matriks_serasi, n_alt = n_alt)),
+      alt_RZWP3K_list = list(get_alternative_zone(
+        RTRW, RZWP3K, "RZWP3K", matriks_serasi, n_alt = n_alt))
+    ) %>%
+    dplyr::ungroup() %>%
+    tidyr::unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
+    tidyr::unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
+    dplyr::rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
+                       dplyr::starts_with("alt_RTRW_list_")) %>%
+    dplyr::rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
+                       dplyr::starts_with("alt_RZWP3K_list_"))
+  
+  if (was_sf && !is.null(geom_col)) {
+    out[[geom_col]] <- df[[geom_col]]
+    out <- sf::st_as_sf(out, sf_column_name = geom_col)
+  }
+  out
+}
+
 #' Dissolve adjacent feature pairs to one row per `id_pu`
 #'
 #' @description
@@ -3591,21 +3652,8 @@ determine_alternative_zones <- function(idx_padan_map_filter,
                      "length", "idx_serasi")
       base_cols <- intersect(base_cols, names(work))
       
-      idx_padan_map_alt <- work %>%
-        rowwise() %>%
-        mutate(
-          alt_RTRW_list   = list(get_alternative_zone(RZWP3K, RTRW, "RTRW",
-                                                      matriks_serasi, n_alt = n_alt)),
-          alt_RZWP3K_list = list(get_alternative_zone(RTRW, RZWP3K, "RZWP3K",
-                                                      matriks_serasi, n_alt = n_alt))
-        ) %>%
-        ungroup() %>%
-        unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
-        unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
-        rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
-                    starts_with("alt_RTRW_list_")) %>%
-        rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
-                    starts_with("alt_RZWP3K_list_"))
+      idx_padan_map_alt <- compute_alternative_options(
+        work, matriks_serasi, n_alt = n_alt)
       
       if (compute_recommendation) {
         if (is.null(priority_rtrw) || is.null(priority_rzwp3k)) {
@@ -3687,21 +3735,8 @@ determine_alternative_zones <- function(idx_padan_map_filter,
       stop("Input data missing required columns: ",
            paste(missing, collapse = ", "))
     
-    idx_padan_map_alt <- idx_padan_map_filter %>%
-      rowwise() %>%
-      mutate(
-        alt_RTRW_list   = list(get_alternative_zone(RZWP3K, RTRW, "RTRW",
-                                                    matriks_serasi, n_alt = n_alt)),
-        alt_RZWP3K_list = list(get_alternative_zone(RTRW, RZWP3K, "RZWP3K",
-                                                    matriks_serasi, n_alt = n_alt))
-      ) %>%
-      ungroup() %>%
-      unnest_wider(alt_RTRW_list,   names_sep = "_", names_repair = "unique") %>%
-      unnest_wider(alt_RZWP3K_list, names_sep = "_", names_repair = "unique") %>%
-      rename_with(~ gsub("alt_RTRW_list_",   "alt_RTRW_",   .x),
-                  starts_with("alt_RTRW_list_")) %>%
-      rename_with(~ gsub("alt_RZWP3K_list_", "alt_RZWP3K_", .x),
-                  starts_with("alt_RZWP3K_list_"))
+    idx_padan_map_alt <- compute_alternative_options(
+      idx_padan_map_filter, matriks_serasi, n_alt = n_alt)
     
     df_export <- idx_padan_map_alt %>%
       st_drop_geometry() %>%
@@ -4125,9 +4160,11 @@ generate_reconciliation_excel <- function(recon_map,
                                           step, 
                                           file_name = "recon_map.xlsx",
                                           group_col = NULL,
-                                          dissolve_adjacent = TRUE) {
+                                          dissolve_adjacent = TRUE,
+                                          matriks_serasi = NULL,
+                                          narrow_options = FALSE,
+                                          n_alt = 5L) {
   
-  # Validate step argument
   if (missing(step) || !(step %in% c(1, 2))) {
     stop("'step' must be explicitly provided and must be either 1 or 2.")
   }
@@ -4148,19 +4185,110 @@ generate_reconciliation_excel <- function(recon_map,
     df_flat$user_decision <- NA_character_
   }
   
-  # Extract option lists 
+  # ---- Narrowed per-row option pools -------------------------------------
+  narrow_options <- isTRUE(narrow_options) &&
+    !is.null(matriks_serasi) &&
+    all(c("RTRW", "RZWP3K") %in% names(df_flat)) &&
+    nrow(df_flat) > 0
+  
+  option_matrix <- NULL
+  combined_opts <- character(0)  
+  
+  if (narrow_options) {
+    df_alt <- tryCatch(
+      compute_alternative_options(df_flat, matriks_serasi, n_alt = n_alt),
+      error = function(e) {
+        message("compute_alternative_options failed in template: ", e$message)
+        NULL
+      }
+    )
+    if (is.null(df_alt)) narrow_options <- FALSE
+  }
+  
+  if (narrow_options) {
+    alt_cols_r <- grep("^alt_RTRW_[0-9]+$",   names(df_alt), value = TRUE)
+    alt_cols_z <- grep("^alt_RZWP3K_[0-9]+$", names(df_alt), value = TRUE)
+    
+    collect <- function(row_df, alt_cols, actual_col) {
+      pool <- as.character(row_df[[actual_col]])
+      for (col in alt_cols) {
+        v <- as.character(row_df[[col]])
+        if (!is.na(v) && nzchar(v) && v != "No alternative") pool <- c(pool, v)
+      }
+      unique(pool[!is.na(pool) & nzchar(pool)])
+    }
+    
+    if (identical(step, 2L)) {
+      rtrw_pool <- lapply(seq_len(nrow(df_alt)), function(i) {
+        collect(df_alt[i, , drop = FALSE], alt_cols_r, "RTRW")
+      })
+      rz_pool <- lapply(seq_len(nrow(df_alt)), function(i) {
+        collect(df_alt[i, , drop = FALSE], alt_cols_z, "RZWP3K")
+      })
+      
+      if (all(c("id_rtrw", "id_rzwp3k") %in% names(df_alt))) {
+        id_r <- as.character(df_alt$id_rtrw)
+        id_z <- as.character(df_alt$id_rzwp3k)
+        for (f in unique(id_r)) {
+          idx <- which(id_r == f)
+          if (length(idx) > 1) {
+            common <- Reduce(intersect, rtrw_pool[idx])
+            for (j in idx) rtrw_pool[[j]] <- common
+          }
+        }
+        for (f in unique(id_z)) {
+          idx <- which(id_z == f)
+          if (length(idx) > 1) {
+            common <- Reduce(intersect, rz_pool[idx])
+            for (j in idx) rz_pool[[j]] <- common
+          }
+        }
+      }
+      
+      max_r <- max(1L, max(vapply(rtrw_pool, length, integer(1))))
+      max_z <- max(1L, max(vapply(rz_pool,   length, integer(1))))
+      rtrw_mat <- matrix(NA_character_, nrow(df_alt), max_r)
+      rz_mat   <- matrix(NA_character_, nrow(df_alt), max_z)
+      for (i in seq_len(nrow(df_alt))) {
+        v <- rtrw_pool[[i]]; if (length(v) > 0) rtrw_mat[i, seq_along(v)] <- v
+        v <- rz_pool[[i]];   if (length(v) > 0) rz_mat[i,   seq_along(v)] <- v
+      }
+      option_matrix <- cbind(
+        as.data.frame(rtrw_mat, stringsAsFactors = FALSE),
+        as.data.frame(rz_mat,   stringsAsFactors = FALSE)
+      )
+      names(option_matrix) <- c(paste0("RTRW_",   seq_len(max_r)),
+                                paste0("RZWP3K_", seq_len(max_z)))
+    } else {
+      pool_list <- lapply(seq_len(nrow(df_alt)), function(i) {
+        pool <- c(as.character(df_alt$RTRW[i]), as.character(df_alt$RZWP3K[i]))
+        for (col in c(alt_cols_r, alt_cols_z)) {
+          v <- as.character(df_alt[[col]][i])
+          if (!is.na(v) && nzchar(v) && v != "No alternative") pool <- c(pool, v)
+        }
+        unique(pool[!is.na(pool) & nzchar(pool)])
+      })
+      max_len <- max(1L, max(vapply(pool_list, length, integer(1))))
+      mat <- matrix(NA_character_, nrow(df_alt), max_len)
+      for (i in seq_len(nrow(df_alt))) {
+        v <- pool_list[[i]]; if (length(v) > 0) mat[i, seq_along(v)] <- v
+      }
+      option_matrix <- as.data.frame(mat, stringsAsFactors = FALSE)
+      names(option_matrix) <- paste0("Options_", seq_len(max_len))
+    }
+  }
+  
+  # ---- Workbook and sheets ----------------------------------------------
   rtrw_opts   <- as.character(rtrw_prioritas$RTRW)
   rzwp3k_opts <- as.character(rzwp3k_prioritas$RZWP3K)
   rtrw_opts   <- rtrw_opts[!is.na(rtrw_opts)]
   rzwp3k_opts <- rzwp3k_opts[!is.na(rzwp3k_opts)]
   
-  # Create Workbook and Sheets
   wb <- openxlsx::createWorkbook()
   openxlsx::addWorksheet(wb, "Data")
-  openxlsx::addWorksheet(wb, "Lists")
   openxlsx::writeData(wb, "Data", df_flat)
   
-  # Apply alternating row background colors based on grouping column
+  # Alternating group colouring (unchanged)
   use_col <- NULL
   if (!is.null(group_col) && group_col %in% names(df_flat)) {
     use_col <- group_col
@@ -4174,16 +4302,13 @@ generate_reconciliation_excel <- function(recon_map,
   if (!is.null(use_col)) {
     unique_vals <- unique(df_flat[[use_col]])
     if (length(unique_vals) > 0) {
-      color1 <- "#DCE6F1"   # light blue
-      color2 <- "#FFFFFF"   # white
+      color1 <- "#DCE6F1"
+      color2 <- "#FFFFFF"
       style_group1 <- openxlsx::createStyle(fgFill = color1)
       style_group2 <- openxlsx::createStyle(fgFill = color2)
-      
-      # Data rows start at row 2 (header is row 1)
       for (i in seq_along(unique_vals)) {
         val <- unique_vals[i]
-        rows_data <- which(df_flat[[use_col]] == val)
-        rows_excel <- rows_data + 1
+        rows_excel <- which(df_flat[[use_col]] == val) + 1
         style <- if (i %% 2 == 1) style_group1 else style_group2
         openxlsx::addStyle(wb, "Data", style = style,
                            rows = rows_excel,
@@ -4193,60 +4318,83 @@ generate_reconciliation_excel <- function(recon_map,
     }
   }
   
-  # Write option lists to the Lists sheet
-  openxlsx::writeData(wb, "Lists", x = "RTRW Options", startCol = 1, startRow = 1)
-  if (length(rtrw_opts) > 0) {
-    openxlsx::writeData(wb, "Lists", x = rtrw_opts, startCol = 1, startRow = 2, colNames = FALSE)
-  }
-  openxlsx::writeData(wb, "Lists", x = "RZWP3K Options", startCol = 2, startRow = 1)
-  if (length(rzwp3k_opts) > 0) {
-    openxlsx::writeData(wb, "Lists", x = rzwp3k_opts, startCol = 2, startRow = 2, colNames = FALSE)
+  if (narrow_options) {
+    openxlsx::addWorksheet(wb, "Validation_Lists")
+    openxlsx::writeData(wb, "Validation_Lists", option_matrix)
+  } else {
+    openxlsx::addWorksheet(wb, "Lists")
+    openxlsx::writeData(wb, "Lists", x = "RTRW Options", startCol = 1, startRow = 1)
+    if (length(rtrw_opts) > 0)
+      openxlsx::writeData(wb, "Lists", x = rtrw_opts, startCol = 1, startRow = 2, colNames = FALSE)
+    openxlsx::writeData(wb, "Lists", x = "RZWP3K Options", startCol = 2, startRow = 1)
+    if (length(rzwp3k_opts) > 0)
+      openxlsx::writeData(wb, "Lists", x = rzwp3k_opts, startCol = 2, startRow = 2, colNames = FALSE)
+    if (identical(step, 1L)) {
+      combined_opts <- c(rtrw_opts, rzwp3k_opts)
+      openxlsx::writeData(wb, "Lists", x = "Combined Options", startCol = 3, startRow = 1)
+      if (length(combined_opts) > 0)
+        openxlsx::writeData(wb, "Lists", x = combined_opts, startCol = 3, startRow = 2, colNames = FALSE)
+    }
   }
   
-  # If step == 1, write combined list to column C and set validation for user_decision
-  if (step == 1) {
-    combined_opts <- c(rtrw_opts, rzwp3k_opts)
-    openxlsx::writeData(wb, "Lists", x = "Combined Options", startCol = 3, startRow = 1)
-    if (length(combined_opts) > 0) {
-      openxlsx::writeData(wb, "Lists", x = combined_opts, startCol = 3, startRow = 2, colNames = FALSE)
+  # ---- Data validation ---------------------------------------------------
+  rows <- 2:(nrow(df_flat) + 1)
+  
+  if (narrow_options) {
+    if (identical(step, 1L)) {
+      col_decision <- which(names(df_flat) == "user_decision")
+      if (length(col_decision) == 0) stop("Column 'user_decision' not found.")
+      ncol_opt <- ncol(option_matrix)
+      for (i in seq_len(nrow(df_flat))) {
+        openxlsx::dataValidation(
+          wb, "Data",
+          col = col_decision, rows = i + 1,
+          type = "list",
+          value = sprintf("'Validation_Lists'!$A$%d:$%s$%d",
+                          i + 1, openxlsx::int2col(ncol_opt), i + 1))
+      }
+    } else {
+      col_rtrw   <- which(names(df_flat) == "user_decision_rtrw")
+      col_rzwp3k <- which(names(df_flat) == "user_decision_rzwp3k")
+      if (length(col_rtrw) == 0 || length(col_rzwp3k) == 0)
+        stop("Required decision columns not found.")
+      n_r <- sum(grepl("^RTRW_",   names(option_matrix)))
+      n_z <- sum(grepl("^RZWP3K_", names(option_matrix)))
+      for (i in seq_len(nrow(df_flat))) {
+        openxlsx::dataValidation(
+          wb, "Data", col = col_rtrw, rows = i + 1, type = "list",
+          value = sprintf("'Validation_Lists'!$A$%d:$%s$%d",
+                          i + 1, openxlsx::int2col(n_r), i + 1))
+        openxlsx::dataValidation(
+          wb, "Data", col = col_rzwp3k, rows = i + 1, type = "list",
+          value = sprintf("'Validation_Lists'!$%s$%d:$%s$%d",
+                          openxlsx::int2col(n_r + 1), i + 1,
+                          openxlsx::int2col(n_r + n_z), i + 1))
+      }
     }
-    
+  } else if (identical(step, 1L)) {
     col_decision <- which(names(df_flat) == "user_decision")
     if (length(col_decision) == 0) stop("Column 'user_decision' not found in data frame.")
-    rows <- 2:(nrow(df_flat) + 1)
-    last_row_combined <- length(combined_opts) + 1 
-    formula_combined <- paste0("=Lists!$C$2:$C$", last_row_combined)
-    
+    last_row_combined <- length(combined_opts) + 1
     openxlsx::dataValidation(wb, "Data",
-                             col = col_decision,
-                             rows = rows,
+                             col = col_decision, rows = rows,
                              type = "list",
-                             value = formula_combined)
+                             value = paste0("=Lists!$C$2:$C$", last_row_combined))
   } else {
-    # step == 2: apply validations for both decision columns
     col_rtrw   <- which(names(df_flat) == "user_decision_rtrw")
     col_rzwp3k <- which(names(df_flat) == "user_decision_rzwp3k")
-    if (length(col_rtrw) == 0 || length(col_rzwp3k) == 0) {
+    if (length(col_rtrw) == 0 || length(col_rzwp3k) == 0)
       stop("Required decision columns not found in data frame.")
-    }
-    rows <- 2:(nrow(df_flat) + 1)
-    
     last_row_rtrw   <- length(rtrw_opts) + 1
     last_row_rzwp3k <- length(rzwp3k_opts) + 1
-    formula_rtrw   <- paste0("=Lists!$A$2:$A$", last_row_rtrw)
-    formula_rzwp3k <- paste0("=Lists!$B$2:$B$", last_row_rzwp3k)
-    
     openxlsx::dataValidation(wb, "Data",
-                             col = col_rtrw,
-                             rows = rows,
+                             col = col_rtrw, rows = rows,
                              type = "list",
-                             value = formula_rtrw)
-    
+                             value = paste0("=Lists!$A$2:$A$", last_row_rtrw))
     openxlsx::dataValidation(wb, "Data",
-                             col = col_rzwp3k,
-                             rows = rows,
+                             col = col_rzwp3k, rows = rows,
                              type = "list",
-                             value = formula_rzwp3k)
+                             value = paste0("=Lists!$B$2:$B$", last_row_rzwp3k))
   }
   
   glossary_data <- data.frame(
@@ -4306,17 +4454,13 @@ generate_reconciliation_excel <- function(recon_map,
   
   openxlsx::addWorksheet(wb, "Glossary")
   openxlsx::writeData(wb, "Glossary", glossary_data, startRow = 1, startCol = 1)
-  # Freeze header row in Glossary
   openxlsx::freezePane(wb, "Glossary", firstRow = TRUE)
-  
-  # Freeze header row and first 4 columns in Data sheet
   openxlsx::freezePane(wb, "Data", firstActiveRow = 2, firstActiveCol = 5)
   
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }
   
-  # Save workbook
   full_path <- file.path(output_dir, file_name)
   openxlsx::saveWorkbook(wb, full_path, overwrite = TRUE)
   
