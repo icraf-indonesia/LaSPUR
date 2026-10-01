@@ -1,0 +1,182 @@
+---
+title: "LaSPUR - Laporan Analisis Penyusunan Alternatif"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: bootstrap
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+# Safety check for params
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
+}
+
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Penyusunan Alternatif
+
+```{r prepare}
+is_adjacent <- identical(params$inputs$case, "adjacent")
+is_overlaps <- identical(params$inputs$case, "overlaps")
+
+alt_map <- if (is_adjacent) {
+  params$result$idx_alternative_adjacent_map
+} else if (is_overlaps) {
+  params$result$idx_alternative_overlaps_map
+} else NULL
+
+alt_tbl <- if (is_adjacent) {
+  params$result$idx_alternative_adjacent_table
+} else if (is_overlaps) {
+  params$result$idx_alternative_overlaps_table
+} else NULL
+
+alt_available <- !is.null(alt_map) && inherits(alt_map, "sf")
+
+if (!alt_available && !is.null(alt_tbl)) {
+  alt_tbl <- as.data.frame(alt_tbl)
+} else if (alt_available && is.null(alt_tbl)) {
+  alt_tbl <- sf::st_drop_geometry(alt_map)
+}
+
+case_label <- if (is_adjacent) {
+  "Bertetangga"
+} else if (is_overlaps) {
+  "Tumpang Tindih"
+} else {
+  "Tidak Diketahui"
+}
+
+alpha_val <- tryCatch(as.numeric(params$inputs$alpha[1]),
+                      error = function(e) NA_real_)
+alpha_txt <- if (is.na(alpha_val)) {
+  "tidak diketahui"
+} else {
+  format(alpha_val, nsmall = 2)
+}
+```
+
+## Ringkasan Umum
+
+```{r ringkasan-umum}
+if (!alt_available) {
+  cat("\n*Tidak ada hasil analisis penyusunan alternatif yang tersedia dalam laporan ini.*\n")
+} else {
+  rec_col <- intersect(c("recommendation", "Rekomendasi", "recom", "alternatif"),
+                       names(alt_tbl))[1]
+  
+  n_cases <- nrow(alt_tbl)
+  
+  if (!is.na(rec_col)) {
+    rec_counts <- alt_tbl %>%
+      dplyr::count(.data[[rec_col]]) %>%
+      dplyr::mutate(text = paste0(!!sym(rec_col), ": ", n)) %>%
+      dplyr::pull(text)
+    rec_desc <- paste(rec_counts, collapse = ", ")
+    n_changed <- sum(!alt_tbl[[rec_col]] %in% c("Tetap/Koordinasi", "Koordinasi"),
+                     na.rm = TRUE)
+  } else {
+    rec_desc <- "Data tidak tersedia"
+    n_changed <- 0
+  }
+  
+  cat(paste0(
+    "<div style='display:flex; gap:15px; margin-bottom:25px; flex-wrap:wrap;'>",
+    "<div style='flex:1; background:#e3f2fd; padding:20px; border-radius:8px;",
+    " text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1);'>",
+    "<div style='font-size:14px; color:#1565c0; font-weight:bold;'>Total Unit Perencanaan</div>",
+    "<div style='font-size:32px; color:#0d47a1; font-weight:900;'>", n_cases, "</div></div>",
+    "<div style='flex:1; background:#fbe9e7; padding:20px; border-radius:8px;",
+    " text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1);'>",
+    "<div style='font-size:14px; color:#d84315; font-weight:bold;'>Rekomendasi Perubahan</div>",
+    "<div style='font-size:32px; color:#bf360c; font-weight:900;'>", n_changed, "</div></div>",
+    "<div style='flex:1; background:#e8f5e9; padding:20px; border-radius:8px;",
+    " text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1);'>",
+    "<div style='font-size:14px; color:#2e7d32; font-weight:bold;'>Tipe Rekomendasi</div>",
+    "<div style='font-size:16px; color:#1b5e20; font-weight:900;'>", rec_desc, "</div></div>",
+    "</div>"
+  ))
+}
+```
+
+
+## Tentang Modul
+
+Modul Penyusunan Alternatif menghasilkan rekomendasi opsi penyelesaian konflik integrasi ruang darat–laut untuk setiap unit perencanaan. Pada setiap kasus akan dihasilkan rekomendasi baik berupa Ubah RTRW, Ubah RZWP3K, atau Tetap/Koordinasi, bergantung pada perbandingan indeks PADAN aktual dengan proyeksi indeks PADAN dari masing-masing opsi zona alternatif.
+
+## Hasil Penyusunan Alternatif
+
+```{r results}
+if (!alt_available) {
+  cat("\n*Hasil analisis penyusunan alternatif tidak tersedia.*\n")
+} else {
+  log_dir <- if (!is.null(params$inputs$output_dir) &&
+                 nzchar(params$inputs$output_dir)) {
+    file.path(params$inputs$output_dir, "Penyusunan Alternatif", "log")
+  } else {
+    file.path(getwd(), "Penyusunan Alternatif", "log")
+  }
+  
+  png_name <- if (is_adjacent) "peta_opsi_alternatif_bertetangga.png" else "peta_opsi_alternatif_tumpang_tindih.png"
+  png_path <- file.path(log_dir, png_name)
+  
+  if (file.exists(png_path) && file.size(png_path) > 0) {
+    knitr::include_graphics(png_path)
+  } else {
+    cat("Peta hasil analisis penyusunan alternatif tidak tersedia di log.")
+  }
+}
+```
+
+### Detail Rekomendasi
+
+```{r results2}
+if (alt_available) {
+  rec_col <- intersect(c("recommendation", "Rekomendasi", "recom", "alternatif"), names(alt_tbl))[1]
+  
+  preferred_cols <- c("id_pu", "RTRW", "RZWP3K", rec_col,
+                      "idx_padan", "idx_padan_new", "delta_idx_padan")
+  kept_cols  <- intersect(preferred_cols, names(alt_tbl))
+  tbl_view   <- alt_tbl[, kept_cols, drop = FALSE]
+  
+  tbl_view <- laspur_rename_cols(tbl_view)
+  tbl_view <- laspur_format_numbers(
+    tbl_view,
+    numeric_cols = c("PADAN Aktual", "PADAN Proyeksi", "Kenaikan (Delta)"),
+    integer_cols = c("ID PU")
+  )
+  
+  dt <- DT::datatable(
+    tbl_view,
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(pageLength = 10, scrollX = TRUE, scrollY = "350px", scroller = TRUE)
+  )
+  if ("Kenaikan (Delta)" %in% names(tbl_view)) {
+    dt <- DT::formatRound(dt, columns = "Kenaikan (Delta)", digits = 2)
+  }
+  dt
+}
+```
+
