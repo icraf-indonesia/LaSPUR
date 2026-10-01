@@ -49,7 +49,7 @@ padan_ui <- function(id) {
         fluidRow(
           column(4, uiOutput(ns("query_id_type_ui"))),
           column(4,
-                 numericInput(ns("query_id_val"), "Masukkan ID Numerik", value = 1, min = 1),
+                 uiOutput(ns("query_id_val_ui")),
                  uiOutput(ns("query_id_hint_ui"))
           ),
           column(4,
@@ -159,7 +159,9 @@ padan_server <- function(id, output_dir) {
       display_map      = NULL,
       has_id_group     = FALSE,
       query_geom       = NULL,
-      query_result     = NULL
+      query_result     = NULL,
+      raw_padan_map    = NULL,
+      query_raw_geom   = NULL,
     )
     
     append_log <- function(msg) {
@@ -320,6 +322,8 @@ padan_server <- function(id, output_dir) {
           
           append_log("Kolom yang diperlukan ditemukan.")
           
+          rv$raw_padan_map <- idx_padu_map
+          
           incProgress(0.4, detail = "Menghitung indeks PADAN...")
           alpha <- input$alpha_val
           append_log(paste("Menggunakan alpha =", alpha))
@@ -467,9 +471,37 @@ padan_server <- function(id, output_dir) {
     # ── Query Tab Logic ──────────────────────────────────────
     output$query_id_type_ui <- renderUI({
       if (is.null(rv$display_map)) return(NULL)
-      choices <- c("id_pu")
-      if (isTRUE(rv$has_id_group)) choices <- c(choices, "id_group")
-      selectInput(ns("query_id_type"), "Pilih Tipe ID", choices = choices)
+      df <- rv$display_map
+      
+      has_group <- "id_group" %in% names(df) &&
+        any(!is.na(df$id_group))
+      has_admin <- "admin" %in% names(df) &&
+        any(!is.na(df$admin) & nzchar(as.character(df$admin)))
+      
+      choices <- c("ID PU" = "id_pu")
+      if (has_group) choices <- c(choices, "ID Grup" = "id_group")
+      if (has_admin) choices <- c(choices, "Wilayah Administratif" = "admin")
+      
+      selectInput(ns("query_id_type"), "Pilih Komponen", choices = choices)
+    })
+    
+    output$query_id_val_ui <- renderUI({
+      req(rv$display_map, input$query_id_type)
+      id_type <- input$query_id_type
+      
+      if (identical(id_type, "admin")) {
+        admins <- as.character(rv$display_map$admin)
+        admins <- sort(unique(admins[!is.na(admins) & nzchar(admins)]))
+        if (length(admins) == 0) {
+          return(tags$p(style = "color:#6c757d; font-size:0.85rem;",
+                        "Kolom 'admin' tidak tersedia pada data ini."))
+        }
+        selectInput(ns("query_admin_val"), "Pilih Wilayah Administratif",
+                    choices = admins, selected = admins[1])
+      } else {
+        numericInput(ns("query_id_val"), "Masukkan ID Numerik",
+                     value = 1, min = 1)
+      }
     })
     
     output$query_id_hint_ui <- renderUI({
@@ -486,34 +518,65 @@ padan_server <- function(id, output_dir) {
     })
     
     observeEvent(input$btn_query, {
-      req(rv$display_map, input$query_id_val, input$query_id_type)
-      df <- rv$display_map
-      id_val <- input$query_id_val
+      req(rv$display_map, rv$raw_padan_map, input$query_id_type)
       id_type <- input$query_id_type
+      df      <- rv$display_map
+      raw_df  <- rv$raw_padan_map
       
-      filtered <- if (id_type == "id_pu") df[df$id_pu == id_val, ] else df[df$id_group == id_val, ]
+      filtered     <- NULL
+      filtered_raw <- NULL
+      ids          <- integer(0)
+      
+      if (identical(id_type, "admin")) {
+        req(input$query_admin_val)
+        admin_val <- input$query_admin_val
+        filtered  <- df[!is.na(df$admin) & as.character(df$admin) == admin_val, , drop = FALSE]
+        ids       <- unique(filtered$id_pu)
+      } else if (identical(id_type, "id_group")) {
+        req(input$query_id_val)
+        id_val   <- input$query_id_val
+        filtered <- df[!is.na(df$id_group) & df$id_group == id_val, , drop = FALSE]
+        ids      <- unique(filtered$id_pu)
+      } else {
+        req(input$query_id_val)
+        id_val       <- input$query_id_val
+        filtered     <- df[!is.na(df$id_pu) & df$id_pu == id_val, , drop = FALSE]
+        filtered_raw <- raw_df[!is.na(raw_df$id_pu) & raw_df$id_pu == id_val, , drop = FALSE]
+      }
       
       if (nrow(filtered) == 0) {
         showNotification("ID tidak ditemukan dalam data.", type = "warning")
-        rv$query_geom <- NULL
-        rv$query_result <- NULL
+        rv$query_geom     <- NULL
+        rv$query_raw_geom <- NULL
         return()
       }
-      rv$query_geom <- filtered
-      rv$query_result <- NULL
+      
+      if (is.null(filtered_raw)) {
+        filtered_raw <- raw_df[raw_df$id_pu %in% ids, , drop = FALSE]
+      }
+      
+      rv$query_geom     <- filtered
+      rv$query_raw_geom <- filtered_raw
     })
     
     output$query_header_and_cards_ui <- renderUI({
       req(rv$query_geom)
       id_type <- input$query_id_type
-      id_val <- input$query_id_val
       
-      if (id_type == "id_pu") {
+      id_val <- if (identical(id_type, "admin")) {
+        input$query_admin_val %||% "(tidak dipilih)"
+      } else {
+        input$query_id_val %||% "(tidak dipilih)"
+      }
+      
+      if (identical(id_type, "id_pu")) {
         val_padan  <- rv$query_geom$idx_padan[1]
         val_serasi <- rv$query_geom$idx_serasi[1]
         val_padu   <- rv$query_geom$idx_padu_final[1]
       } else {
-        numeric_df <- rv$query_geom %>% sf::st_drop_geometry() %>% dplyr::select(where(is.numeric))
+        numeric_df <- rv$query_geom %>%
+          sf::st_drop_geometry() %>%
+          dplyr::select(where(is.numeric))
         n_members <- nrow(rv$query_geom)
         get_group_val <- function(col_name) {
           if (!col_name %in% names(numeric_df)) return(NA_real_)
@@ -544,35 +607,79 @@ padan_server <- function(id, output_dir) {
         format(round(as.numeric(val), 3), nsmall = 3)
       }
       
-      if (id_type == "id_pu") {
-        is_adjacent <- "id_group" %in% names(rv$query_geom)
-        case <- if (is_adjacent) "Bertetangga" else "Tumpang Tindih"
+      .val1 <- function(df, col) {
+        if (!col %in% names(df)) return(NA_character_)
+        v <- df[[col]][1]
+        if (length(v) == 0 || is.na(v) || !nzchar(as.character(v))) NA_character_
+        else as.character(v)
+      }
+      .nonna <- function(df, col) {
+        if (!col %in% names(df)) return(character(0))
+        v <- as.character(df[[col]])
+        v[!is.na(v) & nzchar(v)]
+      }
+      
+      if (identical(id_type, "id_pu")) {
+        is_adjacent <- "id_group" %in% names(rv$query_geom) &&
+          any(!is.na(rv$query_geom$id_group))
+        rtrw_val <- .val1(rv$query_geom, "RTRW")
+        rz_val   <- .val1(rv$query_geom, "RZWP3K")
+        case     <- if (is_adjacent) "Bertetangga" else "Tumpang Tindih"
+        
         h1 <- sprintf("Unit Perencanaan %s - Kasus %s %s dan %s",
-                      id_val, case, rv$query_geom$RTRW[1], rv$query_geom$RZWP3K[1])
-        if (is_adjacent) {
-          h2 <- sprintf("Lokasi: %s - Unit Grup: %s",
-                        rv$query_geom$admin[1], rv$query_geom$id_group[1])
+                      id_val, case,
+                      ifelse(is.na(rtrw_val), "-", rtrw_val),
+                      ifelse(is.na(rz_val),   "-", rz_val))
+        
+        admin_txt <- .val1(rv$query_geom, "admin")
+        h2 <- if (is_adjacent) {
+          grp_txt <- .val1(rv$query_geom, "id_group")
+          if (!is.na(admin_txt))
+            sprintf("Lokasi: %s - Unit Grup: %s", admin_txt,
+                    ifelse(is.na(grp_txt), "-", grp_txt))
+          else
+            sprintf("Unit Grup: %s", ifelse(is.na(grp_txt), "-", grp_txt))
         } else {
-          h2 <- sprintf("Lokasi: %s", rv$query_geom$admin[1])
+          if (!is.na(admin_txt)) sprintf("Lokasi: %s", admin_txt) else ""
         }
+        
+      } else if (identical(id_type, "admin")) {
+        n_pairs  <- nrow(rv$query_geom)
+        n_units  <- length(unique(rv$query_geom$id_pu))
+        n_groups <- length(unique(.nonna(rv$query_geom, "id_group")))
+        h1 <- sprintf("Wilayah Administratif %s", id_val)
+        h2 <- sprintf("%d unit perencanaan \u00b7 %d pasangan%s",
+                      n_units, n_pairs,
+                      if (n_groups > 0)
+                        sprintf(" \u00b7 %d unit grup", n_groups) else "")
+        
       } else {
         tbl_rtrw <- table(rv$query_geom$RTRW)
         tbl_rzwp <- table(rv$query_geom$RZWP3K)
         max_rtrw <- max(tbl_rtrw); max_rzwp <- max(tbl_rzwp)
-        hub_class <- if (max_rtrw >= max_rzwp) names(tbl_rtrw)[which.max(tbl_rtrw)] else names(tbl_rzwp)[which.max(tbl_rzwp)]
-        n_pairs <- nrow(rv$query_geom)
+        hub_class <- if (max_rtrw >= max_rzwp)
+          names(tbl_rtrw)[which.max(tbl_rtrw)]
+        else names(tbl_rzwp)[which.max(tbl_rzwp)]
+        
+        n_pairs  <- nrow(rv$query_geom)
+        n_units  <- length(unique(rv$query_geom$id_pu))
+        n_admins <- length(unique(.nonna(rv$query_geom, "admin")))
+        
         h1 <- sprintf("Unit Grup %s - Kasus Bertetangga %s dengan %d pasangan",
                       id_val, hub_class, n_pairs)
-        admins <- paste(unique(rv$query_geom$admin), collapse = ", ")
-        id_pus <- paste(rv$query_geom$id_pu, collapse = ", ")
-        h2 <- sprintf("Lokasi: %s - Unit Perencanaan: %s", admins, id_pus)
+        h2 <- if (n_admins > 0)
+          sprintf("Lokasi: %d wilayah administratif unik \u00b7 %d unit perencanaan",
+                  n_admins, n_units)
+        else
+          sprintf("%d unit perencanaan", n_units)
       }
       
       tagList(
         div(
           style = "margin-bottom: 16px;",
           h5(h1, style = "font-weight: 700; color: #1e293b; margin-bottom: 4px;"),
-          h6(h2, style = "font-weight: 500; color: #64748b; font-size: 0.9rem; margin: 0;")
+          if (nzchar(h2))
+            h6(h2, style = "font-weight: 500; color: #64748b; font-size: 0.9rem; margin: 0;")
         ),
         bslib::layout_columns(
           col_widths = c(4, 4, 4),
@@ -600,37 +707,45 @@ padan_server <- function(id, output_dir) {
     
     output$group_member_selector_ui <- renderUI({
       req(rv$query_geom)
-      if (input$query_id_type == "id_group") {
+      ids <- unique(rv$query_geom$id_pu)
+      if (length(ids) > 1) {
         selectInput(ns("selected_group_member"),
                     "Pilih ID PU untuk melihat detail:",
-                    choices = rv$query_geom$id_pu,
-                    selected = rv$query_geom$id_pu[1])
+                    choices = ids, selected = ids[1])
       } else NULL
     })
     
     query_table_data <- reactive({
       req(rv$query_geom)
-      if (input$query_id_type == "id_pu") {
-        df <- rv$query_geom
-      } else {
+      df <- rv$query_geom
+      ids <- unique(df$id_pu)
+      if (length(ids) > 1) {
         req(input$selected_group_member)
-        df <- rv$query_geom[rv$query_geom$id_pu == as.numeric(input$selected_group_member), ]
+        df <- df[df$id_pu == as.numeric(input$selected_group_member), , drop = FALSE]
       }
-      cols_to_remove <- c("id_pu", "id_group", "RTRW", "RZWP3K", "admin")
-      df_clean <- df[, !names(df) %in% cols_to_remove, drop = FALSE]
-      row_data <- sf::st_drop_geometry(df_clean)[1, , drop = FALSE]
+      if (nrow(df) == 0) return(NULL)
+      row_data <- sf::st_drop_geometry(df)[1, , drop = FALSE]
+      drop_cols <- intersect(c("id_pu", "id_group"), names(row_data))
+      if (length(drop_cols) > 0) {
+        row_data <- row_data[, setdiff(names(row_data), drop_cols), drop = FALSE]
+      }
+      
+      ordered <- intersect(c("RTRW", "RZWP3K", "admin"), names(row_data))
+      rest    <- setdiff(names(row_data), ordered)
+      row_data <- row_data[, c(ordered, rest), drop = FALSE]
+      
       res <- data.frame(
         Parameter = names(row_data),
         Nilai     = as.character(row_data[1, ]),
         stringsAsFactors = FALSE
       )
-      res$Nilai <- sapply(res$Nilai, function(x) {
+      res$Nilai <- vapply(res$Nilai, function(x) {
         if (grepl("^-?[0-9.]+$", x)) {
           num <- suppressWarnings(as.numeric(x))
           if (!is.na(num)) return(format(round(num, 2), nsmall = 2))
         }
-        return(x)
-      })
+        x
+      }, character(1))
       res
     })
     
@@ -654,28 +769,98 @@ padan_server <- function(id, output_dir) {
     }
     
     output$query_map <- renderLeaflet({
-      req(rv$query_geom)
-      map_data <- rv$query_geom
-      if (!sf::st_is_longlat(map_data)) map_data <- sf::st_transform(map_data, 4326)
-      popup_html <- build_query_popup(map_data)
-      leaflet() %>%
-        addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
-        addPolygons(data = map_data, fillColor = "red", fillOpacity = 0.4,
-                    stroke = FALSE, label = ~paste("ID PU:", id_pu), popup = popup_html)
+      req(rv$query_raw_geom)
+      sub_map <- rv$query_raw_geom
+      req(inherits(sub_map, "sf"), nrow(sub_map) > 0)
+      
+      if (!sf::st_is_longlat(sub_map)) {
+        sub_map <- sf::st_transform(sub_map, 4326)
+      }
+      
+      is_rtrw    <- !is.na(sub_map$RTRW)
+      is_rzwp    <- !is.na(sub_map$RZWP3K)
+      is_overlap <- is_rtrw & is_rzwp
+      
+      sub_map$side  <- ifelse(is_overlap, "overlap",
+                              ifelse(is_rtrw, "RTRW", "RZWP3K"))
+      sub_map$color <- ifelse(sub_map$side == "overlap", "#7B1FA2",
+                              ifelse(sub_map$side == "RTRW", "#1565C0", "#2E7D32"))
+      
+      has_overlap <- any(sub_map$side == "overlap")
+      has_rtrw    <- any(sub_map$side == "RTRW")
+      has_rzwp    <- any(sub_map$side == "RZWP3K")
+      
+      legend_colors <- c(
+        if (has_rtrw)    "#1565C0",
+        if (has_rzwp)    "#2E7D32",
+        if (has_overlap) "#7B1FA2"
+      )
+      legend_labels <- c(
+        if (has_rtrw)    "RTRW",
+        if (has_rzwp)    "RZWP3K",
+        if (has_overlap) "Tumpang Tindih"
+      )
+      
+      label_vec <- sprintf(
+        "%s | %s | ID PU %s",
+        sub_map$side,
+        ifelse(sub_map$side == "RZWP3K",
+               ifelse(is.na(sub_map$RZWP3K), "-", as.character(sub_map$RZWP3K)),
+               ifelse(is.na(sub_map$RTRW),   "-", as.character(sub_map$RTRW))),
+        sub_map$id_pu
+      )
+      
+      popup_vec <- sprintf(
+        "<b>%s</b><br/>Zona: %s<br/>ID PU: %s%s",
+        sub_map$side,
+        ifelse(sub_map$side == "RZWP3K",
+               ifelse(is.na(sub_map$RZWP3K), "-", as.character(sub_map$RZWP3K)),
+               ifelse(is.na(sub_map$RTRW),   "-", as.character(sub_map$RTRW))),
+        sub_map$id_pu,
+        if ("admin" %in% names(sub_map))
+          ifelse(is.na(sub_map$admin), "", paste0("<br/>Admin: ", sub_map$admin))
+        else ""
+      )
+      
+      leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
+        addProviderTiles("Esri.WorldGrayCanvas", group = "Peta Dasar") %>%
+        addProviderTiles("Esri.WorldImagery",    group = "Citra Satelit") %>%
+        addLayersControl(baseGroups = c("Peta Dasar", "Citra Satelit"),
+                         options = layersControlOptions(collapsed = TRUE)) %>%
+        addLegend(position = "bottomright", opacity = 0.9, title = "Zona",
+                  colors = legend_colors, labels = legend_labels) %>%
+        addPolygons(
+          data        = sub_map,
+          fillColor   = ~color,
+          fillOpacity = 0.55,
+          color       = ~color,
+          weight      = 1.5,
+          label       = label_vec,
+          popup       = popup_vec,
+          highlightOptions = highlightOptions(weight = 3, bringToFront = TRUE)
+        )
     })
     
     observeEvent(input$selected_group_member, {
-      req(rv$query_geom, input$selected_group_member)
-      if (input$query_id_type != "id_group") return()
+      req(rv$query_raw_geom, input$selected_group_member)
       selected_id <- as.numeric(input$selected_group_member)
-      highlight_data <- rv$query_geom[rv$query_geom$id_pu == selected_id, ]
-      if (!sf::st_is_longlat(highlight_data)) highlight_data <- sf::st_transform(highlight_data, 4326)
+      highlight_data <- rv$query_raw_geom[rv$query_raw_geom$id_pu == selected_id, , drop = FALSE]
+      req(nrow(highlight_data) > 0)
+      if (!sf::st_is_longlat(highlight_data)) {
+        highlight_data <- sf::st_transform(highlight_data, 4326)
+      }
+      is_rtrw <- !is.na(highlight_data$RTRW)
+      is_rzwp <- !is.na(highlight_data$RZWP3K)
+      highlight_data$side <- ifelse(is_rtrw & is_rzwp, "overlap",
+                                    ifelse(is_rtrw, "RTRW", "RZWP3K"))
       popup_html <- build_query_popup(highlight_data)
       leafletProxy(ns("query_map")) %>%
         clearGroup("highlight") %>%
-        addPolygons(data = highlight_data, fillColor = "yellow", fillOpacity = 0.8,
+        addPolygons(data = highlight_data,
+                    fillColor = "yellow", fillOpacity = 0.8,
                     color = "black", weight = 3, group = "highlight",
-                    label = ~paste("ID PU:", id_pu), popup = popup_html)
+                    label = ~paste("ID PU:", id_pu),
+                    popup = popup_html)
     })
     
     padan_config <- list(
