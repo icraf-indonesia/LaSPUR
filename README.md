@@ -1,14 +1,19 @@
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f14a59cb-3813-4b33-83d7-50fb60abc7a2" alt="icon_web" width="180">
+</p>
+
 # Land & Sea Planning Unit Reconcilliation (LaSPUR)
 
 LaSPUR provides a framework and set of tools to help stakeholders negotiate and resolve conflicts between land and sea spatial planning integration. It employs an evidence-based approach to ensure that spatial management is informed by the careful consideration of ecosystem protection, economic value, and the continuity of community living spaces.
+
 
 ## What does LaSPUR offer?
 
 LaSPUR provides a tool designed to help resolve conflicts and reconcilliation in the integration of land and sea spatial planning, categorized into three steps:
 
-- Step 1: Overlapping Areas Areas where Land Spatial Plans (RTRW) and Sea Spatial Plans (RZWP3K) occupy the same geographical space.
-- Step 2: Adjacent Areas Areas where land and sea planning boundaries directly meet or border one another.
-- Step 3: Interdependent Linkage Areas Areas that are not directly adjacent but are linked by ecological or functional processes, where activities in one space potentially impact the other.
+- Step 1: Overlapping Areas, where Land Spatial Plans (RTRW) and Sea Spatial Plans (RZWP3K) occupy the same geographical space.
+- Step 2: Adjacent Areas, where land and sea planning boundaries directly meet or border one another.
+- Step 3: Interdependent Linkage Areas, referring to areas that are not directly adjacent but are linked by ecological or functional processes, where activities in one area may potentially impact another.
 
 ## How to Use LaSPUR
 
@@ -51,11 +56,11 @@ if (!require("pacman")) install.packages("pacman")
 
 # 2. Automatically install and load all required dependencies
 pacman::p_load(
-  bslib, future, promises, shiny, shinyFiles, shinyjs, DT, htmltools, 
-  leaflet, openxlsx, sf, tools, dplyr, terra, openxlsx2, purrr, 
-  rmarkdown, data.table, exactextractr, furrr, landscapemetrics, 
-  stringr, tibble, tidyr, units, here, kableExtra, readxl, utils, 
-  knitr, htmlwidgets, RColorBrewer
+  terra, sf, openxlsx, tibble, dplyr, landscapemetrics, purrr, tidyr,
+  stringr, exactextractr, here, rmarkdown, kableExtra, DT, units, utils,
+  furrr, future, data.table, leaflet, leaflet.extras, htmltools, readxl,
+  shiny, shinyjs, shinyFiles, promises, bslib, base64enc, tidyterra,
+  slickR, igraph, rhandsontable, visNetwork, reactable
 )
 ```
 
@@ -82,4 +87,4 @@ For a deeper walkthrough of the app and additional background, refer to the foll
 - User Manual: a full guide to navigating the LaSPUR Shiny app, module by module. [User Manual](https://laspur.landseascape.id/guide.html)
 - Detailed Information: further background and technical details on the LaSPUR methodology. [Detailed Information](https://laspur.landseascape.id/)
 
-![LaSPUR Landing Page](www/LaSPUR_landing-page.png)
+<img width="1919" height="969" alt="image" src="https://github.com/user-attachments/assets/11040cf8-57c5-47b5-97cb-542bfed9e989" />
