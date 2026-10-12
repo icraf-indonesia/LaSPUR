@@ -1,0 +1,435 @@
+---
+title: "LaSPUR - Laporan Analisis SERASI"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: bootstrap
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+# Safety check for params
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
+}
+
+```
+
+```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Analisis SERASI
+
+## Ringkasan Umum
+
+```{r summary-calculation}
+#| error: true
+#| warning: false
+#| message: false
+
+if (!exists("params")) {
+  params <- list(inputs = list(case = "overlaps"), result = list())
+}
+
+idx_serasi_tbl <- params$result$idx_serasi_map %>% st_drop_geometry()
+
+# Define case label for the header
+case_label <- if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"
+
+summary <- list(
+  overall = idx_serasi_tbl %>%
+    summarise(
+      total_unit = if (params$inputs$case == "adjacent") n_distinct(id_pu) else n(),
+      total_rtrw = n_distinct(RTRW),
+      total_rzwp3k = n_distinct(RZWP3K),
+      total_ha = sum(area_ha, na.rm = TRUE)
+    ) %>%
+    as_tibble(),
+  
+  combinations = if (isTRUE(params$inputs$case == "adjacent")) {
+    idx_serasi_tbl %>%
+      group_by(id_pu) %>%
+      summarise(
+        RTRW = na.omit(RTRW)[1],
+        RZWP3K = na.omit(RZWP3K)[1],
+        area_ha = max(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      group_by(RTRW, RZWP3K) %>%
+      summarise(
+        total_combination = n_distinct(id_pu),
+        total_area_ha = sum(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } else {
+    idx_serasi_tbl %>%
+      group_by(RTRW, RZWP3K) %>%
+      summarise(
+        total_combination = n(),
+        total_area_ha = sum(area_ha, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } %>%
+    arrange(desc(total_combination)) %>%
+    as_tibble()
+)
+```
+
+### Identifikasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
+
+```{r summary_overall}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_overall_t <- summary$overall %>%
+  pivot_longer(everything(), names_to = "Komponen", values_to = "Nilai") %>%
+  mutate(
+    Komponen = case_when(
+      Komponen == "total_unit"                 ~ "Jumlah Kasus",
+      Komponen == "total_rtrw"                 ~ "Jumlah Kelas RTRW",
+      Komponen == "total_rzwp3k"               ~ "Jumlah Kelas RZWP3K",
+      Komponen == "total_ha"                   ~ "Luas Total Area Kasus (ha)",
+      TRUE                                     ~ Komponen  
+    ),
+    Nilai = as.character(Nilai),
+    Nilai = ifelse(
+      Komponen == "Luas Total Area Kasus (ha)",
+      fmt2(as.numeric(Nilai)),
+      Nilai
+    )
+  )
+
+DT::datatable(summary_overall_t, rownames = FALSE)
+```
+
+### Kombinasi Kasus `r if (params$inputs$case == "adjacent") "Bertetangga" else "Tumpang Tindih"`
+
+```{r summary_combinations}
+#| error: true
+#| warning: false
+#| message: false
+
+summary_combinations_t <- summary$combinations %>%
+  rename(
+    "RTRW" = RTRW,
+    "RZWP3K" = RZWP3K,
+    "Jumlah Kasus" = total_combination,
+    "Total Luas Area (ha)" = total_area_ha
+  )
+
+DT::datatable(summary_combinations_t, rownames = FALSE) |>
+  DT::formatRound(
+    columns = "Total Luas Area (ha)",
+    digits  = 2
+  )
+```
+
+## Tentang Modul
+
+Modul Land and Sea Planning Unit Reconciliation (LaSPUR) adalah kerangka kerja yang dilengkapi dengan alat bantu proses negosiasi parapihak dalam penyelesaian konflik integrasi pengelolaan ruang darat dan laut berdasarkan analisis berbasis bukti yang melibatkan pertimbangan perlindungan ekosistem, optimalisasi pemanfaatan ruang untuk peningkatan nilai ekonomi, dan keberlangsungan ruang hidup masyarakat.
+
+## Data dan Metode
+
+### Data
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RTRW</summary>
+
+```{r input-peta-rtrw}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+
+if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+  log_dir <- file.path(params$inputs$output_dir, "Analisis SERASI", "log")
+} else {
+  log_dir <- file.path(getwd(), "Analisis SERASI", "log")
+}
+
+rtrw_png_path <- file.path(log_dir, "rtrw.png")
+
+if (file.exists(rtrw_png_path)) {
+  knitr::include_graphics(rtrw_png_path)
+} else if (!is.null(params$result$rtrw_vect)) {
+  rtrw <- params$result$rtrw_vect["RTRW"]
+  plot_with_autokey(rtrw)
+} else {
+  cat("Peta RTRW tidak tersedia.")
+}
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Peta RZWP3K</summary>
+
+```{r input-peta-rzwp3k}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+
+rzwp3k_png_path <- file.path(log_dir, "rzwp3k.png")
+
+if (file.exists(rzwp3k_png_path)) {
+  knitr::include_graphics(rzwp3k_png_path)
+} else if (!is.null(params$result$rzwp3k_vect)) {
+  rzwp3k <- params$result$rzwp3k_vect["RZWP3K"]
+  plot_with_autokey(rzwp3k)
+} else {
+  cat("Peta RZWP3K tidak tersedia.")
+}
+```
+
+</details>
+
+<details style='margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;'>
+<summary style='font-weight: bold; font-size: 1.1em; cursor: pointer; padding: 10px; background-color: #f8f9fa; border-radius: 3px; margin: -10px -10px 15px -10px;'>Matriks Kompabilitas (SERASI)</summary>
+
+```{r matriks-serasi}
+#| echo: false
+#| error: false
+#| warning: false
+#| message: false
+
+if (!is.null(params$result$matriks_serasi)) {
+  DT::datatable(params$result$matriks_serasi)
+} else {
+  cat("Matriks SERASI tidak tersedia.")
+}
+```
+
+</details>
+
+### Metode
+
+Metodologi analisis SERASI menggunakan matriks kompatibilitas untuk mengevaluasi keserasian antar pola ruang darat (RTRW) dan laut (RZWP3K) pada setiap unit perencanaan.
+
+## Hasil Analisi SERASI `r case_label`
+
+```{r interactive-map-serasi}
+#| echo: false
+#| warning: false
+#| message: false
+
+# Load libraries 
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  leaflet,
+  htmltools,
+  htmlwidgets,
+  RColorBrewer
+)
+
+idx_serasi_map <- params$result$idx_serasi_map
+
+is_adjacent <- identical(params$inputs$case, "adjacent")
+
+if (is_adjacent) {
+  log_dir <- if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+    file.path(params$inputs$output_dir, "Analisis SERASI", "log")
+  } else {
+    file.path(getwd(), "Analisis SERASI", "log")
+  }
+  png_path <- file.path(log_dir, "idx_serasi.png")
+  
+  if (file.exists(png_path) && file.size(png_path) > 0) {
+    map_ui <- png_to_img_tag(normalizePath(png_path, mustWork = FALSE))
+  } else {
+    map_data_static <- idx_serasi_map %>% sf::st_transform(crs = 4326)
+    p <- ggplot2::ggplot(map_data_static) +
+      ggplot2::geom_sf(ggplot2::aes(fill = idx_serasi), color = "#444", linewidth = 0.1) +
+      ggplot2::scale_fill_gradient(low = "red", high = "lightgreen", na.value = "#808080") +
+      ggplot2::labs(title = "Peta Indeks SERASI", fill = "Indeks") +
+      ggplot2::theme_minimal()
+    
+    tmp_png <- tempfile(fileext = ".png")
+    ggplot2::ggsave(tmp_png, p, width = 10, height = 6, dpi = 96)
+    map_ui <- png_to_img_tag(tmp_png)
+  }
+  
+  map_data <- idx_serasi_map |>
+    st_transform(crs = 4326) |>
+    mutate(.row_id = row_number() - 1L)
+  
+  tbl_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+  tbl_data <- map_data |>
+    st_drop_geometry() |>
+    select(all_of(tbl_cols)) |>
+    mutate(area_ha = as.numeric(area_ha), idx_serasi = as.numeric(idx_serasi))
+  
+  dt_table <- datatable(
+    tbl_data,
+    rownames = FALSE,
+    filter = "top",
+    options = list(pageLength = 10, scrollX = TRUE, scrollY = "300px", scroller = TRUE)
+  ) |> DT::formatRound(columns = c("area_ha", "idx_serasi"), digits = 2)
+  
+  tagList(map_ui, dt_table)
+  
+} else {
+  map_data <- idx_serasi_map |>
+    st_transform(crs = 4326) |>
+    mutate(.row_id = row_number() - 1L)
+  
+  pal <- colorNumeric(palette = "RdYlGn", domain = map_data$idx_serasi, na.color = "#808080")
+  
+  tbl_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi")
+  tbl_data <- map_data |>
+    st_drop_geometry() |>
+    select(all_of(tbl_cols)) |>
+    mutate(area_ha = as.numeric(area_ha), idx_serasi = as.numeric(idx_serasi))
+  
+  leaf_map <- leaflet(map_data, elementId = "serasi-map") |>
+    addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "Basemap") |>
+    addPolygons(
+      layerId     = ~.row_id,       
+      fillColor   = ~pal(idx_serasi),
+      fillOpacity = 0.7,
+      color       = "#444",
+      weight      = 0.8,
+      opacity     = 1,
+      highlightOptions = highlightOptions(color = "#ff6600", weight = 3, fillOpacity = 0.9, bringToFront = TRUE),
+      label = ~paste0("<b>PU ", id_pu, "</b><br>", "RTRW: ", RTRW, "<br>", "RZWP3K: ", RZWP3K, "<br>", "Indeks SERASI: ", fmt2(idx_serasi)) |> lapply(HTML),
+      popup = ~paste0("<b>Planning Unit ", id_pu, "</b><hr>", "<b>RTRW:</b> ", RTRW, "<br>", "<b>RZWP3K:</b> ", RZWP3K, "<br>", "<b>Area (ha):</b> ", fmt2(area_ha), "<br>", "<hr>", "<b>idx_serasi:</b> ", fmt2(idx_serasi), "<br>") |> lapply(HTML),
+      group = "SERASI"
+    ) |>
+    addLegend(pal = pal, values = ~idx_serasi, title = "Indeks SERASI", position = "bottomright", opacity = 0.8) |>
+    addLayersControl(baseGroups = "Basemap", overlayGroups = "SERASI", options = layersControlOptions(collapsed = FALSE))
+  
+  dt_table <- datatable(
+    tbl_data,
+    elementId  = "serasi-table",
+    rownames   = FALSE,
+    filter     = "top",
+    extensions = c("Buttons", "Scroller"),
+    options    = list(
+      pageLength  = 10,
+      scrollX     = TRUE,
+      scrollY     = "300px",
+      scroller    = TRUE,
+      dom         = "Bfrtip",
+      buttons     = list(
+        list(extend = "copy",  className = "btn btn-light btn-sm"),
+        list(extend = "csv",   className = "btn btn-light btn-sm"),
+        list(extend = "excel", className = "btn btn-light btn-sm")
+      ),
+      rowCallback = JS("function(row, data, index) { $(row).attr('data-row-id', index); }")
+    )
+  ) |> DT::formatRound(columns = c("area_ha", "idx_serasi"), digits = 2)
+  
+  sync_js <- HTML("
+  <script>
+  (function() {
+    function init() {
+      var mapEl  = document.getElementById('serasi-map');
+      var tblEl  = document.getElementById('serasi-table');
+      if (!mapEl || !tblEl) { setTimeout(init, 300); return; }
+      var leafMap = null;
+      try { leafMap = mapEl._leaflet_id ? L.map(mapEl) : null; } catch(e) {}
+      if (!leafMap) {
+        if (window.HTMLWidgets) {
+          var instances = HTMLWidgets.getInstance(mapEl);
+          if (instances) leafMap = instances.getMap();
+        }
+      }
+      if (!leafMap) { setTimeout(init, 300); return; }
+      var dtApi = null;
+      if (window.$) { try { dtApi = $('#serasi-table table').DataTable(); } catch(e) {} }
+      if (!dtApi) { setTimeout(init, 300); return; }
+      var lastHighlighted = null;
+      leafMap.eachLayer(function(layer) {
+        if (layer.feature) {
+          layer.on('mouseover', function(e) {
+            var rowId = layer.feature.properties['.row_id'];
+            highlightRow(rowId);
+          });
+          layer.on('mouseout', function(e) { clearHighlight(); });
+        }
+      });
+      function highlightRow(rowId) {
+        if (lastHighlighted !== null) { $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', ''); }
+        lastHighlighted = rowId;
+        var row = $('tr[data-row-id=\"' + rowId + '\"]');
+        if (row.length) {
+          row.css('background-color', '#fff3cd');
+          var tblWrapper = document.getElementById('serasi-table_wrapper');
+          if (tblWrapper) {
+            var rowTop = row.position() ? row.position().top : 0;
+            var scroller = tblWrapper.querySelector('.dataTables_scrollBody');
+            if (scroller) scroller.scrollTop = rowTop - 50;
+          }
+        }
+      }
+      function clearHighlight() {
+        if (lastHighlighted !== null) { $('tr[data-row-id=\"' + lastHighlighted + '\"]').css('background-color', ''); lastHighlighted = null; }
+      }
+      $('#serasi-table tbody').on('mouseenter', 'tr', function() {
+        var rowId = parseInt($(this).attr('data-row-id'));
+        if (isNaN(rowId)) return;
+        leafMap.eachLayer(function(layer) {
+          if (layer.feature && layer.feature.properties['.row_id'] === rowId) {
+            layer.setStyle({ color: '#ff6600', weight: 3, fillOpacity: 0.9 });
+            layer.bringToFront();
+          }
+        });
+      }).on('mouseleave', 'tr', function() {
+        leafMap.eachLayer(function(layer) {
+          if (layer.feature) { layer.setStyle({ color: '#444', weight: 0.8, fillOpacity: 0.7 }); }
+        });
+      });
+    }
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 800); });
+  })();
+  </script>
+  ")
+  
+  tagList(
+    tags$style("
+      #serasi-map    { height: 500px; width: 100%; margin-bottom: 0; }
+      #serasi-table_wrapper { border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 10px; }
+      #serasi-map    { border-radius: 5px 5px 0 0; border: 1px solid #dee2e6; }
+      .dataTables_scrollBody tr[data-row-id]:hover { background-color: #e8f4f8 !important; cursor: pointer; }
+    "),
+    leaf_map,
+    dt_table,
+    sync_js
+  )
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+

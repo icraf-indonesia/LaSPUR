@@ -1,6 +1,4 @@
-# Helper Functions for Data Loading and Validation ------------------------
-
-# Load libraries 
+# Load libraries
 if (!requireNamespace("pacman", quietly = TRUE)) {
   install.packages("pacman")
 }
@@ -8,33 +6,67 @@ if (!requireNamespace("pacman", quietly = TRUE)) {
 library(pacman)
 
 pacman::p_load(
-  terra,
-  sf,
-  openxlsx,
-  tibble,
-  dplyr,
-  landscapemetrics,
-  purrr,
-  tidyr,
-  stringr,
-  exactextractr,
-  here,
-  rmarkdown,
-  kableExtra,
-  DT,
-  units,
-  utils,
-  furrr,
-  future,
-  data.table,
-  leaflet,
-  htmltools,
-  readxl,
-  shinyjs,
-  shinyFiles,
-  promises,
-  bslib
+  terra, sf, openxlsx, tibble, dplyr, landscapemetrics, purrr, tidyr,
+  stringr, exactextractr, here, rmarkdown, kableExtra, DT, units, utils,
+  furrr, future, data.table, leaflet, leaflet.extras, htmltools, readxl,
+  shiny, shinyjs, shinyFiles, promises, bslib, base64enc, tidyterra,
+  slickR, igraph, rhandsontable, visNetwork, reactable
 )
+
+laspur_render <- function(...) {
+  if (requireNamespace("shiny", quietly = TRUE)) {
+    shiny::withReactiveDomain(NULL, rmarkdown::render(...))
+  } else {
+    rmarkdown::render(...)
+  }
+}
+
+laspur_report_theme <- function() {
+  return("bootstrap")
+}
+
+
+if (!exists("render_loaded_file_bar", mode = "function")) {
+  source("R/shared_inputs.R")
+}
+
+if (!exists("write_id_group_bipartite_plots", mode = "function")) {
+  source("R/visualisation.R")
+}
+
+# Ensure Pandoc is configured for rmarkdown
+.ensure_pandoc_available <- function() {
+  tryCatch({
+    if (nzchar(Sys.which("pandoc"))) {
+      return(invisible(TRUE))  
+    }
+  }, error = function(e) NULL)
+  
+  app_root <- tryCatch({
+    here::here()
+  }, error = function(e) {
+    getwd()
+  })
+  
+  pandoc_dir <- file.path(dirname(app_root), "R-Portable/App/pandoc")
+  pandoc_exe <- file.path(pandoc_dir, "pandoc.exe")
+  
+  if (file.exists(pandoc_exe)) {
+    tryCatch({
+      current_path <- Sys.getenv("PATH")
+      Sys.setenv(PATH = paste(pandoc_dir, current_path, sep = .Platform$path.sep))
+      Sys.setenv(RSTUDIO_PANDOC = pandoc_dir)
+      return(invisible(TRUE))
+    }, error = function(e) {
+      warning("Failed to configure Pandoc: ", conditionMessage(e))
+      return(invisible(FALSE))
+    })
+  }
+  
+  return(invisible(FALSE))
+}
+
+.ensure_pandoc_available()
 
 #' Load and Validate a Shapefile
 #'
@@ -68,7 +100,7 @@ pacman::p_load(
 #' @export
 load_and_validate_shapefile <- function(shp_path) {
   file_ext <- tolower(tools::file_ext(shp_path))
-
+  
   if (file_ext == "gpkg") {
     # GeoPackage: single file, no sidecar check needed
     if (!file.exists(shp_path)) {
@@ -85,11 +117,11 @@ load_and_validate_shapefile <- function(shp_path) {
     required_ext <- c(".shp", ".shx", ".dbf", ".prj")
     base_path <- tools::file_path_sans_ext(shp_path)
     missing_files <- required_ext[!file.exists(paste0(base_path, required_ext))]
-
+    
     if (length(missing_files) > 0) {
       stop("Missing required files: ", paste(missing_files, collapse = ", "))
     }
-
+    
     # Read shapefile
     message(">> Reading shapefile: ", shp_path, " ...")
     sf_object <- tryCatch(
@@ -427,56 +459,22 @@ load_and_validate_raster <- function(raster_path,
   return(r)
 }
 
-# 5. export_table()
-# 6. export_map()
-# 7. generate_report()
-
-#' Generate LaSPUR Report
-#' 
-#' Generates a report for the LaSPUR using R Markdown.
+#' Validate and Create Output Directory
 #'
-#' @param output List. Output from LaSPUR module.
-#' @param dir Character string. Directory to save the report.
-#' @param output_format Character string. The format of the output report. 
-#' Options are "html" (default) or "pdf".
-#' 
-#' @importFrom rmarkdown render
+#' @description
+#' Validates whether an output directory exists, and creates it (recursively)
+#' if it does not.
 #'
-#' @export
-generate_report <- function(output, dir, output_format = c("html", "pdf")) {
-  # Match the input argument to ensure it's either "html" or "pdf"
-  output_format <- match.arg(output_format)
-  
-  report_params <- list(
-    inputs = output$inputs,
-    result = output$result
-  )
-  
-  # Determine file extension and rmarkdown output format type
-  if (output_format == "html") {
-    file_ext <- ".html"
-    fmt_target <- "html_document"
-  } else {
-    file_ext <- ".pdf"
-    fmt_target <- "pdf_document"
-  }
-  
-  output_file <- paste0("LaSPUR_Report_", Sys.Date(), file_ext)
-  
-  rmarkdown::render(
-    input = "report/LaSPUR_type1_report_template.Rmd",
-    output_format = fmt_target,
-    output_file = output_file,
-    output_dir = dir,
-    params = report_params,
-    knit_root_dir = getwd() 
-  )
-}
-
-#' Validate and create output directory if missing
+#' @param dir_path Character string. Path to the output directory.
 #'
-#' @param dir_path Character string: path to the output directory.
-#' @return Logical: TRUE if directory is valid/exists/created, FALSE otherwise.
+#' @return Logical. `TRUE` if the directory is valid/exists/created,
+#'   `FALSE` otherwise.
+#'
+#' @examples
+#' \dontrun{
+#' validate_output_dir("output/Analisis SERASI")
+#' }
+#'
 #' @export
 validate_output_dir <- function(dir_path) {
   if (is.null(dir_path) || dir_path == "") {
@@ -493,7 +491,20 @@ validate_output_dir <- function(dir_path) {
   return(TRUE)
 }
 
-# Ensure geometry column is named "geometry"
+#' Ensure the Geometry Column is Named "geometry"
+#'
+#' @description
+#' Renames the active simple features geometry column to `"geometry"` if it
+#' currently has a different name.
+#'
+#' @param sf_obj An `sf` object.
+#'
+#' @return The input `sf` object with its geometry column renamed to
+#'   `"geometry"` (if it wasn't already).
+#'
+#' @importFrom sf st_set_geometry
+#'
+#' @export
 ensure_geometry_name <- function(sf_obj) {
   geom_col <- attr(sf_obj, "sf_column")
   if (!is.null(geom_col) && geom_col != "geometry") {
@@ -501,4 +512,1810 @@ ensure_geometry_name <- function(sf_obj) {
     sf_obj <- sf::st_set_geometry(sf_obj, "geometry")
   }
   return(sf_obj)
+}
+
+#' Normalize Legacy (Un-namespaced) Adjacent-Map IDs
+#'
+#' @description
+#' Before the layer-namespacing fix, `identify_adjacent()` assigned
+#' `id_SRC = row_number()` independently to RTRW and RZWP3K, so RTRW
+#' feature 5 and RZWP3K feature 5 shared the integer key `5`. Saved
+#' gpkg files produced by that version carry these colliding ids and
+#' will produce incorrect group assignments in `identify_adjacent_group()`.
+#'
+#' This helper detects feature-level adjacent maps whose `id` column is
+#' purely integer and prefixes each id with `"R"` or `"Z"` based on
+#' which side (RTRW or RZWP3K) the row belongs to. Maps that are already
+#' namespaced, or that lack an `id` column, or that are not in the
+#' feature-level adjacent form (2 rows per `id_pu`) are returned unchanged.
+#'
+#' @param sf_obj An `sf` object (or `data.frame`) with an `id` column.
+#' @param id_col Name of the id column (default `"id"`).
+#' @return The input object, with namespaced ids in `id_col` when applicable.
+#' @export
+normalize_legacy_ids <- function(sf_obj, id_col = "id") {
+  if (is.null(sf_obj)) return(sf_obj)
+  if (!id_col %in% names(sf_obj)) return(sf_obj)
+  if (!all(c("RTRW", "RZWP3K", "id_pu") %in% names(sf_obj))) return(sf_obj)
+  
+  ids_chr <- as.character(sf_obj[[id_col]])
+  non_na  <- ids_chr[!is.na(ids_chr)]
+  if (length(non_na) == 0) return(sf_obj)
+  
+  # Already namespaced? ("R<digits>" or "Z<digits>")
+  if (any(grepl("^[RZ][0-9]+$", non_na))) return(sf_obj)
+  
+  # Only proceed if ALL values are pure integers (legacy format)
+  if (!all(grepl("^[0-9]+$", non_na))) return(sf_obj)
+  
+  # Only proceed if every id_pu has exactly 2 rows (feature-level adjacent form)
+  pu_counts <- table(table(sf_obj$id_pu))
+  if (length(pu_counts) != 1 || names(pu_counts)[1] != "2") return(sf_obj)
+  
+  is_rtrw <- !is.na(sf_obj$RTRW)
+  is_rzwp <- !is.na(sf_obj$RZWP3K)
+  
+  # Each pair must have exactly one RTRW row and one RZWP3K row
+  if (!all(xor(is_rtrw, is_rzwp))) return(sf_obj)
+  
+  new_ids <- ids_chr
+  new_ids[is_rtrw] <- paste0("R", ids_chr[is_rtrw])
+  new_ids[is_rzwp] <- paste0("Z", ids_chr[is_rzwp])
+  sf_obj[[id_col]] <- new_ids
+  sf_obj
+}
+
+#' Create Result Visualization UI
+#'
+#' @description
+#' Builds the shared Shiny UI used across modules to display analysis results:
+#' a Leaflet map, a DT table, a validation log, and download buttons.
+#'
+#' @param ns Namespace function of the module calling this helper.
+#' @param extra_tab Optional `nav_panel` to insert between the main results and the log.
+#'
+#' @return A Shiny UI object containing the map, table, log, and download buttons.
+#'
+#' @importFrom shiny tagList fluidRow column div hr downloadButton
+#' @importFrom bslib navset_tab nav_panel
+#' @importFrom leaflet leafletOutput
+#' @importFrom DT DTOutput
+#'
+#' @export
+create_result_ui <- function(ns, extra_tab = NULL) {
+  tagList(
+    navset_tab(
+      nav_panel(
+        "Visualisasi Hasil",
+        fluidRow(
+          column(
+            width = 12,
+            style = "margin-top: 10px;",
+            leafletOutput(ns("result_map"), height = "450px")
+          )
+        ),
+        hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
+        fluidRow(
+          column(
+            width = 12,
+            div(
+              style = "max-height: 400px; overflow-y: auto; width: 100%;",
+              DT::DTOutput(ns("result_table"), width = "100%")
+            )
+          )
+        )
+      ),
+      if (!is.null(extra_tab)) extra_tab,
+      nav_panel(
+        "Log",
+        div(
+          style = "max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;",
+          verbatimTextOutput(ns("validation_log"))
+        )
+      )
+    ),
+    
+    div(
+      style = "display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;",
+      downloadButton(ns("dl_gpkg"), "Unduh GPKG", class = "btn-outline-secondary btn-sm"),
+      downloadButton(ns("dl_xlsx"), "Unduh XLSX", class = "btn-outline-secondary btn-sm")
+    )
+  )
+}
+
+#' Render Result Visualization Server Logic
+#'
+#' @description
+#' Registers the shared Shiny server-side outputs used across analysis modules:
+#' a Leaflet map, a DT table, a validation log, and download handlers. Renders
+#' map geometry with optional simplification, dynamic popups/labels, table
+#' column subsetting and rounding, and synchronized table-to-map selection.
+#'
+#' @param input,output,session Standard Shiny server arguments from the calling
+#'   module.
+#' @param rv Reactive values object containing `analysis_result$map`,
+#'   `analysis_result$table`, `log_messages`, `gpkg_path`, and `xlsx_path`.
+#' @param config A list of configuration options:
+#'   \describe{
+#'     \item{map_color_col}{Column used for map coloring.}
+#'     \item{map_title}{Title for the map legend.}
+#'     \item{map_label_cols}{Named list or vector of columns used for
+#'       labels/popups. Example: `c("ID PU: " = "id_pu", "Indeks: " = "idx_padu_se")`.}
+#'     \item{map_palette}{Palette name (e.g., `"RdYlGn"`) or a vector of colors
+#'       (passed to `leaflet::colorFactor` for categorical columns).
+#'       Default `"RdYlGn"`.}
+#'     \item{map_simplify_tolerance}{Simplification tolerance (map units) used
+#'       only for the Leaflet display copy of the geometry. Default `5`.}
+#'     \item{table_cols}{Named vector for subsetting/renaming table columns.}
+#'     \item{table_round_cols}{Character vector of display column names to round
+#'       to 2 digits.}
+#'     \item{table_optional_cols}{Character vector of *source* column names
+#'       (i.e., keys of `table_cols`) that should be dropped from the rendered
+#'       table when every value in that column is `NA`. Useful for conditional
+#'       columns such as economic/NPV outputs.}
+#'   }
+#'
+#' @return Invisibly `NULL`. Called for its side effects of registering
+#'   outputs and observers on `output` and `session`.
+#'
+#' @importFrom shiny req renderPrint observeEvent observe invalidateLater
+#' @importFrom leaflet renderLeaflet leaflet addProviderTiles addPolygons
+#'   addLegend colorNumeric colorFactor leafletProxy clearGroup setView
+#'   highlightOptions leafletOptions providers
+#' @importFrom leaflet.extras addSearchFeatures searchFeaturesOptions
+#'   addResetMapButton
+#' @importFrom DT renderDT datatable formatRound
+#' @importFrom sf st_is_longlat st_transform st_simplify st_is_valid
+#'   st_make_valid st_centroid st_geometry st_coordinates
+#' @importFrom htmltools HTML
+#'
+#' @export
+render_result_server <- function(input, output, session, rv, config) {
+  
+  # Default configurations
+  map_color_col <- config$map_color_col
+  map_title <- config$map_title
+  map_palette <- if(!is.null(config$map_palette)) config$map_palette else "RdYlGn"
+  table_cols <- config$table_cols
+  table_round_cols <- config$table_round_cols
+  table_optional_cols <- config$table_optional_cols   # NEW
+  
+  # Simplification tolerance (map units, typically meters for UTM data) used only for the Leaflet display copy of the geometry.
+  map_simplify_tolerance <- if (!is.null(config$map_simplify_tolerance)) {
+    config$map_simplify_tolerance
+  } else {
+    5 # meters
+  }
+  
+  output$result_map <- renderLeaflet({
+    req(rv$analysis_result)
+    
+    map_sf <- rv$analysis_result$map
+    
+    # Build a display-only copy with simplified geometry for rendering.
+    if (isTRUE(map_simplify_tolerance > 0) && nrow(map_sf) > 0 && !sf::st_is_longlat(map_sf)) {
+      map_sf <- tryCatch({
+        simplified <- sf::st_simplify(
+          map_sf,
+          dTolerance = map_simplify_tolerance,
+          preserveTopology = TRUE
+        )
+        # Guard against simplification collapsing/invalidating a geometry
+        if (any(!sf::st_is_valid(simplified))) {
+          simplified <- sf::st_make_valid(simplified)
+        }
+        simplified
+      }, error = function(e) {
+        warning("Map geometry simplification failed, falling back to full precision: ", conditionMessage(e))
+        map_sf
+      })
+    }
+    
+    if (!sf::st_is_longlat(map_sf)) {
+      map_sf <- sf::st_transform(map_sf, crs = 4326)
+    }
+    
+    if (!map_color_col %in% names(map_sf)) {
+      return(leaflet::leaflet() %>%
+               leaflet::addControl(paste("Kolom", map_color_col, "tidak ditemukan."), position = "topright"))
+    }
+    
+    # Construct popup and label HTML dynamically
+    create_html <- function(row) {
+      res <- ""
+      for (name in names(config$map_label_cols)) {
+        col <- config$map_label_cols[[name]]
+        val <- row[[col]]
+        if (is.numeric(val)) val <- round(val, 3)
+        res <- paste0(res, "<b>", name, "</b>: ", val, "<br>")
+      }
+      res
+    }
+    
+    create_label <- function(row) {
+      res <- ""
+      for (name in names(config$map_label_cols)) {
+        col <- config$map_label_cols[[name]]
+        val <- row[[col]]
+        if (is.numeric(val)) val <- round(val, 2)
+        if (res == "") {
+          res <- paste0(name, " ", val)
+        } else {
+          res <- paste0(res, " | ", name, " ", val)
+        }
+      }
+      res
+    }
+    
+    # Apply to all rows
+    if (nrow(map_sf) > 0) {
+      popups <- sapply(1:nrow(map_sf), function(i) create_html(map_sf[i, ]))
+      labels <- sapply(1:nrow(map_sf), function(i) create_label(map_sf[i, ]))
+      map_sf$popup_html <- lapply(popups, htmltools::HTML)
+      map_sf$search_label <- lapply(labels, htmltools::HTML)
+    } else {
+      map_sf$popup_html <- list()
+      map_sf$search_label <- list()
+    }
+    
+    # Check if map_color_col is numeric to decide palette type
+    if (is.numeric(map_sf[[map_color_col]])) {
+      pal <- leaflet::colorNumeric(
+        palette = map_palette,
+        domain  = map_sf[[map_color_col]],
+        na.color = "transparent"
+      )
+    } else {
+      pal <- leaflet::colorFactor(
+        palette = map_palette,
+        domain  = map_sf[[map_color_col]],
+        na.color = "transparent"
+      )
+    }
+    
+    leaflet::leaflet(
+      map_sf,
+      options = leafletOptions(preferCanvas = TRUE)
+    ) %>%
+      leaflet::addProviderTiles(leaflet::providers$Esri.WorldGrayCanvas) %>% 
+      leaflet::addPolygons(
+        layerId     = ~id_pu,
+        group       = "result_layer",
+        fillColor   = ~pal(get(map_color_col)),
+        fillOpacity = 0.7,
+        weight      = 1,
+        color       = "black",
+        stroke      = FALSE,
+        label       = ~search_label,
+        popup       = ~popup_html,
+        highlightOptions = leaflet::highlightOptions(
+          weight = 3,
+          color  = "red",
+          fillOpacity = 0.9,
+          bringToFront = TRUE
+        )
+      ) %>%
+      leaflet.extras::addSearchFeatures(
+        targetGroups = "result_layer",
+        options = leaflet.extras::searchFeaturesOptions(
+          propertyName = "label",
+          zoom = 15,
+          openPopup = TRUE,
+          firstTipSubmit = TRUE,
+          autoCollapse = FALSE,
+          hideMarkerOnCollapse = TRUE
+        )
+      ) %>% leaflet.extras::addResetMapButton() %>%
+      leaflet::addLegend(
+        position = "bottomright",
+        pal      = pal,
+        values   = as.formula(paste0("~`", map_color_col, "`")),
+        title    = map_title,
+        opacity  = 0.7
+      )
+  })
+  
+  output$result_table <- DT::renderDT({
+    req(rv$analysis_result)
+    
+    df <- rv$analysis_result$table
+    
+    # Subset by available columns
+    valid_cols <- names(table_cols)[names(table_cols) %in% colnames(df)]
+    df_subset <- df[, valid_cols, drop = FALSE]
+    
+    if (!is.null(table_optional_cols) && length(table_optional_cols) > 0) {
+      drop_cols <- character(0)
+      for (cn in valid_cols) {
+        if (cn %in% table_optional_cols && all(is.na(df_subset[[cn]]))) {
+          drop_cols <- c(drop_cols, cn)
+        }
+      }
+      if (length(drop_cols) > 0) {
+        df_subset <- df_subset[, setdiff(colnames(df_subset), drop_cols), drop = FALSE]
+        valid_cols <- setdiff(valid_cols, drop_cols)
+      }
+    }
+    
+    # Rename to display names
+    colnames(df_subset) <- table_cols[valid_cols]
+    
+    dt <- DT::datatable(
+      df_subset,
+      selection = "single",
+      extensions = c('FixedColumns', 'FixedHeader'),
+      options = list(
+        pageLength     = 10,
+        autoWidth      = TRUE,
+        scrollX        = TRUE,
+        scrollY        = "400px",
+        scrollCollapse = TRUE,
+        dom            = 'Bfrtip',
+        columnDefs     = list(
+          list(targets = "_all", className = "dt-center")
+        )
+      ),
+      rownames = FALSE,
+      class = "display compact stripe hover"
+    )
+    
+    # Round specified columns
+    if (!is.null(table_round_cols) && length(table_round_cols) > 0) {
+      valid_round_cols <- table_round_cols[table_round_cols %in% colnames(df_subset)]
+      if (length(valid_round_cols) > 0) {
+        dt <- dt %>% DT::formatRound(columns = valid_round_cols, digits = 2)
+      }
+    }
+    
+    dt
+  })
+  
+  # Table row selection targets map polygon
+  observeEvent(input$result_table_rows_selected, {
+    req(rv$analysis_result)
+    
+    selected_idx <- input$result_table_rows_selected
+    df_table <- rv$analysis_result$table
+    
+    if (!"id_pu" %in% colnames(df_table)) return()
+    
+    selected_id_pu <- df_table$id_pu[selected_idx]
+    
+    # Subset in the original CRS
+    map_sf_raw <- rv$analysis_result$map
+    selected_polygon_raw <- map_sf_raw[map_sf_raw$id_pu == selected_id_pu, ]
+    req(nrow(selected_polygon_raw) > 0)
+    
+    if (any(!sf::st_is_valid(selected_polygon_raw))) {
+      selected_polygon_raw <- sf::st_make_valid(selected_polygon_raw)
+    }
+    
+    centroid_pt <- sf::st_centroid(sf::st_geometry(selected_polygon_raw))
+    if (!sf::st_is_longlat(selected_polygon_raw)) {
+      centroid_pt <- sf::st_transform(centroid_pt, crs = 4326)
+    }
+    centroid_coord <- sf::st_coordinates(centroid_pt)
+    
+    selected_polygon <- if (!sf::st_is_longlat(selected_polygon_raw)) {
+      sf::st_transform(selected_polygon_raw, crs = 4326)
+    } else {
+      selected_polygon_raw
+    }
+    
+    # Build popup for highlighted polygon
+    row_data <- selected_polygon[1, ]
+    popup_text <- ""
+    for (name in names(config$map_label_cols)) {
+      col <- config$map_label_cols[[name]]
+      val <- row_data[[col]]
+      if (is.numeric(val)) val <- round(val, 3)
+      popup_text <- paste0(popup_text, "<b>", name, " (Terpilih)</b>: ", val, "<br>")
+    }
+    
+    leaflet::leafletProxy("result_map", session = session) %>%
+      leaflet::clearGroup("polygon_highlight") %>%
+      leaflet::setView(lng = centroid_coord[1], lat = centroid_coord[2], zoom = 13) %>%
+      leaflet::addPolygons(
+        data = selected_polygon,
+        color = "#008B8B",
+        weight = 5,
+        fillColor = "#00FFFF",
+        fillOpacity = 0.7,
+        group = "polygon_highlight",
+        popup = htmltools::HTML(popup_text)
+      )
+  })
+  
+  observe({
+    if (is.null(input$result_table_rows_selected)) {
+      leaflet::leafletProxy("result_map", session = session) %>% leaflet::clearGroup("polygon_highlight")
+    }
+  })
+  
+  output$validation_log <- renderPrint({
+    invalidateLater(100, session)
+    cat(rv$log_messages)
+  })
+  
+  output$dl_gpkg <- downloadHandler(
+    filename = function() {
+      if(!is.null(rv$gpkg_path)) basename(rv$gpkg_path) else "result.gpkg"
+    },
+    content = function(file) {
+      req(rv$gpkg_path)
+      file.copy(rv$gpkg_path, file, overwrite = TRUE)
+    }
+  )
+  
+  output$dl_xlsx <- downloadHandler(
+    filename = function() {
+      if(!is.null(rv$xlsx_path)) basename(rv$xlsx_path) else "result.xlsx"
+    },
+    content = function(file) {
+      req(rv$xlsx_path)
+      file.copy(rv$xlsx_path, file, overwrite = TRUE)
+    }
+  )
+}
+
+#' Plot Continuous Raster or Vector (sf) Map with Optional PNG Export
+#'
+#' @description
+#' Creates a continuous map using **ggplot2**, supporting either a
+#' [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**) or an
+#' [`sf`][sf::st_sf] object (plotted via `geom_sf()`). Instead of an HTML
+#' download button, the plot can optionally be exported directly to a PNG file
+#' by supplying `filepath`.
+#'
+#' @details
+#' When `filepath` is supplied, the exported PNG is drawn on top of an
+#' **Esri.WorldGrayCanvas** basemap (via the \pkg{basemaps} package). The
+#' data is temporarily reprojected to EPSG:3857 (Web Mercator) so it aligns
+#' with the tile service; the returned `ggplot` object is unaffected and keeps
+#' the original CRS. If the basemap cannot be fetched (e.g. no internet, or
+#' \pkg{basemaps} not installed), a warning is emitted and the PNG is saved
+#' without a basemap.
+#'
+#' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
+#' @param title A character string giving the overall map title, shown above
+#'   the plot. If `NULL` (default), no title is shown. Independent of `legend`,
+#'   which labels the color bar.
+#' @param column A character string giving the name of the numeric column to
+#'   plot as the continuous fill/color variable. Required when `map` is an `sf`
+#'   object; ignored when `map` is a `SpatRaster`.
+#' @param legend A character string giving the legend title. If `NULL`, no
+#'   legend title is shown.
+#' @param low A character string specifying the color for the low end of the gradient.
+#' @param high A character string specifying the color for the high end of the gradient.
+#' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
+#' @param filepath A string giving the file path (including extension, e.g.
+#'   `"output/map.png"`) to export the plot as a PNG. If `NULL` (default), no
+#'   file is written.
+#' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
+#' @param height Numeric height (inches) for the exported PNG. Also used to size
+#'   the legend color bar, which is drawn at 80% of this height. Defaults to `5`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported
+#'   PNG. Defaults to `300`.
+#'
+#' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
+#'   as a PNG (with an Esri.WorldGrayCanvas basemap) to that path as a side
+#'   effect.
+#'
+#' @importFrom ggplot2 ggplot aes geom_sf scale_fill_gradient scale_color_gradient
+#'   theme_bw labs coord_sf guides guide_colorbar theme
+#'   element_blank element_text margin ggsave
+#' @importFrom tidyterra geom_spatraster
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type st_crs st_transform
+#' @importFrom terra crs project
+#' @importFrom grid unit
+#'
+#' @export
+plot_continuous_map <- function(map, title = NULL, column = NULL, legend, low, high,
+                                na_color = "white", filepath = NULL,
+                                width = 7, height = 5, dpi = 300) {
+  
+  build_plot <- function(map_data, basemap_layer = NULL) {
+    
+    if (inherits(map_data, "SpatRaster")) {
+      
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      p <- p +
+        tidyterra::geom_spatraster(data = map_data) +
+        ggplot2::scale_fill_gradient(
+          low = low,
+          high = high,
+          na.value = na_color,
+          name = if (!is.null(legend)) legend else NULL
+        )
+      
+    } else if (inherits(map_data, "sf")) {
+      
+      if (is.null(column)) {
+        stop("`column` must be specified when `map` is an sf object.")
+      }
+      if (!column %in% names(map_data)) {
+        stop(sprintf("Column '%s' not found in `map`.", column))
+      }
+      
+      map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+      map_data <- sf::st_make_valid(map_data)
+      map_data <- map_data[!sf::st_is_empty(map_data), ]
+      map_data[[column]] <- as.numeric(map_data[[column]])
+      map_data[[column]][!is.finite(map_data[[column]])] <- NA
+      
+      geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+      is_polygon <- any(grepl("POLYGON", geom_types))
+      
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      
+      if (is_polygon) {
+        p <- p +
+          ggplot2::geom_sf(data = map_data, ggplot2::aes(fill = .data[[column]]), color = NA) +
+          ggplot2::scale_fill_gradient(
+            low = low,
+            high = high,
+            na.value = na_color,
+            name = if (!is.null(legend)) legend else NULL
+          )
+      } else {
+        p <- p +
+          ggplot2::geom_sf(data = map_data, ggplot2::aes(color = .data[[column]])) +
+          ggplot2::scale_color_gradient(
+            low = low,
+            high = high,
+            na.value = na_color,
+            name = if (!is.null(legend)) legend else NULL
+          )
+      }
+      
+    } else {
+      stop("`map` must be a SpatRaster or an sf object.")
+    }
+    
+    p +
+      ggplot2::theme_bw() +
+      ggplot2::labs(fill = NULL, title = title) +
+      ggplot2::coord_sf(expand = FALSE) +
+      ggplot2::guides(
+        fill = ggplot2::guide_colorbar(
+          title.position = "top",
+          direction = "vertical",
+          barwidth = grid::unit(0.4, "cm"),
+          barheight = grid::unit(0.8 * height, "in")
+        ),
+        color = ggplot2::guide_colorbar(
+          title.position = "top",
+          direction = "vertical",
+          barwidth = grid::unit(0.4, "cm"),
+          barheight = grid::unit(0.8 * height, "in")
+        )
+      ) +
+      ggplot2::theme(
+        axis.title.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_blank(),
+        axis.text.x = ggplot2::element_text(size = 8),
+        axis.text.y = ggplot2::element_text(size = 8),
+        panel.grid.major = ggplot2::element_blank(),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+        legend.title = ggplot2::element_text(size = 12),
+        legend.text = ggplot2::element_text(size = 10),
+        legend.position = "right",
+        legend.justification = c(0, 0.5),
+        legend.box.spacing = grid::unit(0.5, "cm"),
+        legend.margin = ggplot2::margin(0, 0, 0, 0),
+        plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
+      )
+  }
+  
+  plot_lc <- build_plot(map)
+  
+  if (!is.null(filepath)) {
+    map_3857 <- .reproject_to_3857(map)
+    bm <- .get_esri_gray_basemap(map_3857)
+    export_plot <- if (!is.null(bm)) build_plot(map_3857, bm) else plot_lc
+    ggplot2::ggsave(filename = filepath, plot = export_plot,
+                    width = width, height = height, dpi = dpi)
+  }
+  
+  return(plot_lc)
+}
+
+
+#' Plot Categorical Raster or Vector (sf) Map with Optional PNG Export
+#'
+#' @description
+#' Creates a categorical (discrete class) map using **ggplot2**, supporting
+#' either a [`SpatRaster`][terra::SpatRaster] (plotted via **tidyterra**) or an
+#' [`sf`][sf::st_sf] object (plotted via `geom_sf()`). Uses the same overall
+#' styling as [plot_continuous_map()]. Long class names in the legend are
+#' automatically wrapped so they aren't cropped by the map's dimensions, and the
+#' legend can be split into multiple columns if there are many categories.
+#'
+#' @details
+#' When `filepath` is supplied, the exported PNG is drawn on top of an
+#' **Esri.WorldGrayCanvas** basemap (via the \pkg{basemaps} package), following
+#' the same approach as [plot_continuous_map()]. If the basemap cannot be
+#' fetched, a warning is emitted and the PNG is saved without a basemap.
+#'
+#' @param map A [`SpatRaster`][terra::SpatRaster] or [`sf`][sf::st_sf] object to plot.
+#' @param title A character string giving the overall map title, shown above the
+#'   plot, left-justified. If `NULL` (default), no title is shown.
+#' @param column A character string giving the name of the categorical column to
+#'   plot. Required when `map` is an `sf` object; ignored when `map` is a
+#'   `SpatRaster`.
+#' @param lookup For `SpatRaster` input **only** (required): a file path to a
+#'   `.csv`, `.xlsx`, or `.xls` file containing the raster's class table, with
+#'   (at least) an ID column matching the raster's integer cell values and a
+#'   class-name column.
+#' @param id_col Column name in `lookup` holding the raster cell ID values.
+#'   Defaults to `"ID"`.
+#' @param class_col Column name in `lookup` holding the class name/label.
+#'   Defaults to `"class"`.
+#' @param legend A character string giving the legend title. If `NULL`, no
+#'   legend title is shown.
+#' @param colors An optional named character vector of colors, with names
+#'   matching the category labels (from `class_col` for rasters, or the unique
+#'   values of `column` for `sf`). If `NULL` (default), a default discrete
+#'   palette is generated automatically.
+#' @param na_color A character string for the color of `NA` values. Defaults to `"white"`.
+#' @param label_wrap_width Integer giving the number of characters after which
+#'   legend labels wrap onto a new line. Defaults to `15`. Increase for a wider
+#'   legend column, decrease if labels are still being cut off.
+#' @param legend_ncol Integer giving the number of columns to arrange legend
+#'   keys into. Defaults to `1`. Increase this if there are many categories and
+#'   the legend is taller than the map (getting cropped vertically).
+#' @param filepath A string giving the file path (including extension, e.g.
+#'   `"output/map.png"`) to export the plot as a PNG. If `NULL` (default), no
+#'   file is written.
+#' @param width Numeric width (inches) for the exported PNG. Defaults to `7`.
+#' @param height Numeric height (inches) for the exported PNG. Defaults to `5`.
+#' @param dpi An integer giving the resolution (dots per inch) for the exported
+#'   PNG. Defaults to `300`.
+#'
+#' @return A `ggplot` object. If `filepath` is supplied, the plot is also saved
+#'   as a PNG (with an Esri.WorldGrayCanvas basemap) to that path as a side
+#'   effect.
+#'
+#' @importFrom ggplot2 ggplot aes geom_sf scale_fill_manual scale_color_manual
+#'   theme_bw labs coord_sf guides guide_legend theme
+#'   element_blank element_text margin ggsave
+#' @importFrom tidyterra geom_spatraster
+#' @importFrom sf st_zm st_make_valid st_is_empty st_geometry_type st_crs st_transform
+#' @importFrom scales hue_pal label_wrap
+#' @importFrom grid unit
+#' @importFrom terra levels crs project
+#' @importFrom stats setNames
+#' @importFrom tools file_ext
+#' @importFrom utils read.csv
+#'
+#' @export
+plot_categorical_map <- function(map, title = NULL, column = NULL, lookup = NULL,
+                                 id_col = "ID", class_col = "class", legend = NULL,
+                                 colors = NULL, na_color = "white",
+                                 label_wrap_width = 30, legend_ncol = 1,
+                                 filepath = NULL, width = 7, height = 5, dpi = 300) {
+  
+  read_lookup <- function(path) {
+    ext <- tolower(tools::file_ext(path))
+    if (ext == "csv") {
+      utils::read.csv(path, stringsAsFactors = FALSE)
+    } else if (ext %in% c("xlsx", "xls")) {
+      if (!requireNamespace("readxl", quietly = TRUE)) {
+        stop("Package 'readxl' is required to read xlsx/xls lookup files.")
+      }
+      readxl::read_excel(path)
+    } else {
+      stop("`lookup` must be a .csv, .xlsx, or .xls file.")
+    }
+  }
+  
+  build_plot <- function(map_data, basemap_layer = NULL) {
+    
+    if (inherits(map_data, "SpatRaster")) {
+      
+      if (is.null(lookup)) {
+        stop("`lookup` (a .csv/.xlsx file with ID and class columns) is required for SpatRaster input.")
+      }
+      
+      lookup_df <- read_lookup(lookup)
+      if (!all(c(id_col, class_col) %in% names(lookup_df))) {
+        stop(sprintf("`lookup` must contain columns '%s' and '%s'.", id_col, class_col))
+      }
+      
+      cat_df <- data.frame(
+        id    = lookup_df[[id_col]],
+        class = as.character(lookup_df[[class_col]])
+      )
+      terra::levels(map_data) <- cat_df
+      
+      class_labels <- as.character(terra::levels(map_data)[[1]][[2]])
+      
+      if (is.null(colors)) {
+        pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+      } else {
+        pal <- colors
+      }
+      
+      p <- ggplot2::ggplot()
+      if (!is.null(basemap_layer)) p <- p + basemap_layer
+      p <- p +
+        tidyterra::geom_spatraster(data = map_data) +
+        ggplot2::scale_fill_manual(
+          values   = pal,
+          na.value = na_color,
+          labels   = scales::label_wrap(label_wrap_width),
+          name     = if (!is.null(legend)) legend else NULL
+        )
+      
+    } else if (inherits(map_data, "sf")) {
+      
+      if (is.null(column) || is.na(column) || column == "") {
+        map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+        map_data <- sf::st_make_valid(map_data)
+        map_data <- map_data[!sf::st_is_empty(map_data), ]
+        
+        geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+        is_polygon <- any(grepl("POLYGON", geom_types))
+        
+        p <- ggplot2::ggplot()
+        if (!is.null(basemap_layer)) p <- p + basemap_layer
+        
+        if (is_polygon) {
+          p <- p + ggplot2::geom_sf(data = map_data, fill = "lightblue",
+                                    color = "darkblue", size = 0.2)
+        } else {
+          p <- p + ggplot2::geom_sf(data = map_data, color = "darkblue")
+        }
+        
+      } else {
+        if (!column %in% names(map_data)) {
+          stop(sprintf("Column '%s' not found in `map`.", column))
+        }
+        
+        map_data <- sf::st_zm(map_data, drop = TRUE, what = "ZM")
+        map_data <- sf::st_make_valid(map_data)
+        map_data <- map_data[!sf::st_is_empty(map_data), ]
+        
+        map_data[[column]] <- factor(map_data[[column]])
+        class_labels <- levels(map_data[[column]])
+        
+        if (is.null(colors)) {
+          pal <- stats::setNames(scales::hue_pal()(length(class_labels)), class_labels)
+        } else {
+          pal <- colors
+        }
+        
+        geom_types <- unique(as.character(sf::st_geometry_type(map_data)))
+        is_polygon <- any(grepl("POLYGON", geom_types))
+        
+        p <- ggplot2::ggplot()
+        if (!is.null(basemap_layer)) p <- p + basemap_layer
+        
+        if (is_polygon) {
+          p <- p +
+            ggplot2::geom_sf(data = map_data, ggplot2::aes(fill = .data[[column]]), color = NA) +
+            ggplot2::scale_fill_manual(
+              values   = pal,
+              na.value = na_color,
+              labels   = scales::label_wrap(label_wrap_width),
+              name     = if (!is.null(legend)) legend else NULL
+            )
+        } else {
+          p <- p +
+            ggplot2::geom_sf(data = map_data, ggplot2::aes(color = .data[[column]])) +
+            ggplot2::scale_color_manual(
+              values   = pal,
+              na.value = na_color,
+              labels   = scales::label_wrap(label_wrap_width),
+              name     = if (!is.null(legend)) legend else NULL
+            )
+        }
+      }
+      
+    } else {
+      stop("`map` must be a SpatRaster or an sf object.")
+    }
+    
+    p <- p +
+      ggplot2::theme_bw() +
+      ggplot2::labs(title = title) +
+      ggplot2::coord_sf(expand = FALSE) +
+      ggplot2::theme(
+        axis.title.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_blank(),
+        axis.text.x = ggplot2::element_text(size = 8),
+        axis.text.y = ggplot2::element_text(size = 8),
+        panel.grid.major = ggplot2::element_blank(),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+        plot.margin = ggplot2::margin(t = 5, r = 5, b = 2, l = 2)
+      )
+    
+    if (inherits(map_data, "sf") && (is.null(column) || is.na(column) || column == "")) {
+      p <- p + ggplot2::theme(legend.position = "none")
+    } else {
+      p <- p +
+        ggplot2::guides(
+          fill = ggplot2::guide_legend(
+            title.position = "top",
+            ncol      = legend_ncol,
+            keywidth  = grid::unit(0.4, "cm"),
+            keyheight = grid::unit(0.4, "cm")
+          ),
+          color = ggplot2::guide_legend(
+            title.position = "top",
+            ncol      = legend_ncol,
+            keywidth  = grid::unit(0.4, "cm"),
+            keyheight = grid::unit(0.4, "cm")
+          )
+        ) +
+        ggplot2::theme(
+          legend.title = ggplot2::element_text(size = 12),
+          legend.text = ggplot2::element_text(size = 9),
+          legend.position = "right",
+          legend.justification = c(0, 0.5),
+          legend.box.spacing = grid::unit(0.5, "cm"),
+          legend.margin = ggplot2::margin(0, 0, 0, 0)
+        )
+    }
+    
+    p
+  }
+  
+  plot_lc <- build_plot(map)
+  
+  if (!is.null(filepath)) {
+    map_3857 <- .reproject_to_3857(map)
+    bm <- .get_esri_gray_basemap(map_3857)
+    export_plot <- if (!is.null(bm)) build_plot(map_3857, bm) else plot_lc
+    ggplot2::ggsave(filename = filepath, plot = export_plot,
+                    width = width, height = height, dpi = dpi)
+  }
+  
+  return(plot_lc)
+}
+
+#' @noRd
+#' @keywords internal
+.reproject_to_3857 <- function(map) {
+  target <- "EPSG:3857"
+  if (inherits(map, "SpatRaster")) {
+    cur <- terra::crs(map)
+    if (is.na(cur) || is.null(cur) || identical(cur, "")) return(map)
+    if (!identical(terra::crs(map, proj = TRUE),
+                   terra::crs(target, proj = TRUE))) {
+      map <- terra::project(map, target)
+    }
+  } else if (inherits(map, "sf")) {
+    cur <- sf::st_crs(map)
+    if (is.na(cur)) return(map)
+    if (cur != sf::st_crs(target)) {
+      map <- sf::st_transform(map, target)
+    }
+  }
+  map
+}
+
+#' Fetch Esri.WorldGrayCanvas tiles and return them as a ggplot layer.
+#'
+#' Uses \pkg{maptiles} to download the tiles and \pkg{tidyterra} to render
+#' the returned RGB \code{SpatRaster} as a ggplot layer. Fails gracefully
+#' (returns \code{NULL} with a warning) if either package is unavailable or
+#' the tiles cannot be fetched (e.g. no internet).
+#'
+#' @noRd
+#' @keywords internal
+.get_esri_gray_basemap <- function(map) {
+  if (!requireNamespace("maptiles", quietly = TRUE)) {
+    warning("Package 'maptiles' is required to fetch the Esri.WorldGrayCanvas ",
+            "basemap. Install with install.packages('maptiles'). ",
+            "Proceeding without basemap.", call. = FALSE)
+    return(NULL)
+  }
+  tryCatch({
+    tiles <- maptiles::get_tiles(
+      x        = map,
+      provider = "Esri.WorldGrayCanvas",
+      crop     = TRUE,
+      project  = TRUE  
+    )
+    tidyterra::geom_spatraster_rgb(data = tiles)
+  }, error = function(e) {
+    warning("Failed to fetch Esri.WorldGrayCanvas basemap: ",
+            conditionMessage(e),
+            ". Proceeding without basemap.", call. = FALSE)
+    NULL
+  })
+}
+
+#' Module File Paths and Result Variable Names
+#'
+#' @description
+#' Configuration mapping each analysis module to its folder name and expected
+#' output file names (GPKG, XLSX, RDA log, and PNG directory).
+#'
+#' @format A named list of lists.
+#' @keywords internal
+module_file_config <- list(
+  serasi = list(
+    folder  = "Analisis SERASI",
+    rda     = "log/idx_serasi_log.rda",
+    png_dir = "log"
+  ),
+  padu_ke = list(
+    folder  = "Analisis PADU-KE",
+    gpkg    = "idx_padu_ke.gpkg",
+    xlsx    = "idx_padu_ke.xlsx",
+    rda     = "log/idx_padu_ke_log.rda",
+    png_dir = "log"
+  ),
+  padu_hs = list(
+    folder  = "Analisis PADU-HS",
+    gpkg    = "idx_padu_hs.gpkg",
+    xlsx    = "idx_padu_hs.xlsx",
+    rda     = "log/idx_padu_hs_log.rda",
+    png_dir = "log"
+  ),
+  padu_kl = list(
+    folder  = "Analisis PADU-KL",
+    gpkg    = "idx_padu_kl.gpkg",
+    xlsx    = "idx_padu_kl.xlsx",
+    rda     = "log/idx_padu_kl_log.rda",
+    png_dir = "log"
+  ),
+  padu_kh = list(
+    folder  = "Analisis PADU-KH",
+    gpkg    = "idx_padu_kh.gpkg",
+    xlsx    = "idx_padu_kh.xlsx",
+    rda     = "log/idx_padu_kh_log.rda",
+    png_dir = "log"
+  ),
+  padu_rtp = list(
+    folder  = "Analisis PADU-RTp",
+    gpkg    = "idx_padu_rtp.gpkg",
+    xlsx    = "idx_padu_rtp.xlsx",
+    rda     = "log/idx_padu_rtp_log.rda",
+    png_dir = "log"
+  ),
+  padu_se = list(
+    folder  = "Analisis PADU-SE",
+    gpkg    = "idx_padu_se.gpkg",
+    xlsx    = "idx_padu_se.xlsx",
+    rda     = "log/idx_padu_se_log.rda",
+    png_dir = "log"
+  ),
+  padu_ki = list(
+    folder  = "Analisis PADU-KI",
+    gpkg    = "idx_padu_ki.gpkg",
+    xlsx    = "idx_padu_ki.xlsx",
+    rda     = "log/idx_padu_ki_log.rda",
+    png_dir = "log"
+  ),
+  padu_combine = list(
+    folder  = "Analisis PADU-Kombinasi",
+    gpkg    = "idx_padu_combine.gpkg",
+    xlsx    = "idx_padu_combine.xlsx",
+    rda     = "log/idx_padu_combine_log.rda",
+    png_dir = "log"
+  ),
+  padan = list(
+    folder  = "Analisis PADAN",
+    gpkg    = "idx_padan.gpkg",
+    xlsx    = "idx_padan.xlsx",
+    rda     = "log/idx_padan_log.rda",
+    png_dir = "log"
+  ),
+  recommendation = list(
+    folder  = "Penyusunan Alternatif",
+    png_dir = "log"
+  ),
+  reconcile = list(
+    folder  = "Rekonsiliasi",
+    rda     = "log/idx_reconcile_log.rda",
+    png_dir = "log"
+  )
+)
+
+#' Module Result Variable Names
+#'
+#' @description
+#' Maps each analysis module to the variable names used inside its result list
+#' for the map (`sf`) and table objects.
+#'
+#' @format A named list of lists, each containing `map` and `table` entries.
+#' @keywords internal
+module_result_names <- list(
+  serasi              = list(map = "idx_serasi_map",    table = "idx_serasi_table"),
+  padu_ke             = list(map = "idx_padu_ke_map",   table = "idx_padu_ke_table"),
+  padu_hs             = list(map = "idx_padu_hs_map",   table = "idx_padu_hs_table"),
+  padu_kl             = list(map = "idx_padu_kl_map",   table = "idx_padu_kl_table"),
+  padu_kh             = list(map = "idx_padu_kh_map",   table = "idx_padu_kh_table"),
+  padu_rtp            = list(map = "idx_padu_rtp_map",  table = "idx_padu_rtp_table"),
+  padu_se             = list(map = "idx_padu_se_map",   table = "idx_padu_se_table"),
+  padu_ki             = list(map = "idx_padu_ki_map",   table = "idx_padu_ki_table"),
+  padu_combine        = list(map = "idx_padu_map",      table = "idx_padu_table"),
+  padan               = list(map = "idx_padan_map",     table = "idx_padan_table"),
+  reconcile           = list(map = "idx_reconcile_map", table = "idx_reconcile_table")
+)
+
+#' Validate that the Output Directory Exists and is Writable
+#'
+#' @description
+#' Lightweight validator that returns `TRUE` only when a non-empty directory
+#' path is supplied and the directory currently exists.
+#'
+#' @param dir Character string. Directory path to validate.
+#'
+#' @return Logical. `TRUE` if `dir` is non-empty and exists, otherwise `FALSE`.
+#'
+#' @keywords internal
+validate_output_dir <- function(dir) {
+  if (is.null(dir) || !nzchar(dir)) return(FALSE)
+  if (!dir.exists(dir)) return(FALSE)
+  return(TRUE)
+}
+
+#' Special Loading for SERASI Module (Overlap/Adjacent)
+#'
+#' @description
+#' Loads the SERASI module's saved results from disk. Because SERASI output
+#' filenames depend on the chosen case (`"overlap"` or `"adjacent"`), this
+#' helper inspects the saved `inputs` object in the log RDA to determine which
+#' files to load.
+#'
+#' @param base_dir Character. Base output directory for the SERASI module.
+#' @param cfg List. The module's file configuration (as stored in
+#'   `module_file_config$serasi`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'   Returns `list(ready = FALSE, data = NULL)` when the required files are
+#'   missing or loading fails.
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+load_serasi_from_files <- function(base_dir, cfg) {
+  rda_path <- file.path(base_dir, cfg$rda)
+  if (!file.exists(rda_path)) return(list(ready = FALSE, data = NULL))
+  
+  env <- new.env()
+  load(rda_path, envir = env)
+  inputs <- env$inputs
+  case <- inputs$case  # "overlap" or "adjacent"
+  
+  case_plural <- paste0(case, "s")
+  gpkg_name_plural <- paste0("idx_serasi_", case_plural, ".gpkg")
+  xlsx_name_plural <- paste0("idx_serasi_", case_plural, ".xlsx")
+  gpkg_path_plural <- file.path(base_dir, gpkg_name_plural)
+  xlsx_path_plural <- file.path(base_dir, xlsx_name_plural)
+  
+  gpkg_name <- paste0("idx_serasi_", case, ".gpkg")
+  xlsx_name <- paste0("idx_serasi_", case, ".xlsx")
+  gpkg_path <- file.path(base_dir, gpkg_name)
+  xlsx_path <- file.path(base_dir, xlsx_name)
+  
+  if (file.exists(gpkg_path_plural) && file.exists(xlsx_path_plural)) {
+    gpkg_path <- gpkg_path_plural
+    xlsx_path <- xlsx_path_plural
+  } else if (!file.exists(gpkg_path) || !file.exists(xlsx_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) || length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    map_obj <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    names_list <- module_result_names[["serasi"]]
+    result <- list()
+    result[[names_list$map]] <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    log_dir <- file.path(base_dir, "log")
+    matriks_result <- NULL
+    if (dir.exists(log_dir)) {
+      candidate_paths <- character(0)
+
+      uploaded_name <- tryCatch(inputs$matriks_serasi_uploaded,
+                                error = function(e) NULL)
+      if (!is.null(uploaded_name) && length(uploaded_name) == 1 &&
+          nzchar(uploaded_name)) {
+        candidate_paths <- c(candidate_paths,
+                             file.path(log_dir, uploaded_name))
+      }
+
+      canonical_name <- sprintf("matriks_serasi_%s_filled.xlsx", case)
+      candidate_paths <- c(candidate_paths,
+                           file.path(log_dir, canonical_name))
+
+      pattern_files <- list.files(
+        log_dir,
+        pattern = "^matriks_serasi.*_filled.*\\.xlsx$",
+        full.names = TRUE, ignore.case = TRUE
+      )
+      if (length(pattern_files) > 0) {
+        pattern_files <- pattern_files[
+          order(file.info(pattern_files)$mtime, decreasing = TRUE)
+        ]
+        candidate_paths <- c(candidate_paths, pattern_files)
+      }
+
+      fallback_files <- list.files(
+        log_dir,
+        pattern = "^matriks_serasi.*\\.xlsx$",
+        full.names = TRUE, ignore.case = TRUE
+      )
+      if (length(fallback_files) > 0) {
+        fallback_files <- fallback_files[
+          order(file.info(fallback_files)$mtime, decreasing = TRUE)
+        ]
+        candidate_paths <- c(candidate_paths, fallback_files)
+      }
+      
+      for (p in candidate_paths) {
+        if (!file.exists(p)) next
+        parsed <- tryCatch(
+          load_validate_matrix_table(p, title = "serasi"),
+          error = function(e) NULL
+        )
+        if (!is.null(parsed)) {
+          matriks_result <- parsed
+          break
+        }
+      }
+    }
+    
+    if (!is.null(matriks_result)) {
+      result$matriks_serasi <- matriks_result
+    }
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load SERASI from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+#' Special Loading for Recommendation Module (Overlaps/Adjacent)
+#'
+#' @description
+#' The two "Penyusunan Alternatif" modules (Tumpang Tindih / Bertetangga)
+#' write to the same output folder with a case-dependent filename and a
+#' case-dependent RDA log:
+#'   - overlaps: idx_padan_overlaps_recommendation.{gpkg,xlsx,rda}
+#'   - adjacent: idx_padan_adjacent_recommendation.{gpkg,xlsx,rda}
+#' This helper inspects the log RDA's `inputs$case` to determine which
+#' GPKG/XLSX pair to load, and returns a result list whose variable names
+#' match `module_result_names[["recommendation_*"]]`.
+#'
+#' @param base_dir Character. Base output directory for the module.
+#' @param cfg List. The module's file configuration
+#'   (as stored in `module_file_config$recommendation`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+load_recommendation_from_files <- function(base_dir, cfg) {
+  rda_candidates <- c(
+    file.path(base_dir, "log", "idx_alternatives_overlaps.rda"),
+    file.path(base_dir, "log", "idx_alternatives_adjacent.rda")
+  )
+  rda_existing <- rda_candidates[file.exists(rda_candidates)]
+  if (length(rda_existing) == 0) return(list(ready = FALSE, data = NULL))
+  
+  # Prefer the most recently written log
+  rda_path <- rda_existing[order(file.info(rda_existing)$mtime, decreasing = TRUE)][1]
+  
+  env <- new.env()
+  load(rda_path, envir = env)
+  inputs <- env$inputs
+  case <- inputs$case %||% NA_character_
+  
+  # Fall back to filename detection if `case` was not recorded
+  if (is.na(case) || !nzchar(case)) {
+    case <- if (grepl("overlaps", basename(rda_path), fixed = TRUE)) "overlaps"
+    else if (grepl("adjacent", basename(rda_path), fixed = TRUE)) "adjacent"
+    else NA_character_
+  }
+  if (is.na(case)) return(list(ready = FALSE, data = NULL))
+  
+  gpkg_name <- sprintf("idx_alternatives_%s.gpkg", case)
+  xlsx_name <- sprintf("idx_alternatives_%s.xlsx", case)
+  gpkg_path <- file.path(base_dir, gpkg_name)
+  xlsx_path <- file.path(base_dir, xlsx_name)
+  
+  if (!file.exists(gpkg_path) || !file.exists(xlsx_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) ||
+      length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    map_obj   <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    result <- if (identical(case, "overlaps")) {
+      list(
+        idx_alternative_overlaps_map   = map_obj,
+        idx_alternative_overlaps_table = table_obj
+      )
+    } else {
+      list(
+        idx_alternative_adjacent_map   = map_obj,
+        idx_alternative_adjacent_table = table_obj
+      )
+    }
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load Recommendation from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+#' Special Loading for Reconcile Module (Overlaps/Adjacent)
+#'
+#' @description
+#' Reconcile output filenames depend on the reconciliation step:
+#' `rtrwp_terintegrasi_overlaps.*` for step 1 (overlaps) or
+#' `rtrwp_terintegrasi_adjacent.*` for step 2 (adjacent). This helper
+#' inspects the module folder, picks the most recent matching GPKG/XLSX
+#' pair, and loads the accompanying log RDA.
+#'
+#' @param base_dir Character. Base output directory for the Reconcile module.
+#' @param cfg List. The module's file configuration
+#'   (as stored in `module_file_config$reconcile`).
+#'
+#' @return A list with elements `ready` (logical) and, when `ready = TRUE`,
+#'   `data` (a list with `inputs` and `result`) and `source` (character).
+#'   Returns `list(ready = FALSE, data = NULL)` when the required files are
+#'   missing or loading fails.
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+load_reconcile_from_files <- function(base_dir, cfg) {
+  rda_path <- file.path(base_dir, cfg$rda)
+  if (!file.exists(rda_path)) return(list(ready = FALSE, data = NULL))
+  
+  png_dir <- file.path(base_dir, cfg$png_dir)
+  if (!dir.exists(png_dir) ||
+      length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  gpkg_candidates <- list.files(
+    base_dir, pattern = "^rtrwp_terintegrasi_.*\\.gpkg$",
+    full.names = TRUE, ignore.case = TRUE
+  )
+  xlsx_candidates <- list.files(
+    base_dir, pattern = "^rtrwp_terintegrasi_.*\\.xlsx$",
+    full.names = TRUE, ignore.case = TRUE
+  )
+  
+  if (length(gpkg_candidates) == 0 || length(xlsx_candidates) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  # Prefer the most recent file
+  gpkg_path <- gpkg_candidates[order(file.info(gpkg_candidates)$mtime, decreasing = TRUE)][1]
+  xlsx_path <- xlsx_candidates[order(file.info(xlsx_candidates)$mtime, decreasing = TRUE)][1]
+  
+  tryCatch({
+    env <- new.env()
+    load(rda_path, envir = env)
+    inputs <- env$inputs
+    
+    map_obj   <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    names_list <- module_result_names[["reconcile"]]
+    result <- list()
+    result[[names_list$map]]   <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load Reconcile from files: ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+#' Check Module Readiness and Load Data
+#'
+#' @description
+#' Determines whether a module has completed results available, preferring
+#' in-memory results stored in `session$userData$module_results` and falling
+#' back to reading the module's output files from `output_dir`.
+#'
+#' @param module_id Character. The module identifier. May include a parent and
+#'   child separated by `"$"` (e.g. `"parent$child"`).
+#' @param output_dir Character. Root output directory.
+#' @param session Shiny session object, used to look up in-memory results.
+#'
+#' @return A list with elements:
+#'   \describe{
+#'     \item{ready}{Logical. Whether the module results are available.}
+#'     \item{data}{The module result payload when `ready = TRUE`, else `NULL`.}
+#'     \item{source}{Either `"memory"`, `"files"`, or `NULL`.}
+#'   }
+#'
+#' @importFrom sf st_read
+#' @importFrom openxlsx read.xlsx
+#'
+#' @keywords internal
+module_ready_and_data <- function(module_id, output_dir, session) {
+  mod_key <- module_id
+  parent <- NULL
+  child <- NULL
+  
+  if (!is.null(module_id) && grepl("$", module_id, fixed = TRUE)) {
+    parts <- strsplit(module_id, "$", fixed = TRUE)[[1]]
+    if (length(parts) == 2) {
+      parent <- parts[1]
+      child <- parts[2]
+      mod_key <- child
+    } else {
+      mod_key <- module_id
+    }
+  } else {
+    mod_key <- module_id
+  }
+  
+  mem_data <- session$userData$module_results[[mod_key]]
+  if (!is.null(mem_data) && length(mem_data) > 0) {
+    return(list(ready = TRUE, data = mem_data, source = "memory"))
+  }
+  
+  if (is.null(output_dir) || !nzchar(output_dir)) {
+    return(list(ready = FALSE, data = NULL, source = NULL))
+  }
+  
+  cfg <- module_file_config[[mod_key]]
+  if (is.null(cfg)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  base_dir <- file.path(output_dir, cfg$folder)
+  if (!dir.exists(base_dir)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  if (mod_key == "serasi") {
+    return(load_serasi_from_files(base_dir, cfg))
+  }
+  
+  if (mod_key == "reconcile") {
+    return(load_reconcile_from_files(base_dir, cfg))
+  }
+  
+  if (mod_key == "recommendation") {
+    return(load_recommendation_from_files(base_dir, cfg))
+  }
+  
+  gpkg_path <- file.path(base_dir, cfg$gpkg)
+  xlsx_path <- file.path(base_dir, cfg$xlsx)
+  rda_path  <- file.path(base_dir, cfg$rda)
+  png_dir   <- file.path(base_dir, cfg$png_dir)
+  
+  if (!file.exists(gpkg_path) || !file.exists(xlsx_path) || !file.exists(rda_path)) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  if (!dir.exists(png_dir) || length(list.files(png_dir, pattern = "\\.png$", ignore.case = TRUE)) == 0) {
+    return(list(ready = FALSE, data = NULL))
+  }
+  
+  tryCatch({
+    env <- new.env()
+    load(rda_path, envir = env)
+    inputs <- env$inputs
+    
+    map_obj <- sf::st_read(gpkg_path, quiet = TRUE)
+    table_obj <- openxlsx::read.xlsx(xlsx_path)
+    
+    names_list <- module_result_names[[mod_key]]
+    if (is.null(names_list)) {
+      stop("No variable name mapping for module: ", mod_key)
+    }
+    result <- list()
+    result[[names_list$map]] <- map_obj
+    result[[names_list$table]] <- table_obj
+    
+    if (identical(mod_key, "padu_ke")) {
+      log_dir <- file.path(base_dir, "log")
+      matriks_result <- NULL
+      if (dir.exists(log_dir)) {
+        candidate_paths <- character(0)
+        uploaded_name <- tryCatch(inputs$matriks_padu_ke_uploaded,
+                                  error = function(e) NULL)
+        if (!is.null(uploaded_name) && length(uploaded_name) == 1 &&
+            nzchar(uploaded_name)) {
+          candidate_paths <- c(candidate_paths,
+                               file.path(log_dir, uploaded_name))
+        }
+        candidate_paths <- c(candidate_paths,
+                             file.path(log_dir, "matriks_padu_ke_filled.xlsx"))
+        pattern_files <- list.files(
+          log_dir,
+          pattern = "^matriks_padu_ke.*_filled.*\\.xlsx$",
+          full.names = TRUE, ignore.case = TRUE
+        )
+        if (length(pattern_files) > 0) {
+          pattern_files <- pattern_files[
+            order(file.info(pattern_files)$mtime, decreasing = TRUE)
+          ]
+          candidate_paths <- c(candidate_paths, pattern_files)
+        }
+        for (p in candidate_paths) {
+          if (!file.exists(p)) next
+          parsed <- tryCatch(
+            load_validate_matrix_table(p, title = "padu_ke"),
+            error = function(e) NULL
+          )
+          if (!is.null(parsed)) {
+            matriks_result <- parsed
+            break
+          }
+        }
+      }
+      if (!is.null(matriks_result)) {
+        result$matriks_padu_ke <- matriks_result
+      }
+    }
+    
+    out <- list(inputs = inputs, result = result)
+    return(list(ready = TRUE, data = out, source = "files"))
+  }, error = function(e) {
+    warning("Failed to load module from files: ", mod_key, " - ", e$message)
+    return(list(ready = FALSE, data = NULL))
+  })
+}
+
+#' Knit an Rmd Module as a Child Document
+#'
+#' @description
+#' Reads an R Markdown template, strips its YAML front matter, and knits the
+#' remaining body as a child document using the supplied module parameters.
+#'
+#' @param template_path Character. Path to the Rmd template file.
+#' @param module_params List. Parameters to expose to the child document via
+#'   `params`.
+#' @param envir Environment in which to evaluate the child. Defaults to the
+#'   parent frame.
+#'
+#' @return A character vector/string containing the rendered Markdown.
+#'
+#' @importFrom knitr knit_child
+#'
+#' @keywords internal
+knit_child_module <- function(template_path, module_params, envir = parent.frame()) {
+  abs_path <- here::here(template_path)
+  if (!file.exists(abs_path)) {
+    return(paste0("\n\n*Template tidak ditemukan: ", template_path, " (at ", abs_path, ")*\n\n"))
+  }
+  
+  # Read the template file
+  lines <- readLines(abs_path, warn = FALSE)
+  
+  # Find the YAML front matter (between --- lines)
+  yaml_start <- which(lines == "---")[1]
+  yaml_end <- which(lines == "---")[2]
+  
+  if (!is.na(yaml_start) && !is.na(yaml_end) && yaml_start < yaml_end) {
+    # Remove the YAML front matter
+    body_lines <- lines[-(yaml_start:yaml_end)]
+  } else {
+    body_lines <- lines
+  }
+  
+  # Combine into a single string
+  body_text <- paste(body_lines, collapse = "\n")
+  
+  # Create a new environment with the params set
+  child_env <- new.env(parent = envir)
+  child_env$params <- module_params
+  
+  # Knit the body text with the child environment
+  # quiet = TRUE suppresses the child's progress bar / processing messages,
+  # which would otherwise be captured as stdout inside this chunk's output.
+  result <- knitr::knit_child(text = body_text, envir = child_env, quiet = TRUE)
+  
+  return(result)
+}
+
+#' Generate a Module or Master Report
+#'
+#' @description
+#' Renders an HTML report for a specific module or, when `master_params` is
+#' supplied, renders the master report template. Falls back to a minimal
+#' placeholder template when the module-specific template cannot be found.
+#'
+#' @param output The output object returned by a module (expected to contain
+#'   `inputs` and `result` elements).
+#' @param dir Character. Directory where the rendered HTML report will be
+#'   written.
+#' @param module_name Character. Optional module name used in the output file
+#'   name and passed to the template as `module_name`.
+#' @param template_path Character. Path to the module-specific Rmd template.
+#'   Defaults to the SERASI report template.
+#' @param master_params List. When provided, forces rendering of the master
+#'   report template with these parameters.
+#'
+#' @return Invisibly `NULL`. Called for its side effect of rendering an HTML
+#'   report.
+#'
+#' @importFrom rmarkdown render yaml_front_matter
+#'
+#' @export
+generate_report <- function(output, dir, module_name = NULL,
+                            template_path = "report/LaSPUR_SERASI_report_template.Rmd",
+                            master_params = NULL) {
+  
+  # Ensure Pandoc is available in this execution context
+  .ensure_pandoc_available()
+  
+  # Check if output directory is writable and has space
+  if (!dir.exists(dir)) {
+    stop("Output directory does not exist: ", dir)
+  }
+  
+  # Simple write test to check disk space
+  test_file <- file.path(dir, ".write_test_tmp")
+  tryCatch({
+    writeLines("test", test_file)
+    unlink(test_file)
+  }, error = function(e) {
+    stop("Cannot write to output directory. Check disk space and permissions: ", dir)
+  })
+  
+  # If master_params is provided, use the master template
+  if (!is.null(master_params)) {
+    # Use the master template (override template_path if provided)
+    template_path <- "report/LaSPUR_master_report_template.Rmd"
+    if (!file.exists(template_path)) {
+      stop("Master template not found: ", template_path)
+    }
+    
+    timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
+    output_file <- paste0("LaSPUR_Master_Report_", timestamp, ".html")
+    
+    laspur_render(
+      input         = template_path,
+      output_file   = output_file,
+      output_dir    = dir,
+      params        = master_params,
+      output_options = list(theme = laspur_report_theme())
+    )
+    return(invisible())
+  }
+  
+  # Fallback for modules that don't have a template yet
+  if (is.null(template_path) || !nzchar(template_path) || !file.exists(template_path)) {
+    template_path <- tempfile(fileext = ".Rmd")
+    writeLines(c(
+      "---",
+      paste0("title: \"Laporan Modul ", module_name, "\""),
+      "output: html_document",
+      "params:",
+      "  inputs: NA",
+      "  result: NA",
+      "  module_name: NA",
+      "---",
+      "",
+      "### Laporan Belum Tersedia",
+      "",
+      "Template laporan spesifik untuk modul ini sedang dalam tahap pengembangan."
+    ), template_path)
+  }
+  
+  # Prepare inputs payload
+  inputs_payload <- output$inputs
+  if (is.null(inputs_payload) || !is.list(inputs_payload)) {
+    inputs_payload <- list()
+  }
+  
+  # Build all possible parameters
+  all_params <- list(
+    start_time  = Sys.time(),
+    end_time    = Sys.time(),
+    inputs      = inputs_payload,
+    result      = output$result,
+    module_name = module_name
+  )
+  
+  declared_params <- tryCatch({
+    yml <- rmarkdown::yaml_front_matter(template_path)
+    if (!is.null(yml$params) && is.list(yml$params)) names(yml$params) else NULL
+  }, error = function(e) NULL)
+  
+  if (!is.null(declared_params)) {
+    report_params <- all_params[intersect(names(all_params), declared_params)]
+  } else {
+    report_params <- list(inputs = inputs_payload, result = output$result, module_name = module_name)
+  }
+  
+  timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M")
+  if (!is.null(module_name) && nzchar(module_name)) {
+    base_name <- paste0("LaSPUR_", module_name, "_Report_", timestamp)
+  } else {
+    base_name <- paste0("LaSPUR_Report_", timestamp)
+  }
+  
+  output_file <- paste0(base_name, ".html")
+  
+  laspur_render(
+    input         = template_path,
+    output_format = "html_document",
+    output_file   = output_file,
+    output_dir    = dir,
+    params        = report_params,
+    knit_root_dir = getwd(),
+    quiet         = TRUE
+  )
+}
+
+# Numeric display helper — fixed 2 decimals, padded with trailing zeros
+fmt2 <- function(x) {
+  if (inherits(x, "units")) x <- as.numeric(x)
+  if (!is.numeric(x)) return(x)
+  ifelse(
+    is.na(x),
+    NA_character_,
+    formatC(x, format = "f", digits = 2)
+  )
+}
+
+laspur_rename_cols <- function(df) {
+  mapping <- c(
+    "id_pu" = "ID PU",
+    "RTRW" = "RTRW",
+    "RZWP3K" = "RZWP3K",
+    "area_ha" = "Luas (ha)",
+    "idx_serasi" = "Indeks SERASI",
+    "idx_padu_final" = "Indeks PADU",
+    "idx_padan" = "Indeks PADAN",
+    "recommendation" = "Rekomendasi",
+    "idx_padan_new" = "PADAN Proyeksi",
+    "delta_idx_padan" = "Kenaikan (Delta)"
+  )
+  
+  current_names <- names(df)
+  new_names <- current_names
+  
+  for (i in seq_along(current_names)) {
+    if (current_names[i] %in% names(mapping)) {
+      new_names[i] <- mapping[current_names[i]]
+    }
+  }
+  
+  names(df) <- new_names
+  df
+}
+
+laspur_format_numbers <- function(df, numeric_cols = NULL, integer_cols = NULL) {
+  if (is.null(df)) return(NULL)
+  
+  if (!is.null(numeric_cols)) {
+    for (col in numeric_cols) {
+      if (col %in% names(df)) {
+        df[[col]] <- fmt2(as.numeric(df[[col]]))
+      }
+    }
+  }
+  
+  if (!is.null(integer_cols)) {
+    for (col in integer_cols) {
+      if (col %in% names(df)) {
+        df[[col]] <- as.character(as.integer(df[[col]]))
+      }
+    }
+  }
+  df
+}
+
+# open folder helper
+open_folder_crossplatform <- function(path) {
+  if (is.null(path) || length(path) != 1 || !nzchar(path) || !dir.exists(path)) {
+    showNotification("Direktori belum tersedia.", type = "warning", duration = 5)
+    return(invisible(FALSE))
+  }
+  path_norm <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  
+  tryCatch({
+    os <- .Platform$OS.type
+    if (os == "windows") {
+      shell.exec(path_norm)
+    } else if (os == "unix") {
+      sysname <- Sys.info()[["sysname"]]
+      if (sysname == "Darwin") {
+        system2("open", shQuote(path_norm), wait = FALSE)
+      } else {
+        system2("xdg-open", shQuote(path_norm), wait = FALSE)
+      }
+    } else {
+      showNotification("Sistem operasi tidak dikenali.", type = "warning")
+      return(invisible(FALSE))
+    }
+    invisible(TRUE)
+  }, error = function(e) {
+    showNotification(paste("Gagal membuka folder:", conditionMessage(e)),
+                     type = "error", duration = 5)
+    invisible(FALSE)
+  })
+}
+
+plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
+  width <- start_cm
+  repeat {
+    result <- tryCatch(
+      {
+        plot(obj, key.pos = 4, key.width = lcm(width))
+        "ok"
+      },
+      error = function(e) "retry"
+    )
+    if (result == "ok" || width >= max_cm) break
+    width <- width + step
+  }
+}
+
+png_to_img_tag <- function(path, max_width = "100%") {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  src <- tryCatch({
+    if (requireNamespace("base64enc", quietly = TRUE)) {
+      paste0("data:image/png;base64,", base64enc::base64encode(path))
+    } else {
+      path
+    }
+  }, error = function(e) path)
+  htmltools::tags$img(
+    src = src,
+    style = paste0("max-width: ", max_width,
+                   "; height: auto; display: block; margin: 0 auto;")
+  )
+}
+
+css_carousel <- function(paths) {
+  enc_ok <- requireNamespace("base64enc", quietly = TRUE)
+  imgs <- lapply(paths, function(p) {
+    src <- if (enc_ok) {
+      paste0("data:image/png;base64,", base64enc::base64encode(p))
+    } else {
+      p
+    }
+    htmltools::tags$img(
+      src = src,
+      style = paste(
+        "width: 100%; height: auto; display: block;",
+        "scroll-snap-align: center; border-radius: 4px;"
+      )
+    )
+  })
+  htmltools::tags$div(
+    style = paste(
+      "display: flex; overflow-x: auto;",
+      "scroll-snap-type: x mandatory; gap: 12px; padding: 8px 0;"
+    ),
+    imgs
+  )
 }

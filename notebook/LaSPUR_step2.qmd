@@ -32,17 +32,17 @@ Input data meliputi seluruh file yang dibutuhkan dalam analisis baik dalam forma
 #| include: true
 
 # Main input data for SERASI index calculation
-rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 2 (Bertetangga)/step2_RTRW_sulteng_v1.shp"
-rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/SERASI/Step 2 (Bertetangga)/step2_RZWP3K_sulteng_v1.shp"
+rtrw_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/01_Vektor/SERASI/Step 2 (Bertetangga)/step2_RTRW_sulteng_v1.shp"
+rzwp3k_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/01_Vektor/SERASI/Step 2 (Bertetangga)/step2_RZWP3K_sulteng_v1.shp"
 
 # Output directory
-output_dir <- "D:/step2_sulteng/"
+output_dir <- "D:/Step 2 (Sulteng)/"
 
 # Input analisis SERASI
-rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_pola_RTRW.xlsx"
-rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_pola_RZWP3K_integrasi.xlsx"
-matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/02_Tabular/Step 2 (Bertetangga)/matriks_serasi_integrasi.xlsx"
-admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/Administrasi/gadm41_IDN_3_kecamatan.shp"
+rtrw_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_pola_RTRW.xlsx"
+rzwp3k_prioritas_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/02_Tabular/Step 2 (Bertetangga)/tabel_acuan_pola_RZWP3K_integrasi.xlsx"
+matriks_serasi_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/02_Tabular/Step 2 (Bertetangga)/matriks_serasi_integrasi.xlsx"
+admin_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Events/20260713_Lokalatih_I_LaSPUR/Data/01_Vektor/Administrasi/gadm41_IDN_3_kecamatan.shp"
 
 # PADU_KE input data
 lulc_vect_path <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Data/v1/01_Vektor/PADU-KE/penutup_lahan_darat-laut_sulteng_2024_v1.shp"
@@ -102,18 +102,23 @@ rzwp3k_vect <- load_and_validate_shapefile(rzwp3k_path)
 adjacent_map_raw <- identify_adjacent(
   rtrw = rtrw_vect,
   rzwp = rzwp3k_vect,
-  min_area_ha = 0,
+  min_area_ha = 1,
   m_precision = 1
-)
+) 
+
+# Identify group
+adjacent_map_raw_update <- identify_adjacent_group(
+  adjacent_map_raw
+  )
 
 # Process adjacent map
 adjacent_map <- process_adjacent(
-  pu_sf = adjacent_map_raw,
+  pu_sf = adjacent_map_raw_update,
   buffer_m = 100,
   m_precision = 1,
   snap_tolerance = 0.5,
   parallel = TRUE, 
-  workers = 4
+  workers = 3
 )
 ```
 
@@ -159,7 +164,8 @@ Tahap ini mengintegrasikan nilai indeks SERASI yang diperoleh dari matriks kompa
 # Merge serasi index to adjacent area just if the zone class name is matched
 if (length(valid_class$mismatch_col3) == 0 &&
     length(valid_class$mismatch_col4) == 0) {
-  idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) 
+  idx_serasi_map <- merge_attributes_to_map(adjacent_map, matriks_serasi) %>%
+    filter(idx_serasi != 1)
   idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
   write_sf(idx_serasi_map, paste0(output_dir, "idx_serasi_adjacent.gpkg"), overwrite = TRUE)
   # plot(idx_serasi_map["idx_serasi"])

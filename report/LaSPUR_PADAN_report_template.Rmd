@@ -1,0 +1,159 @@
+---
+title: "LaSPUR - Laporan Analisis PADAN"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: bootstrap
+    highlight: tango
+    df_print: kable
+  pdf_document: default
+always_allow_html: true
+params:
+  start_time: NA
+  end_time: NA
+  inputs: NA
+  result: NA
+  module_name: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+# Safety check for params
+if (!exists("params")) {
+  params <- list(
+    start_time = NA, end_time = NA, 
+    inputs = list(case = "overlaps", output_dir = ""), 
+    result = list(), module_name = "Unknown"
+  )
+}
+
+```
+
+```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
+source(here::here("R/functions.R"))
+source(here::here("R/helpers.R"))
+```
+
+# Analisis PADAN
+
+```{r include=FALSE}
+padan_available <- !is.null(params$result$idx_padan_map) &&
+                   !is.null(params$result$idx_padan_table)
+
+alpha_raw <- tryCatch(params$inputs$alpha, error = function(e) NA_real_)
+alpha_val <- if (is.null(alpha_raw) || length(alpha_raw) == 0 || any(is.na(alpha_raw))) {
+  NA_real_
+} else {
+  as.numeric(alpha_raw[1])
+}
+
+padu_src_raw <- tryCatch(params$inputs$idx_padu_path, error = function(e) NA_character_)
+padu_src_path <- if (is.null(padu_src_raw) || length(padu_src_raw) == 0 || any(is.na(padu_src_raw))) {
+  NA_character_
+} else {
+  as.character(padu_src_raw[1])
+}
+
+padan_output_dir_raw <- tryCatch(params$inputs$output_dir, error = function(e) NA_character_)
+padan_output_dir <- if (is.null(padan_output_dir_raw) || length(padan_output_dir_raw) == 0 || any(is.na(padan_output_dir_raw))) {
+  NA_character_
+} else {
+  as.character(padan_output_dir_raw[1])
+}
+
+alpha_txt       <- if (is.na(alpha_val)) "tidak diketahui" else format(alpha_val, nsmall = 2)
+one_minus_alpha <- if (is.na(alpha_val)) NA_real_ else round(1 - alpha_val, 10)
+oma_txt         <- if (is.na(one_minus_alpha)) "tidak diketahui" else format(one_minus_alpha, nsmall = 2)
+```
+
+```{r}
+if (!padan_available) {
+  cat("\n*Tidak ada hasil analisis PADAN yang tersedia dalam laporan ini.*\n")
+} else {
+
+  padan_map <- params$result$idx_padan_map
+  padan_tbl <- params$result$idx_padan_table
+
+  if (is.null(padan_tbl)) {
+    padan_tbl <- sf::st_drop_geometry(padan_map)
+  }
+
+  has_area <- "area_ha" %in% names(padan_tbl)
+
+  total_area <- if (has_area) round(sum(padan_tbl$area_ha, na.rm = TRUE), 2) else NA_real_
+
+  summary_stats <- data.frame(
+    Statistik = c(
+      "Jumlah Unit Perencanaan",
+      "Indeks PADAN Rata-rata",
+      "Indeks PADAN Minimum",
+      "Indeks PADAN Maksimum",
+      "Total Luas (ha)"
+    ),
+    Nilai = c(
+      as.character(nrow(padan_tbl)),                          
+      fmt2(mean(padan_tbl$idx_padan, na.rm = TRUE)),         
+      fmt2(min(padan_tbl$idx_padan,  na.rm = TRUE)),
+      fmt2(max(padan_tbl$idx_padan,  na.rm = TRUE)),
+      if (is.na(total_area)) "tidak tersedia" else fmt2(total_area)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  DT::datatable(
+    summary_stats,
+    rownames  = FALSE,
+    options   = list(dom = 't', pageLength = 10, ordering = FALSE),
+    caption   = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: 600;",
+      "Ringkasan Statistik Indeks PADAN"
+    )
+  )
+}
+```
+
+## Tentang Modul
+
+Modul Analisis PADAN menghasilkan nilai gabungan integrasi antara Indeks SERASI (keserasian pola ruang darat–laut) dan Indeks PADU Final (kepaduan lingkungan) untuk setiap unit perencanaan. Indeks PADAN merepresentasikan skor gabungan yang dapat digunakan sebagai dasar penilaian prioritas rekonsiliasi ruang darat dan laut.
+
+## Hasil Analisis PADAN
+
+```{r results-padan}
+if (!padan_available) {
+  cat("\n*Hasil analisis PADAN tidak tersedia.*\n")
+} else {
+  log_dir <- if (!is.null(params$inputs$output_dir) && nzchar(params$inputs$output_dir)) {
+    file.path(params$inputs$output_dir, "Analisis PADAN", "log")
+  } else {
+    file.path(getwd(), "Analisis PADAN", "log")
+  }
+  png_path <- file.path(log_dir, "idx_padan.png")
+  
+  if (file.exists(png_path) && file.size(png_path) > 0) {
+    knitr::include_graphics(png_path)
+  } else {
+    cat("Peta hasil analisis PADAN tidak tersedia di log.")
+  }
+}
+```
+
+```{r detail-padan}
+if (padan_available) {
+  padan_tbl <- params$result$idx_padan_table
+  if (is.null(padan_tbl)) {
+    padan_tbl <- sf::st_drop_geometry(params$result$idx_padan_map)
+  }
+  
+  preferred_cols <- c("id_pu", "RTRW", "RZWP3K", "area_ha", "idx_serasi", "idx_padu_final", "idx_padan")
+  kept_cols <- intersect(preferred_cols, names(padan_tbl))
+  tbl_view <- padan_tbl[, kept_cols, drop = FALSE]
+  tbl_view <- laspur_rename_cols(tbl_view)
+  
+  DT::datatable(tbl_view, rownames = FALSE, filter = "top", options = list(pageLength = 10, scrollX = TRUE, scrollY = "350px", scroller = TRUE)) |>
+    DT::formatRound(columns = intersect(names(tbl_view), c("Luas (ha)", "Indeks SERASI", "Indeks PADU", "Indeks PADAN")), digits = 2)
+}
+```
+
