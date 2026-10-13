@@ -2,6 +2,10 @@
   <img src="https://github.com/user-attachments/assets/f14a59cb-3813-4b33-83d7-50fb60abc7a2" alt="icon_web" width="180">
 </p>
 
+[![CI](https://github.com/icraf-indonesia/LaSPUR/actions/workflows/ci.yml/badge.svg)](https://github.com/icraf-indonesia/LaSPUR/actions/workflows/ci.yml)
+[![Issues](https://img.shields.io/github/issues/icraf-indonesia/LaSPUR)](https://github.com/icraf-indonesia/LaSPUR/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/icraf-indonesia/LaSPUR)](https://github.com/icraf-indonesia/LaSPUR/pulls)
+
 # Land & Sea Planning Unit Reconcilliation (LaSPUR)
 
 LaSPUR provides a framework and set of tools to help stakeholders negotiate and resolve conflicts between land and sea spatial planning integration. It employs an evidence-based approach to ensure that spatial management is informed by the careful consideration of ecosystem protection, economic value, and the continuity of community living spaces.
