@@ -18,11 +18,8 @@ jobs:
         with:
           r-version: 'release'
 
-      # install dependencies
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::testthat
-          needs: check
+      # set up renv and restore the project library from renv
+      - uses: r-lib/actions/setup-renv@v2
 
       # run the tests
       - name: Run R tests
