@@ -8,3 +8,5 @@
 /output
 /ui/output
 /R/manual
+/.agents
+skills-lock.json
