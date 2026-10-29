@@ -68,33 +68,19 @@ if (!exists("write_id_group_bipartite_plots", mode = "function")) {
 
 .ensure_pandoc_available()
 
-#' Load and Validate a Shapefile
+#' Load and Validate Shapefile
 #'
 #' @description
-#' Loads a shapefile (.shp) and performs validation checks including file
-#' completeness, geometry, properties, and attribute table integrity.
+#' Reads an ESRI Shapefile or GeoPackage and validates its existence, sidecar files,
+#' geometry presence/validity, CRS, and attribute completeness.
+#' Automatically drops Z/M dimensions to ensure 2D geometry and conditionally repairs invalid topologies.
 #'
-#' @param shp_path Character. Path to the shapefile (.shp) to be loaded.
+#' @param shp_path Character. Path to the .shp or .gpkg file.
 #'
-#' @return An `sf` object that has been validated and is ready for analysis.
-#'
-#' @details
-#' Validation steps:
-#' \enumerate{
-#'   \item Checks that .shp, .shx, .dbf, and .prj files exist
-#'   \item Reads the shapefile using `sf::st_read()`
-#'   \item Validates geometry presence and checks for invalid geometries
-#'   \item Checks for defined CRS and missing values in attribute table
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' province_boundary <- load_and_validate_shapefile("data/province_boundary.shp")
-#' print(province_boundary)
-#' }
+#' @return An sf object.
 #'
 #' @importFrom sf st_read st_geometry st_is_valid st_crs st_drop_geometry
-#'   st_geometry_type
+#'   st_geometry_type st_zm st_make_valid
 #' @importFrom tools file_path_sans_ext
 #'
 #' @export
@@ -137,12 +123,19 @@ load_and_validate_shapefile <- function(shp_path) {
     stop("Shapefile contains no geometry.")
   }
   
-  invalid_geom <- !sf::st_is_valid(sf_object)
-  if (any(invalid_geom, na.rm = TRUE)) {
-    warning(sum(invalid_geom, na.rm = TRUE), " invalid geometries detected. ",
-            "Consider using sf::st_make_valid().")
+  sf_object <- sf::st_zm(sf_object, drop = TRUE, what = "ZM")
+  
+  if (nrow(sf_object) <= 5000) {
+    invalid_geom <- !sf::st_is_valid(sf_object)
+    if (any(invalid_geom, na.rm = TRUE)) {
+      warning(sum(invalid_geom, na.rm = TRUE), " invalid geometries detected. ",
+              "Automatically repairing using sf::st_make_valid().")
+      sf_object <- sf::st_make_valid(sf_object)
+    } else {
+      message("   All geometries are valid.")
+    }
   } else {
-    message("   All geometries are valid.")
+    message("   Dataset besar (", nrow(sf_object), " fitur). Validasi topologi penuh ditunda ke tahap analisis.")
   }
   
   # Check CRS

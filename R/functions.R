@@ -1491,6 +1491,9 @@ calculate_lulc_adjacency.sf <- function(lulc,
   message("Cleaning LULC geometries...")
   if (!all(sf::st_is_valid(lulc))) {
     lulc <- sf::st_make_valid(lulc) |> sf::st_buffer(dist = 0)
+    if (any(sf::st_geometry_type(lulc) == "GEOMETRYCOLLECTION")) {
+      lulc <- suppressWarnings(sf::st_collection_extract(lulc, "POLYGON", warn = FALSE))
+    }
   }
   
   if (sf::st_crs(lulc) != sf::st_crs(admin_sf)) {
@@ -1499,6 +1502,19 @@ calculate_lulc_adjacency.sf <- function(lulc,
   }
   
   admin_ids <- unique(admin_sf[[id_col]])
+  
+  safe_extract_polygons <- function(x) {
+    if (is.null(x) || nrow(x) == 0) return(NULL)
+    if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
+      x <- suppressWarnings(sf::st_collection_extract(x, "POLYGON", warn = FALSE))
+    }
+    if (is.null(x) || nrow(x) == 0) return(NULL)
+    x <- x[sf::st_geometry_type(x) %in% c("POLYGON", "MULTIPOLYGON"), ]
+    if (nrow(x) == 0) return(NULL)
+    x <- x[!sf::st_is_empty(x), ]
+    if (nrow(x) == 0) return(NULL)
+    x
+  }
   
   if (parallel) {
     old_plan <- future::plan("list")
@@ -1538,25 +1554,18 @@ calculate_lulc_adjacency.sf <- function(lulc,
         return(list(success = zero_row(uid)))
       }
       
-      if (!all(sf::st_is_valid(lulc_clip))) {
-        lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
-      }
-      
-      safe_extract_polygons <- function(x) {
-        if (any(sf::st_geometry_type(x) == "GEOMETRYCOLLECTION")) {
-          x <- sf::st_collection_extract(x, "POLYGON", warn = FALSE)
-        }
-        if (is.null(x) || nrow(x) == 0) return(NULL)
-        x <- x[sf::st_geometry_type(x) %in% c("POLYGON", "MULTIPOLYGON"), ]
-        if (nrow(x) == 0) return(NULL)
-        x <- x[!sf::st_is_empty(x), ]
-        if (nrow(x) == 0) return(NULL)
-        x
-      }
-      
+      # Extract polygon parts first to prevent st_make_valid on GEOMETRYCOLLECTION
       lulc_clip <- safe_extract_polygons(lulc_clip)
       if (is.null(lulc_clip) || nrow(lulc_clip) == 0) {
         return(list(success = zero_row(uid)))
+      }
+      
+      if (!all(sf::st_is_valid(lulc_clip))) {
+        lulc_clip <- sf::st_make_valid(lulc_clip) |> sf::st_buffer(dist = 0)
+        lulc_clip <- safe_extract_polygons(lulc_clip)
+        if (is.null(lulc_clip) || nrow(lulc_clip) == 0) {
+          return(list(success = zero_row(uid)))
+        }
       }
       
       lulc_clip$class_code <- as.character(lulc_clip[[class_col]])
