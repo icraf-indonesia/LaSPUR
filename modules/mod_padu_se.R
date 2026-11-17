@@ -13,7 +13,7 @@ padu_se_ui <- function(id) {
     div(
       style = "margin-bottom: 20px;",
       h4("2.6 PADU-SE (Sosial & Ekonomi)", style = "margin: 0; font-weight: 700;"),
-      tags$p("Menilai kepaduan wilayah berdasarkan aktivitas sosial dan ekonomi untuk menghasilkan nilai indeks PADU-SE.",
+      tags$p("Menilai kepaduan wilayah berdasarkan aktivitas sosial dan ekonomi serta aksesibilitas fasilitas untuk menghasilkan nilai indeks PADU-SE.",
              style = "color: #6c757d; margin: 4px 0 0 0; font-size: 0.9rem;")
     ),
     fluidRow(
@@ -37,6 +37,35 @@ padu_se_ui <- function(id) {
                      "Layer raster populasi penduduk per satuan luas."),
           fileInput(ns("popdens_area_file"), label = NULL,
                     accept = c(".tif", ".tiff", ".geotiff"), multiple = FALSE),
+          hr(),
+          div(
+            id = ns("facility_section"),
+            style = "margin-bottom: 12px;",
+            tags$span(
+              tagList(tags$i(class = "bi bi-buildings me-1"), "Peta Infrastruktur Pendukung Kegiatan Sosial & Ekonomi"),
+              style = "font-weight: 600; font-size: 0.95rem; display: block; margin-bottom: 6px;"
+            ),
+            tags$small(
+              style = "color: #6c757d; display: block; margin-bottom: 10px;",
+              "Tambahkan layer peta jarak ke sejumlah infrastruktur (fasilitas umum, fasilitas sosial, jalan, dll) yang menunjang kegiatan sosial & ekonomi untuk memberikan informasi keterjangkauan infrastruktur publik. Unggah peta dalam format vektor (titik/garis/poligon) atau raster (jarak)."
+            ),
+            div(
+              class = "row align-items-center g-2 mb-2",
+              div(
+                class = "col-7",
+                uiOutput(ns("facility_summary_ui"))
+              ),
+              div(
+                class = "col-5 text-end",
+                actionButton(
+                  ns("btn_add_facility"),
+                  tagList(tags$i(class = "bi bi-plus-circle me-1"), "Tambah Peta"),
+                  class = "btn-outline-primary btn-sm w-100"
+                )
+              )
+            ),
+            div(id = ns("facility_container"))
+          ),
           hr(),
           div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
               actionButton(ns("btn_run"),
@@ -64,6 +93,9 @@ padu_se_server <- function(id, output_dir) {
     
     serasi_in <- serasi_input(input, output, session, output_dir)
     
+    fac_ids <- reactiveVal(character(0))
+    fac_counter <- reactiveVal(0)
+    
     rv <- reactiveValues(
       analysis_result = NULL, gpkg_path = NULL,
       xlsx_path = NULL, log_messages = ""
@@ -75,6 +107,102 @@ padu_se_server <- function(id, output_dir) {
     
     output$serasi_ui_container <- renderUI({ serasi_in$ui_block() })
     
+    observeEvent(input$btn_add_facility, {
+      cnt <- fac_counter() + 1
+      fac_counter(cnt)
+      fac_id <- paste0("fac_", cnt)
+      current_ids <- fac_ids()
+      fac_ids(c(current_ids, fac_id))
+      
+      insertUI(
+        selector = paste0("#", ns("facility_container")),
+        where = "beforeEnd",
+        ui = div(
+          id = ns(paste0("box_", fac_id)),
+          class = "card p-3 mb-2 bg-light border",
+          style = "position: relative; border-radius: 6px;",
+          div(
+            style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
+            tags$span(
+              tags$strong(sprintf("Peta #%d", length(current_ids) + 1)),
+              style = "font-size: 0.88rem; color: #334155;"
+            ),
+            actionButton(
+              ns(paste0("btn_del_", fac_id)),
+              tagList(tags$i(class = "bi bi-trash me-1"), "Hapus"),
+              class = "btn-outline-danger btn-sm py-0 px-2",
+              style = "font-size: 0.78rem;"
+            )
+          ),
+          textInput(
+            ns(paste0("name_", fac_id)),
+            label = tags$span("Nama Peta", style = "font-size: 0.85rem; font-weight: 600;"),
+            value = sprintf("Peta %d", length(current_ids) + 1),
+            placeholder = "Contoh: Sekolah, Rumah Sakit, Pasar, Jalan"
+          ),
+          radioButtons(
+            ns(paste0("type_", fac_id)),
+            label = tags$span("Format Data", style = "font-size: 0.85rem; font-weight: 600;"),
+            choices = c(
+              "Vektor (Titik/Garis/Poligon) (.shp / .gpkg)" = "vector",
+              "Raster Jarak (.tif)" = "raster"
+            ),
+            selected = "vector",
+            inline = TRUE
+          ),
+          conditionalPanel(
+            condition = sprintf("input['%s'] == 'vector'", ns(paste0("type_", fac_id))),
+            fileInput(
+              ns(paste0("file_vec_", fac_id)),
+              label = tags$span("Unggah File Vektor (.shp, .gpkg)", style = "font-size: 0.85rem; font-weight: 600;"),
+              accept = c(".shp", ".shx", ".dbf", ".prj", ".gpkg", ".cpg"),
+              multiple = TRUE
+            )
+          ),
+          conditionalPanel(
+            condition = sprintf("input['%s'] == 'raster'", ns(paste0("type_", fac_id))),
+            fileInput(
+              ns(paste0("file_rast_", fac_id)),
+              label = tags$span("Unggah File Raster Jarak (.tif)", style = "font-size: 0.85rem; font-weight: 600;"),
+              accept = c(".tif", ".tiff", ".geotiff"),
+              multiple = FALSE
+            )
+          ),
+          numericInput(
+            ns(paste0("dmax_", fac_id)),
+            label = tags$span("Ambang Batas Keterjangkauan (m)", style = "font-size: 0.85rem; font-weight: 600;"),
+            value = 5000,
+            min = 1,
+            step = 100
+          )
+        )
+      )
+      
+      observeEvent(input[[paste0("btn_del_", fac_id)]], {
+        removeUI(selector = paste0("#", ns(paste0("box_", fac_id))))
+        fac_ids(setdiff(fac_ids(), fac_id))
+      }, ignoreInit = TRUE, once = TRUE)
+    })
+    
+    output$facility_summary_ui <- renderUI({
+      ids <- fac_ids()
+      if (length(ids) == 0) {
+        div(
+          class = "alert alert-secondary py-1 px-2 mb-0",
+          style = "font-size: 0.82rem;",
+          tags$i(class = "bi bi-info-circle me-1"),
+          "Belum ada peta ditambahkan."
+        )
+      } else {
+        div(
+          class = "alert alert-info py-1 px-2 mb-0",
+          style = "font-size: 0.82rem;",
+          tags$i(class = "bi bi-layers me-1"),
+          sprintf("%d peta ditambahkan.", length(ids))
+        )
+      }
+    })
+    
     observeEvent(input$btn_run, {
       out_dir <- output_dir()
       if (length(out_dir) > 1) out_dir <- out_dir[1]
@@ -84,7 +212,37 @@ padu_se_server <- function(id, output_dir) {
       }
       
       pu_raw <- serasi_in$idx_serasi_map()
-      req(pu_raw, input$ntl_area_file, input$popdens_area_file)
+      if (is.null(pu_raw)) {
+        showNotification("Peta unit perencanaan (SERASI) belum diatur.", type = "error", duration = 5)
+        return()
+      }
+      if (is.null(input$ntl_area_file) || is.null(input$popdens_area_file)) {
+        showNotification("Harap unggah layer Cahaya Malam dan Kepadatan Penduduk.", type = "error", duration = 5)
+        return()
+      }
+      
+      ids <- fac_ids()
+      for (id_item in ids) {
+        fac_type <- input[[paste0("type_", id_item)]] %||% "vector"
+        fac_file <- if (fac_type == "vector") input[[paste0("file_vec_", id_item)]] else input[[paste0("file_rast_", id_item)]]
+        fac_name <- trimws(input[[paste0("name_", id_item)]] %||% "")
+        if (!nzchar(fac_name)) fac_name <- id_item
+        if (is.null(fac_file) || nrow(fac_file) == 0) {
+          showNotification(
+            sprintf("File untuk peta '%s' belum diunggah. Silakan unggah file atau hapus baris peta tersebut.", fac_name),
+            type = "error", duration = 8
+          )
+          return()
+        }
+        fac_dmax <- input[[paste0("dmax_", id_item)]]
+        if (is.null(fac_dmax) || is.na(fac_dmax) || !is.numeric(fac_dmax) || fac_dmax <= 0) {
+          showNotification(
+            sprintf("Nilai Ambang Batas Keterjangkauan untuk peta '%s' harus berupa angka positif (meter).", fac_name),
+            type = "error", duration = 8
+          )
+          return()
+        }
+      }
       
       rv$analysis_result <- NULL; rv$gpkg_path <- NULL
       rv$xlsx_path <- NULL; rv$log_messages <- ""
@@ -94,38 +252,59 @@ padu_se_server <- function(id, output_dir) {
       withProgress(message = "Menjalankan Analisis PADU-SE", value = 0, {
         tryCatch({
           incProgress(0.1, detail = "Memuat data...")
-          if ("length" %in% colnames(pu_raw)) {
-            pu <- dissolve_id_pu(pu_raw)
+          if ("length" %in% colnames(pu_raw) || ("id_pu" %in% colnames(pu_raw) && any(duplicated(pu_raw$id_pu)))) {
+            pu <- tryCatch(dissolve_id_pu(pu_raw), error = function(e) pu_raw)
           } else {
             pu <- pu_raw
           }
           ntl_map <- load_and_validate_raster(input$ntl_area_file$datapath)
           popdens_map <- load_and_validate_raster(input$popdens_area_file$datapath)
-          append_log("Data berhasil dimuat.")
+          append_log("Data SERASI, Cahaya Malam, dan Kepadatan Penduduk berhasil dimuat.")
           
-          incProgress(0.1, detail = "Mengekstrak nilai...")
-          append_log("Menghitung nilai agregat NTL dan kepadatan populasi...")
+          facility_list <- list()
+          if (length(ids) > 0) {
+            append_log(sprintf("Memproses %d layer peta pendukung...", length(ids)))
+            for (j in seq_along(ids)) {
+              id_item <- ids[j]
+              fac_name <- trimws(input[[paste0("name_", id_item)]] %||% "")
+              if (!nzchar(fac_name)) fac_name <- paste0("peta_", j)
+              fac_type <- input[[paste0("type_", id_item)]] %||% "vector"
+              fac_file <- if (fac_type == "vector") input[[paste0("file_vec_", id_item)]] else input[[paste0("file_rast_", id_item)]]
+              fac_dmax <- as.numeric(input[[paste0("dmax_", id_item)]] %||% 5000)
+              
+              incProgress(0.1 / length(ids), detail = sprintf("Memproses peta '%s'...", fac_name))
+              append_log(sprintf("Memproses peta [%d/%d]: %s (%s, ambang batas=%s m)...",
+                                 j, length(ids), fac_name, fac_type, fac_dmax))
+              
+              fac_layer <- build_facility_layer(
+                name       = fac_name,
+                file_input = fac_file,
+                fac_type   = fac_type,
+                pu         = pu,
+                max_dist   = fac_dmax,
+                resolution = 100
+              )
+              facility_list[[length(facility_list) + 1]] <- fac_layer
+            }
+            append_log("Seluruh layer peta pendukung berhasil diproses menjadi raster jarak.")
+          }
           
-          ntl_extracted <- extract_raster_to_sf(pu, ntl_map, id_col = "id_pu", new_col = "ntl")
-          popdens_extracted <- extract_raster_to_sf(pu, popdens_map, id_col = "id_pu", new_col = "popdens")
-          incProgress(0.5, detail = "Pemrosesan selesai...")
+          incProgress(0.2, detail = "Menghitung indikator & indeks PADU-SE...")
+          append_log("Menghitung pilar aktivitas dan pilar keterjangkauan infrastruktur...")
           
-          ntl_norm <- ntl_extracted %>%
-            mutate(ntl_norm = (ntl - min(ntl)) / (max(ntl) - min(ntl)))
-          popdens_norm <- popdens_extracted %>%
-            mutate(popdens_norm = (popdens - min(popdens)) / (max(popdens) - min(popdens)))
+          calc_res <- calculate_padu_se(
+            idx_serasi_map     = pu,
+            ntl_rast           = ntl_map,
+            popdens_rast       = popdens_map,
+            facilities         = facility_list,
+            id_col             = "id_pu",
+            keep_intermediates = FALSE
+          )
           
-          popdens_subset <- popdens_norm %>%
-            dplyr::select(id_pu, popdens, popdens_norm) %>%
-            sf::st_drop_geometry()
+          idx_padu_se_map <- calc_res$idx_padu_se_map
+          res_table       <- calc_res$idx_padu_se_table
           
-          idx_padu_se_map <- ntl_norm %>%
-            dplyr::left_join(popdens_subset, by = "id_pu") %>%
-            dplyr::mutate(idx_padu_se = (ntl_norm + popdens_norm) / 2)
-          
-          incProgress(0.5, detail = "Pemrosesan selesai...")
-          
-          incProgress(0.1, detail = "Menyimpan hasil...")
+          incProgress(0.3, detail = "Menyimpan hasil...")
           padu_se_dir <- file.path(output_dir(), "Analisis PADU-SE")
           if (!dir.exists(padu_se_dir))
             dir.create(padu_se_dir, recursive = TRUE, showWarnings = FALSE)
@@ -133,7 +312,6 @@ padu_se_server <- function(id, output_dir) {
           gpkg_path <- file.path(padu_se_dir, "idx_padu_se.gpkg")
           xlsx_path <- file.path(padu_se_dir, "idx_padu_se.xlsx")
           sf::st_write(idx_padu_se_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          res_table <- as_tibble(sf::st_drop_geometry(idx_padu_se_map))
           openxlsx::write.xlsx(res_table, xlsx_path)
           
           rv$gpkg_path <- gpkg_path; rv$xlsx_path <- xlsx_path
@@ -148,12 +326,14 @@ padu_se_server <- function(id, output_dir) {
               serasi_source_hash     = serasi_in$hash(),
               ntl_path               = input$ntl_area_file,
               popdens_area_path      = input$popdens_area_file,
+              facilities             = lapply(facility_list, function(f) list(name = f$name, max_dist = f$max_dist)),
               output_dir             = output_dir()
             ),
             result = list(
               idx_serasi_map     = pu,
               ntl_map            = ntl_map,
               popdens_map        = popdens_map,
+              facilities         = facility_list,
               idx_padu_se_map    = idx_padu_se_map,
               idx_padu_se_table  = res_table
             )
@@ -169,20 +349,24 @@ padu_se_server <- function(id, output_dir) {
           
           session$userData$module_results$padu_se <- out
           
-          plot_continuous_map(map = idx_padu_se_map, column = "idx_padu_se",
-                              title = "Peta Indeks PADU-SE", legend = "Indeks PADU-SE",
-                              low = "red", high = "lightgreen",
-                              filepath = file.path(log_dir, "idx_padu_se.png"))
-          plot_continuous_map(map = ntl_map, column = NA,
-                              title = "Peta Cahaya Malam (Night time light)",
-                              legend = "nanoWatts/sr/cm\u00B2",
-                              low = "darkblue", high = "yellow",
-                              filepath = file.path(log_dir, "cahaya_malam.png"))
-          plot_continuous_map(map = popdens_map, column = NA,
-                              title = "Peta Kepadatan Populasi Penduduk",
-                              legend = "Penduduk (jiwa/ha)",
-                              low = "darkblue", high = "yellow",
-                              filepath = file.path(log_dir, "kepadatan_penduduk.png"))
+          tryCatch({
+            plot_continuous_map(map = idx_padu_se_map, column = "idx_padu_se",
+                                title = "Peta Indeks PADU-SE", legend = "Indeks PADU-SE",
+                                low = "red", high = "lightgreen",
+                                filepath = file.path(log_dir, "idx_padu_se.png"))
+            plot_continuous_map(map = ntl_map, column = NA,
+                                title = "Peta Cahaya Malam (Night time light)",
+                                legend = "nanoWatts/sr/cm\u00B2",
+                                low = "darkblue", high = "yellow",
+                                filepath = file.path(log_dir, "cahaya_malam.png"))
+            plot_continuous_map(map = popdens_map, column = NA,
+                                title = "Peta Kepadatan Populasi Penduduk",
+                                legend = "Penduduk (jiwa/ha)",
+                                low = "darkblue", high = "yellow",
+                                filepath = file.path(log_dir, "kepadatan_penduduk.png"))
+          }, error = function(e) {
+            append_log(paste("Peringatan saat membuat plot peta log:", conditionMessage(e)))
+          })
           
           append_log(paste("Peta disimpan \u2192", gpkg_path))
           append_log(paste("Tabel disimpan \u2192", xlsx_path))
@@ -205,8 +389,10 @@ padu_se_server <- function(id, output_dir) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"), "Analisis selesai.")
       } else if (!is.null(serasi_in$idx_serasi_map()) && !is.null(input$popdens_area_file)) {
+        n_fac <- length(fac_ids())
+        fac_msg <- if (n_fac == 0) "Siap menjalankan analisis (Aktivitas saja)." else sprintf("Siap menjalankan analisis (%d peta disiapkan).", n_fac)
         div(class = "alert alert-secondary mb-0",
-            tags$i(class = "bi bi-circle me-2"), "Siap menjalankan analisis.")
+            tags$i(class = "bi bi-circle me-2"), fac_msg)
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"), "Unggah file dan klik Jalankan Analisis.")
@@ -226,7 +412,9 @@ padu_se_server <- function(id, output_dir) {
         "popdens" = "Kepadatan Penduduk (jiwa/ha)",
         "idx_padu_se" = "Indeks PADU-SE"),
       table_round_cols = c("Luas (ha)", "Cahaya Malam (nanoWatts/sr/cm\u00B2)",
-                           "Kepadatan Penduduk (jiwa/ha)", "Indeks PADU-SE")
+                           "Kepadatan Penduduk (jiwa/ha)",
+                           "Indeks PADU-SE"),
+      include_dynamic_cols = TRUE
     )
     
     render_result_server(input, output, session, rv, padu_se_config)

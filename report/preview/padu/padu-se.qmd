@@ -1,5 +1,5 @@
 ---
-title: "PADU-SE"
+title: "PADU-SE (Keterpaduan Sosial & Ekonomi)"
 execute:
   echo: false
   warning: false
@@ -10,263 +10,118 @@ execute:
 source("R/utils.R")
 ```
 
-Analisis **PADU-SE** (Keterpaduan Sosial-Ekonomi) bertujuan untuk mengidentifikasi dan mengevaluasi tingkat aktivitas sosial-ekonomi masyarakat serta intensitas perkembangan wilayah berbasis data cahaya malam (*Night Time Light*) dan kepadatan penduduk (*Population Density*) terhadap alokasi ruang pada Peta Indeks SERASI.
+Analisis **PADU-SE** (Keterpaduan Sosial-Ekonomi) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan wilayah berbasis aktivitas sosial-ekonomi serta keterjangkauan infrastruktur dan layanan publik terhadap alokasi ruang pada Peta Indeks SERASI.
 
-Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, **Peta Cahaya Malam (Night Time Light)**, dan **Peta Kepadatan Populasi Penduduk**.
+Perhitungan indeks PADU-SE mengadopsi **Struktur Hierarkis 2 Pilar**:
+1. **Pilar 1: Indeks Aktivitas Sosial-Ekonomi (`idx_aktivitas`)**: Menggabungkan intensitas ekonomi malam hari (*Night Time Light*) dan konsentrasi sebaran penduduk (*Population Density*).
+2. **Pilar 2: Indeks Aksesibilitas Layanan Publik (`idx_aksesibilitas`)**: Menggabungkan tingkat keterjangkauan terhadap berbagai fasilitas publik (seperti sekolah, fasilitas kesehatan, pasar, atau jaringan jalan) berbasis fungsi peluruhan jarak linier berbatas (*Bounded Linear Distance Decay*).
+
+# Struktur Metodologi & Formula
+
+### 1. Pilar 1: Indeks Aktivitas (`idx_aktivitas`)
+Data Cahaya Malam (NTL) dan Kepadatan Penduduk (WorldPop) dinormalisasi dengan metode *min-max*:
+$$\text{NTL}_{\text{norm}} = \frac{\text{NTL} - \min(\text{NTL})}{\max(\text{NTL}) - \min(\text{NTL})}$$
+$$\text{Pop}_{\text{norm}} = \frac{\text{Pop} - \min(\text{Pop})}{\max(\text{Pop}) - \min(\text{Pop})}$$
+$$\text{idx\_aktivitas} = \frac{\text{NTL}_{\text{norm}} + \text{Pop}_{\text{norm}}}{2}$$
+
+### 2. Pilar 2: Indeks Aksesibilitas (`idx_aksesibilitas`)
+Untuk setiap layer fasilitas umum $i$ yang dimasukkan pengguna, dihitung jarak Euclidean rata-rata ($\bar{d}_i$ dalam meter) pada setiap unit perencanaan. Skor aksesibilitas dihitung menggunakan fungsi peluruhan linier dengan batas ambang $d_{\max, i}$:
+$$\text{acc}_i = \max\left(0, 1 - \min\left(\frac{\bar{d}_i}{d_{\max, i}}, 1\right)\right)$$
+Skor seluruh fasilitas kemudian dirata-ratakan secara berimbang:
+$$\text{idx\_aksesibilitas} = \frac{1}{N} \sum_{i=1}^N \text{acc}_i$$
+
+### 3. Indeks PADU-SE Komposit Final (`idx_padu_se`)
+- **Jika tanpa data fasilitas ($N = 0$)**:
+  $$\text{idx\_padu\_se} = \text{idx\_aktivitas} \quad \text{(100\% backward compatible)}$$
+- **Jika terdapat $\ge 1$ data fasilitas ($N \ge 1$)**:
+  $$\text{idx\_padu\_se} = 0.5 \times \text{idx\_aktivitas} + 0.5 \times \text{idx\_aksesibilitas}$$
+
+------------------------------------------------------------------------
 
 # Input Mandatory
 
-Bagian ini berisi data yang wajib tersedia sebelum proses analisis dapat dijalankan.
+Data berikut wajib tersedia sebelum proses analisis dapat dijalankan:
 
-|  |  |  |  |
-|----|----|----|----|
-| **No.** | **Data** | **Format** | **Peran** |
-| 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
-| 2 | Peta Cahaya Malam (Night Time Light) | Raster | Indikator intensitas aktivitas sosial-ekonomi |
-| 3 | Peta Kepadatan Populasi Penduduk | Raster | Indikator konsentrasi sebaran penduduk |
+| No. | Data | Format | Peran |
+|:---:|:---|:---:|:---|
+| 1 | Peta Indeks SERASI | Vektor | Input spasial unit perencanaan hasil analisis SERASI |
+| 2 | Peta Cahaya Malam (Night Time Light) | Raster | Proksi intensitas aktivitas ekonomi dan elektrifikasi |
+| 3 | Peta Kepadatan Populasi Penduduk | Raster | Proksi konsentrasi sebaran demografi penduduk |
 
-## Peta Indeks SERASI
+## 1. Peta Indeks SERASI
 
 ### Deskripsi
+Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai unit spasial evaluasi (*planning unit*). Data ini memuat informasi alokasi ruang darat (RTRW) dan laut (RZWP-3-K).
 
-Peta Indeks SERASI merupakan hasil dari analisis SERASI yang digunakan sebagai salah satu input utama dalam analisis **PADU-SE**. Data ini memuat informasi hasil identifikasi hubungan atau konflik spasial antara alokasi ruang darat dan laut yang selanjutnya menjadi dasar dalam penilaian keterpaduan penggunaan lahan dan perairan.
-
-Output yang digunakan pada tahap ini berupa data spasial dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
+Format yang didukung berupa **GeoPackage (.gpkg)** atau **Shapefile (.shp)**.
 
 ### Preview
-
 ```{r}
 create_vector_map( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ), color_field = "idx_serasi" )
 ```
 
 ### Spesifikasi Teknis
-
 ```{r}
 get_vector_metadata( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
 ```
 
-### Pemeriksaan Data
-
-```{r}
-check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg" ) )
-```
-
 ------------------------------------------------------------------------
 
-# Deskripsi
-
-Dataset PADU-SE merupakan kumpulan data raster yang digunakan sebagai masukan pada proses analisis PADU-SE di LaSPUR. Raster ini digunakan untuk menghitung indikator yang berkaitan dengan kedekatan terhadap infrastruktur dan jalur pelayaran.
-
-------------------------------------------------------------------------
-
-# Data yang Digunakan
-
-| Nama Data | Format | Keterangan |
-|--------------------------|-------------------|----------------------------|
-| EuDist Industri | GeoTIFF | Raster Euclidean Distance terhadap kawasan industri. |
-| EuDist Alur Pelayaran | GeoTIFF | Raster Euclidean Distance terhadap alur pelayaran. |
-
-------------------------------------------------------------------------
-
-## Peta Cahaya Malam (Night Time Light)
+## 2. Peta Cahaya Malam (Night Time Light)
 
 ### Deskripsi
+Peta Cahaya Malam (*Night Time Light*) menggunakan sensor VIIRS untuk merepresentasikan tingkat intensitas cahaya malam hari sebagai indikator aktivitas ekonomi makro dan elektrifikasi pemukiman.
 
-Peta Cahaya Malam (*Night Time Light*) merupakan data raster yang digunakan untuk merepresentasikan tingkat intensitas cahaya malam hari sebagai proksi aktivitas ekonomi, elektrifikasi, dan perkembangan kawasan pemukiman/perkotaan.
-
-### Data yang Digunakan
-
-| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
-|-----------|--------|------------|--------|------------|-----|
-| Night Time Light | GeoTIFF | Data raster intensitas cahaya malam VIIRS (resolusi 100m). | VIIRS / Earth Observation Group | 2023 | — |
+| Nama Data | Format | Sumber | Resolusi |
+|:---|:---:|:---:|:---:|
+| Night Time Light | GeoTIFF (.tif) | VIIRS / Earth Observation Group | 100m |
 
 ### Preview
-
 ```{r}
 create_raster_map(
   data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
 )
 ```
 
-### Spesifikasi Teknis
-
-```{r}
-get_raster_metadata(
-  data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
-)
-```
-
-### Pemeriksaan Data
-
-```{r}
-check_raster(
-  data_path("raster", "padu_se", "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif")
-)
-```
-
 ------------------------------------------------------------------------
 
-## Peta Kepadatan Populasi Penduduk
+## 3. Peta Kepadatan Populasi Penduduk
 
 ### Deskripsi
+Peta Kepadatan Populasi Penduduk merepresentasikan sebaran estimasi jumlah penduduk per satuan luas (jiwa/ha) dari WorldPop untuk mengukur tekanan demografi wilayah.
 
-Peta Kepadatan Populasi Penduduk merupakan data raster yang merepresentasikan sebaran dan jumlah estimasi penduduk per unit area (resolusi 100m). Data ini digunakan sebagai acuan tekanan populasi terhadap pemanfaatan ruang darat dan pesisir.
-
-### Data yang Digunakan
-
-| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
-|-----------|--------|------------|--------|------------|-----|
-| Population Density | GeoTIFF | Data raster estimasi kepadatan penduduk dari WorldPop (resolusi 100m). | WorldPop | 2025 | — |
+| Nama Data | Format | Sumber | Resolusi |
+|:---|:---:|:---:|:---:|
+| Population Density | GeoTIFF (.tif) | WorldPop | 100m |
 
 ### Preview
-
 ```{r}
 create_raster_map(
   data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
 )
 ```
 
-### Spesifikasi Teknis
+------------------------------------------------------------------------
 
-```{r}
-get_raster_metadata(
-  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
-)
-```
+# Input Opsional: Peta Infrastruktur Pendukung Kegiatan Sosial & Ekonomi
 
-### Pemeriksaan Data
-```{r}
-check_raster(
-  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
-)
+Pengguna dapat menambahkan $N$ layer peta infrastruktur secara dinamis melalui antarmuka modul. Untuk setiap peta yang ditambahkan, modul mendukung format hybrid:
 
-```
+1. **Vektor (Titik/Garis/Poligon) (.shp / .gpkg)**: Lokasi infrastruktur (misal sebaran fasilitas umum, fasilitas sosial, jalan, dll). Modul secara otomatis menghitung raster jarak Euclidean pada resolusi unit perencanaan.
+2. **Raster Jarak Siap Pakai (.tif)**: Raster jarak Euclidean kontinu yang telah dianalisis sebelumnya.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Visualisasi
-
-## Night Time Light
-
-```{r}
-create_raster_map(
-  data_path(
-    "raster",
-    "padu_se",
-    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
-  )
-)
-```
-
-## Population Density
-
-```{r}
-create_raster_map(
-  data_path(
-    "raster",
-    "padu_se",
-    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
-  )
-)
-```
+Setiap peta dilengkapi parameter Ambang Batas Keterjangkauan ($d_{\max}$ dalam meter) yang merefleksikan radius pelayanan efektif infrastruktur tersebut.
 
 ------------------------------------------------------------------------
 
-# Sumber Data
+# Skema Data Output
 
-| Dataset | Instansi    | Tahun | URL |
-|---------|-------------|-------|-----|
-| PADU-SE | CIFOR-ICRAF | \-    | \-  |
+Hasil analisis PADU-SE diekspor ke direktori output dalam format **GeoPackage (`idx_padu_se.gpkg`)** dan **Spreadsheet Excel (`idx_padu_se.xlsx`)** dengan atribut:
 
-------------------------------------------------------------------------
+- `id_pu`: Identifikasi unik unit perencanaan
+- `ntl`: Nilai rata-rata intensitas Cahaya Malam
+- `popdens`: Nilai rata-rata Kepadatan Penduduk (jiwa/ha)
+- `dist_<nama>`: Jarak rata-rata fisik dalam satuan meter ke infrastruktur tertentu
+- `idx_padu_se`: Nilai indeks keterpaduan sosial-ekonomi akhir
 
-# Spesifikasi Teknis
-
-## Night Time Light
-
-```{r}
-get_raster_metadata(
-  data_path(
-    "raster",
-    "padu_se",
-    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
-  )
-)
-```
-
-## Population Density
-
-```{r}
-get_raster_metadata(
-  data_path(
-    "raster",
-    "padu_se",
-    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
-  )
-)
-```
-
-------------------------------------------------------------------------
-
-# Digunakan pada Tahapan
-
-| Tahapan        | Digunakan |
-|----------------|:---------:|
-| Persiapan Data |     ✔     |
-| SERASI         |     ✖     |
-| PADU-SE        |     ✔     |
-| Rekonsiliasi   |     ✔     |
-| Output         |     ✔     |
-
-------------------------------------------------------------------------
-
-# Pemeriksaan Data
-
-## Night Time Light
-
-```{r}
-check_raster(
-  data_path(
-    "raster",
-    "padu_se",
-    "night_time_lights_sulteng_2023_100m_VIIRS_v1.tif"
-  )
-)
-```
-
-## Population Density
-
-```{r}
-check_raster(
-  data_path(
-    "raster",
-    "padu_se",
-    "population_density_sulteng_2025_100m_Worldpop_v1.tif"
-  )
-)
-```
+Peta visual hasil analisis disimpan dalam folder `log/` (`idx_padu_se.png`, `cahaya_malam.png`, dan `kepadatan_penduduk.png`).

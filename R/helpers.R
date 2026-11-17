@@ -403,7 +403,7 @@ load_and_validate_raster <- function(raster_path,
                                      check_min_layers = 1) {
   # Check file extension
   extension <- tolower(tools::file_ext(raster_path))
-  if (!extension %in% c("tif", "tiff")) {
+  if (nzchar(extension) && !extension %in% c("tif", "tiff", "geotiff")) {
     stop("Invalid extension: '.", extension, "'. Only .tif or .tiff accepted.")
   }
   if (!file.exists(raster_path)) stop("File not found: ", raster_path)
@@ -434,7 +434,8 @@ load_and_validate_raster <- function(raster_path,
   # Check extent
   if (check_extent) {
     ext <- terra::ext(r)
-    if (any(is.na(ext)) || ext$xmin >= ext$xmax || ext$ymin >= ext$ymax) {
+    ext_vec <- as.vector(ext)
+    if (any(is.na(ext_vec)) || ext$xmin >= ext$xmax || ext$ymin >= ext$ymax) {
       stop("Invalid extent: ", paste(ext[1:4], collapse = ", "))
     } else {
       message("   Extent: xmin=", ext$xmin, ", xmax=", ext$xmax,
@@ -718,8 +719,13 @@ render_result_server <- function(input, output, session, rv, config) {
       res <- ""
       for (name in names(config$map_label_cols)) {
         col <- config$map_label_cols[[name]]
+        if (!col %in% names(row)) next
         val <- row[[col]]
-        if (is.numeric(val)) val <- round(val, 3)
+        if (is.null(val) || length(val) == 0 || is.na(val)) {
+          val <- "-"
+        } else if (is.numeric(val)) {
+          val <- round(val, 3)
+        }
         res <- paste0(res, "<b>", name, "</b>: ", val, "<br>")
       }
       res
@@ -729,8 +735,13 @@ render_result_server <- function(input, output, session, rv, config) {
       res <- ""
       for (name in names(config$map_label_cols)) {
         col <- config$map_label_cols[[name]]
+        if (!col %in% names(row)) next
         val <- row[[col]]
-        if (is.numeric(val)) val <- round(val, 2)
+        if (is.null(val) || length(val) == 0 || is.na(val)) {
+          val <- "-"
+        } else if (is.numeric(val)) {
+          val <- round(val, 2)
+        }
         if (res == "") {
           res <- paste0(name, " ", val)
         } else {
@@ -812,9 +823,30 @@ render_result_server <- function(input, output, session, rv, config) {
     req(rv$analysis_result)
     
     df <- rv$analysis_result$table
+    current_table_cols <- table_cols
+    current_round_cols <- table_round_cols
+    
+    if (isTRUE(config$include_dynamic_cols)) {
+      extra_cols <- setdiff(colnames(df), c(names(current_table_cols), "geometry"))
+      for (ec in extra_cols) {
+        disp_name <- ec
+        if (grepl("^dist_", ec)) {
+          disp_name <- paste0("Jarak ", gsub("_", " ", sub("^dist_", "", ec)), " (m)")
+        } else if (grepl("^acc_", ec)) {
+          disp_name <- paste0("Skor Akses ", gsub("_", " ", sub("^acc_", "", ec)))
+        }
+        current_table_cols[ec] <- disp_name
+        if (is.numeric(df[[ec]])) {
+          current_round_cols <- c(current_round_cols, disp_name)
+        }
+      }
+      # Preserve dataframe column sequence for display
+      col_order <- intersect(colnames(df), names(current_table_cols))
+      current_table_cols <- current_table_cols[col_order]
+    }
     
     # Subset by available columns
-    valid_cols <- names(table_cols)[names(table_cols) %in% colnames(df)]
+    valid_cols <- names(current_table_cols)[names(current_table_cols) %in% colnames(df)]
     df_subset <- df[, valid_cols, drop = FALSE]
     
     if (!is.null(table_optional_cols) && length(table_optional_cols) > 0) {
@@ -831,7 +863,7 @@ render_result_server <- function(input, output, session, rv, config) {
     }
     
     # Rename to display names
-    colnames(df_subset) <- table_cols[valid_cols]
+    colnames(df_subset) <- current_table_cols[valid_cols]
     
     dt <- DT::datatable(
       df_subset,
@@ -853,8 +885,8 @@ render_result_server <- function(input, output, session, rv, config) {
     )
     
     # Round specified columns
-    if (!is.null(table_round_cols) && length(table_round_cols) > 0) {
-      valid_round_cols <- table_round_cols[table_round_cols %in% colnames(df_subset)]
+    if (!is.null(current_round_cols) && length(current_round_cols) > 0) {
+      valid_round_cols <- current_round_cols[current_round_cols %in% colnames(df_subset)]
       if (length(valid_round_cols) > 0) {
         dt <- dt %>% DT::formatRound(columns = valid_round_cols, digits = 2)
       }
