@@ -556,6 +556,8 @@ adjacent_server <- function(id, output_dir) {
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
             idx_serasi_map <- merge_attributes_to_map(adjacent_map, rv$matriks_serasi) %>%
               filter(idx_serasi != 1)
+            idx_serasi_map <- assign_area_function(idx_serasi_map, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
+            append_log("   Klasifikasi fungsi kawasan (fungsi) berhasil ditentukan.")
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
             if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
@@ -1486,18 +1488,20 @@ adjacent_server <- function(id, output_dir) {
         "ID Group"       = "id_group",
         "RTRW"           = "RTRW",
         "RZWP3K"         = "RZWP3K",
+        "Fungsi"         = "fungsi",
         "Indeks SERASI"  = "idx_serasi"
       ),
       table_cols = c(
-        "id"       = "ID",
-        "id_pu"    = "ID PU",
-        "id_group" = "ID Group",
-        "RTRW"     = "RTRW",
-        "RZWP3K"   = "RZWP3K",
-        "admin"    = "Administrasi",
-        "area_ha"  = "Luas (ha)",
-        "length"   = "Panjang Segmen Ketetanggaan (m)",
-        "n_pairs"  = "Jumlah pasangan tetangga",
+        "id"         = "ID",
+        "id_pu"      = "ID PU",
+        "id_group"   = "ID Group",
+        "RTRW"       = "RTRW",
+        "RZWP3K"     = "RZWP3K",
+        "fungsi"     = "Fungsi Kawasan",
+        "admin"      = "Administrasi",
+        "area_ha"    = "Luas (ha)",
+        "length"     = "Panjang Segmen Ketetanggaan (m)",
+        "n_pairs"    = "Jumlah pasangan tetangga",
         "idx_serasi" = "Indeks SERASI"
       ),
       table_round_cols = c("Luas (ha)", "Panjang Segmen Ketetanggaan (m)", "Indeks SERASI")

@@ -1137,6 +1137,300 @@ merge_attributes_to_map <- function(sf_obj, lookup_table, default_compat = NA_re
   return(sf_obj)
 }
 
+#' Assign Area Function Classification to Spatial Units
+#'
+#' @description
+#' Classifies spatial planning units (`id_pu`) with a statutory area function (`fungsi`)
+#' based on the priority designations of their intersecting or adjacent RTRW and
+#' RZWP3K zones.
+#' 
+#' Priority values are defined as:
+#' \itemize{
+#'   \item \code{1}: Lindung (Conservation / Ecological Protection)
+#'   \item \code{0}: Budidaya (Cultivation / Productive / Economic)
+#' }
+#'
+#' The resulting classification in the \code{fungsi} column is:
+#' \itemize{
+#'   \item \code{"lindung"}: Both RTRW and RZWP3K have \code{Prioritas == 1}.
+#'   \item \code{"budidaya"}: Both RTRW and RZWP3K have \code{Prioritas == 0}.
+#'   \item \code{"campuran"}: One zone has \code{Prioritas == 1} and the other has \code{Prioritas == 0}.
+#'   \item \code{NA_character_}: One or both zones cannot be matched or have missing priority.
+#' }
+#'
+#' Handles both single-row (overlap) and paired-row (adjacent) data structures,
+#' as well as plain data frames.
+#'
+#' @param sf_obj An \code{sf} object or \code{data.frame} containing RTRW and RZWP3K zone designations.
+#' @param rtrw_prioritas A \code{data.frame} containing RTRW zone names and numeric \code{Prioritas} column.
+#' @param rzwp3k_prioritas A \code{data.frame} containing RZWP3K zone names and numeric \code{Prioritas} column.
+#'
+#' @return The original \code{sf_obj} with an added character column \code{fungsi}.
+#'
+#' @examples
+#' \dontrun{
+#' rtrw_prio <- data.frame(RTRW = c("Hutan Lindung", "Kawasan Industri"), Prioritas = c(1, 0))
+#' rzwp_prio <- data.frame(RZWP3K = c("Zona Konservasi", "Zona Pelabuhan"), Prioritas = c(1, 0))
+#' result <- assign_area_function(overlap_sf, rtrw_prio, rzwp_prio)
+#' }
+#'
+#' @export
+assign_area_function <- function(sf_obj, rtrw_prioritas, rzwp3k_prioritas) {
+  if (!is.data.frame(sf_obj)) {
+    stop("sf_obj must be an sf object or data frame.")
+  }
+  if (!is.data.frame(rtrw_prioritas) || !is.data.frame(rzwp3k_prioritas)) {
+    stop("rtrw_prioritas and rzwp3k_prioritas must be data frames.")
+  }
+
+  # Helper to extract zone -> priority lookup vector from a reference table
+  extract_prio_map <- function(tbl, default_pat, tbl_name) {
+    if (ncol(tbl) < 2) {
+      stop(sprintf("%s reference table must have at least 2 columns.", tbl_name))
+    }
+    cols <- names(tbl)
+    
+    # 1. Locate priority column
+    prio_col_idx <- grep("^prioritas$", cols, ignore.case = TRUE)
+    if (length(prio_col_idx) == 0) {
+      prio_col_idx <- grep("prioritas|priority", cols, ignore.case = TRUE)
+    }
+    if (length(prio_col_idx) == 0) {
+      if (ncol(tbl) >= 3 && is.numeric(tbl[[3]])) {
+        prio_col_idx <- 3
+      } else {
+        stop(sprintf("%s reference table must contain a 'Prioritas' column.", tbl_name))
+      }
+    } else {
+      prio_col_idx <- prio_col_idx[1]
+    }
+    
+    # 2. Locate zone name column
+    zone_col_idx <- grep(paste0("^", default_pat, "$"), cols, ignore.case = TRUE)
+    if (length(zone_col_idx) == 0) {
+      candidates <- grep(default_pat, cols, ignore.case = TRUE)
+      candidates <- setdiff(candidates, prio_col_idx)
+      non_code <- candidates[!grepl("^(kode|id|no[._])", cols[candidates], ignore.case = TRUE)]
+      if (length(non_code) > 0) zone_col_idx <- non_code else zone_col_idx <- candidates
+    }
+    if (length(zone_col_idx) == 0) {
+      candidates <- grep("pola|zona|subzona|class|nama|name", cols, ignore.case = TRUE)
+      candidates <- setdiff(candidates, prio_col_idx)
+      non_code <- candidates[!grepl("^(kode|id|no[._])", cols[candidates], ignore.case = TRUE)]
+      if (length(non_code) > 0) zone_col_idx <- non_code else zone_col_idx <- candidates
+    }
+    if (length(zone_col_idx) == 0) {
+      zone_col_idx <- if (ncol(tbl) >= 2 && prio_col_idx != 2) 2 else 1
+    } else {
+      zone_col_idx <- zone_col_idx[1]
+    }
+    
+    zones <- trimws(as.character(tbl[[zone_col_idx]]))
+    raw_prio <- tbl[[prio_col_idx]]
+    
+    char_prio <- tolower(trimws(as.character(raw_prio)))
+    num_prio <- suppressWarnings(as.numeric(char_prio))
+    need_mapping <- is.na(num_prio) & !is.na(char_prio) & nzchar(char_prio)
+    if (any(need_mapping)) {
+      char_map <- ifelse(grepl("^lindung", char_prio), 1,
+                  ifelse(grepl("^budidaya", char_prio), 0, NA_real_))
+      num_prio[need_mapping] <- char_map[need_mapping]
+    }
+    
+    invalid_prio <- !is.na(num_prio) & !(num_prio %in% c(0, 1))
+    if (any(invalid_prio)) {
+      warning(sprintf(
+        "%s reference table contains priority values outside {0, 1}. They will be treated as NA.",
+        tbl_name
+      ))
+      num_prio[invalid_prio] <- NA_real_
+    }
+    
+    valid <- !is.na(zones) & nzchar(zones)
+    zones <- zones[valid]
+    num_prio <- num_prio[valid]
+    
+    dup_zones <- zones[duplicated(zones)]
+    if (length(dup_zones) > 0) {
+      conflicts <- vapply(unique(dup_zones), function(z) {
+        z_prios <- unique(stats::na.omit(num_prio[zones == z]))
+        length(z_prios) > 1
+      }, logical(1))
+      if (any(conflicts)) {
+        conflict_names <- names(conflicts)[conflicts]
+        warning(sprintf(
+          "%s reference table contains duplicate entries with conflicting priorities for: %s. Using first occurrence.",
+          tbl_name, paste(conflict_names, collapse = ", ")
+        ))
+      }
+    }
+    
+    unique_mask <- !duplicated(zones)
+    zones <- zones[unique_mask]
+    num_prio <- num_prio[unique_mask]
+    
+    stats::setNames(num_prio, zones)
+  }
+
+  rtrw_prio_map <- extract_prio_map(rtrw_prioritas, "rtrw", "RTRW")
+  rzwp_prio_map <- extract_prio_map(rzwp3k_prioritas, "rzwp3k", "RZWP3K")
+
+  # Helper: lookup priority with case-insensitive fallback
+  lookup_prio <- function(vals, prio_map) {
+    if (length(vals) == 0) return(numeric(0))
+    res <- unname(prio_map[vals])
+    na_idx <- which(is.na(res) & !is.na(vals) & nzchar(vals))
+    if (length(na_idx) > 0 && length(prio_map) > 0) {
+      lower_names <- tolower(names(prio_map))
+      unique_lower <- !duplicated(lower_names)
+      lower_map <- stats::setNames(unname(prio_map)[unique_lower], lower_names[unique_lower])
+      res[na_idx] <- unname(lower_map[tolower(vals[na_idx])])
+    }
+    res
+  }
+
+  # Classify pair of numeric priorities
+  classify_pr_pz <- function(pr, pz) {
+    res <- rep(NA_character_, length(pr))
+    lindung_mask <- !is.na(pr) & !is.na(pz) & pr == 1 & pz == 1
+    budidaya_mask <- !is.na(pr) & !is.na(pz) & pr == 0 & pz == 0
+    campuran_mask <- !is.na(pr) & !is.na(pz) & (
+      (pr == 1 & pz == 0) | (pr == 0 & pz == 1)
+    )
+    res[lindung_mask] <- "Lindung"
+    res[budidaya_mask] <- "Budidaya"
+    res[campuran_mask] <- "Campuran"
+    res
+  }
+
+  # If empty input
+  if (nrow(sf_obj) == 0) {
+    sf_obj$fungsi <- character(0)
+    return(sf_obj)
+  }
+
+  # Locate RTRW and RZWP3K columns in sf_obj
+  sf_cols <- names(sf_obj)
+  rtrw_idx <- which(toupper(sf_cols) == "RTRW")
+  if (length(rtrw_idx) == 0) rtrw_idx <- grep("^(rtrw|pola|pola[._]ruang)$", sf_cols, ignore.case = TRUE)
+  if (length(rtrw_idx) == 0) rtrw_idx <- grep("rtrw|pola", sf_cols, ignore.case = TRUE)
+  
+  rzwp_idx <- which(toupper(sf_cols) %in% c("RZWP3K", "RZWP"))
+  if (length(rzwp_idx) == 0) rzwp_idx <- grep("^(rzwp|rzwp3k|zona|subzona)$", sf_cols, ignore.case = TRUE)
+  if (length(rzwp_idx) == 0) rzwp_idx <- grep("rzwp|zona", sf_cols, ignore.case = TRUE)
+
+  if (length(rtrw_idx) == 0 || length(rzwp_idx) == 0) {
+    geom_col <- if (inherits(sf_obj, "sf")) attr(sf_obj, "sf_column") else NULL
+    data_cols <- setdiff(sf_cols, geom_col)
+    if (length(data_cols) >= 4) {
+      if (length(rtrw_idx) == 0) rtrw_col <- data_cols[3] else rtrw_col <- sf_cols[rtrw_idx[1]]
+      if (length(rzwp_idx) == 0) rzwp_col <- data_cols[4] else rzwp_col <- sf_cols[rzwp_idx[1]]
+    } else {
+      stop("sf_obj must contain 'RTRW' and 'RZWP3K' columns.")
+    }
+  } else {
+    rtrw_col <- sf_cols[rtrw_idx[1]]
+    rzwp_col <- sf_cols[rzwp_idx[1]]
+  }
+
+  # Check if data has paired adjacent structure:
+  # Requires id_pu column, duplicate id_pu values, AND complementary NA structure
+  # where RTRW is present on some rows while RZWP3K is NA, and vice versa.
+  has_id_pu <- "id_pu" %in% sf_cols
+  is_paired_adjacent <- FALSE
+  if (has_id_pu && any(duplicated(sf_obj$id_pu[!is.na(sf_obj$id_pu)]))) {
+    r_has_val <- !is.na(sf_obj[[rtrw_col]]) & nzchar(trimws(as.character(sf_obj[[rtrw_col]])))
+    z_has_val <- !is.na(sf_obj[[rzwp_col]]) & nzchar(trimws(as.character(sf_obj[[rzwp_col]])))
+    if (any(r_has_val & !z_has_val) && any(!r_has_val & z_has_val)) {
+      is_paired_adjacent <- TRUE
+    }
+  }
+
+  if (is_paired_adjacent) {
+    sf_non_geo <- if (inherits(sf_obj, "sf")) sf::st_drop_geometry(sf_obj) else sf_obj
+    valid_id_mask <- !is.na(sf_non_geo$id_pu)
+    sub_df <- sf_non_geo[valid_id_mask, , drop = FALSE]
+
+    r_rows <- sub_df[!is.na(sub_df[[rtrw_col]]) & nzchar(trimws(as.character(sub_df[[rtrw_col]]))), , drop = FALSE]
+    z_rows <- sub_df[!is.na(sub_df[[rzwp_col]]) & nzchar(trimws(as.character(sub_df[[rzwp_col]]))), , drop = FALSE]
+
+    # Check for conflicting zone classes within same id_pu
+    dup_r_ids <- r_rows$id_pu[duplicated(r_rows$id_pu)]
+    if (length(dup_r_ids) > 0) {
+      conflicts_r <- vapply(unique(dup_r_ids), function(pid) {
+        length(unique(r_rows[[rtrw_col]][r_rows$id_pu == pid])) > 1
+      }, logical(1))
+      if (any(conflicts_r)) {
+        warning("assign_area_function: Conflicting RTRW zone classes detected within the same id_pu in adjacent data. Using first occurrence.")
+      }
+    }
+
+    dup_z_ids <- z_rows$id_pu[duplicated(z_rows$id_pu)]
+    if (length(dup_z_ids) > 0) {
+      conflicts_z <- vapply(unique(dup_z_ids), function(pid) {
+        length(unique(z_rows[[rzwp_col]][z_rows$id_pu == pid])) > 1
+      }, logical(1))
+      if (any(conflicts_z)) {
+        warning("assign_area_function: Conflicting RZWP3K zone classes detected within the same id_pu in adjacent data. Using first occurrence.")
+      }
+    }
+
+    # First occurrence per id_pu
+    r_first <- r_rows[!duplicated(r_rows$id_pu), , drop = FALSE]
+    z_first <- z_rows[!duplicated(z_rows$id_pu), , drop = FALSE]
+
+    r_map_by_id <- stats::setNames(trimws(as.character(r_first[[rtrw_col]])), as.character(r_first$id_pu))
+    z_map_by_id <- stats::setNames(trimws(as.character(z_first[[rzwp_col]])), as.character(z_first$id_pu))
+
+    id_str <- as.character(sf_obj$id_pu)
+    pu_rtrw <- unname(r_map_by_id[id_str])
+    pu_rzwp <- unname(z_map_by_id[id_str])
+
+    pr <- lookup_prio(pu_rtrw, rtrw_prio_map)
+    pz <- lookup_prio(pu_rzwp, rzwp_prio_map)
+
+    # Check unmatched among unique pairs
+    all_unique_ids <- unique(sf_obj$id_pu[valid_id_mask])
+    all_u_str <- as.character(all_unique_ids)
+    u_rtrw <- unname(r_map_by_id[all_u_str])
+    u_rzwp <- unname(z_map_by_id[all_u_str])
+    u_pr <- lookup_prio(u_rtrw, rtrw_prio_map)
+    u_pz <- lookup_prio(u_rzwp, rzwp_prio_map)
+
+    unmatched_r <- sum(!is.na(u_rtrw) & nzchar(u_rtrw) & is.na(u_pr))
+    unmatched_z <- sum(!is.na(u_rzwp) & nzchar(u_rzwp) & is.na(u_pz))
+    if (unmatched_r > 0 || unmatched_z > 0) {
+      warning(sprintf(
+        "assign_area_function: %d RTRW and %d RZWP3K zone(s) could not be matched in priority tables. 'fungsi' set to NA for those units.",
+        unmatched_r, unmatched_z
+      ))
+    }
+
+    res_fungsi <- classify_pr_pz(pr, pz)
+    res_fungsi[!valid_id_mask] <- NA_character_
+    sf_obj$fungsi <- res_fungsi
+  } else {
+    r_vals <- trimws(as.character(sf_obj[[rtrw_col]]))
+    z_vals <- trimws(as.character(sf_obj[[rzwp_col]]))
+
+    pr <- lookup_prio(r_vals, rtrw_prio_map)
+    pz <- lookup_prio(z_vals, rzwp_prio_map)
+
+    unmatched_r <- sum(!is.na(r_vals) & nzchar(r_vals) & is.na(pr))
+    unmatched_z <- sum(!is.na(z_vals) & nzchar(z_vals) & is.na(pz))
+    if (unmatched_r > 0 || unmatched_z > 0) {
+      warning(sprintf(
+        "assign_area_function: %d RTRW and %d RZWP3K zone(s) could not be matched in priority tables. 'fungsi' set to NA for those units.",
+        unmatched_r, unmatched_z
+      ))
+    }
+
+    sf_obj$fungsi <- classify_pr_pz(pr, pz)
+  }
+
+  return(sf_obj)
+}
+
 #' Generate a square self-combination matrix from a class table
 #'
 #' @description
@@ -3160,72 +3454,138 @@ calculate_padu_ki <- function(idx_serasi_map,
 #'   padu_idx_weight = padu_idx_weight
 #' )
 #' }
+#' Validate SERASI spatial layer for PADU combine analysis
+#'
+#' Verifies that the input SERASI layer exists and contains the required
+#' statutory area function column ('fungsi').
+#'
+#' @param idx_serasi_map An sf or data frame object representing the SERASI layer.
+#'
+#' @return A list with fields:
+#'   \item{valid}{Logical indicating whether the layer satisfies preconditions.}
+#'   \item{message}{Character string explaining any validation failure or "OK".}
 #'
 #' @export
-calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight) {
+validate_padu_combine_serasi <- function(idx_serasi_map) {
+  if (is.null(idx_serasi_map)) {
+    return(list(
+      valid = FALSE,
+      message = "Peta SERASI belum tersedia. Jalankan modul 1.1/1.2 terlebih dahulu atau unggah berkas."
+    ))
+  }
+  if (!"fungsi" %in% names(idx_serasi_map)) {
+    return(list(
+      valid = FALSE,
+      message = "Peta SERASI tidak memiliki kolom 'fungsi'. Silakan jalankan ulang SERASI dengan tabel acuan prioritas."
+    ))
+  }
+  list(valid = TRUE, message = "OK")
+}
+
+#'
+#' @export
+calculate_padu_index <- function(padu_list, idx_padu_map, padu_idx_weight = NULL) {
+  # Merge all PADU files onto idx_padu_map
   idx_padu_map <- purrr::reduce(
     padu_list,
     .init = idx_padu_map,
     .f = function(x, y) {
-      
       idx_col <- names(y)[grepl("^idx_padu_", names(y))][1]
-      
       y_clean <- y %>%
-        st_drop_geometry() %>%
-        mutate(id_pu = as.integer(id_pu)) %>%
-        select(id_pu, all_of(idx_col))
-      
-      left_join(x, y_clean, by = "id_pu")
+        sf::st_drop_geometry() %>%
+        dplyr::mutate(id_pu = as.integer(id_pu)) %>%
+        dplyr::select(id_pu, dplyr::all_of(idx_col))
+      dplyr::left_join(x, y_clean, by = "id_pu")
     }
   )
-  
-  # Replace NA to 0
+
+  # Replace NA in individual idx_padu_* columns to 0
   idx_padu_map <- idx_padu_map %>%
-    mutate(across(matches("^idx_padu_"), ~replace_na(., 0)))
-  
-  # Prepare weights
-  weights <- padu_idx_weight %>%
-    mutate(
-      code  = tolower(.[[1]]),
-      value = .[[2]]
-    )
-  
+    dplyr::mutate(dplyr::across(dplyr::matches("^idx_padu_"), ~tidyr::replace_na(., 0)))
+
+  # Identify available individual PADU index columns
   idx_cols <- names(idx_padu_map)[grepl("^idx_padu_", names(idx_padu_map))]
   if ("idx_padu_ke_abs" %in% idx_cols) {
     message("Removing 'idx_padu_ke_abs' from composite calculation (ignored).")
     idx_cols <- setdiff(idx_cols, "idx_padu_ke_abs")
   }
-  
-  idx_code <- stringr::str_remove(idx_cols, "idx_padu_")
-  
-  # Validate weights for the remaining indices
-  missing_weights <- idx_code[!idx_code %in% weights$code]
-  if (length(missing_weights) > 0) {
-    stop(paste("Missing weights for indices:", paste(missing_weights, collapse = ", ")))
+  idx_cols <- setdiff(idx_cols, c("idx_padu_all", "idx_padu_lindung", "idx_padu_budidaya", "idx_padu_final"))
+
+  if (length(idx_cols) == 0) {
+    stop("No valid 'idx_padu_*' indicator columns found in padu_list.")
   }
-  
-  n_idx <- length(idx_cols)
-  
-  if (n_idx < 7) {
-    message(paste0("Only ", n_idx, " indices detected → using mean"))
-  } else {
-    message("All indices detected → using weighted sum")
+
+  idx_codes <- tolower(stringr::str_remove(idx_cols, "^idx_padu_"))
+
+  # Parse weight table if supplied
+  weights_df <- NULL
+  if (!is.null(padu_idx_weight) && is.data.frame(padu_idx_weight) && nrow(padu_idx_weight) > 0) {
+    w_code <- tolower(trimws(as.character(padu_idx_weight[[1]])))
+    w_val  <- as.numeric(padu_idx_weight[[2]])
+    valid_w <- !is.na(w_code) & !is.na(w_val) & nzchar(w_code)
+    weights_df <- data.frame(
+      code  = w_code[valid_w],
+      value = w_val[valid_w],
+      stringsAsFactors = FALSE
+    )
   }
-  
-  idx_padu_map <- idx_padu_map %>%
-    rowwise() %>%
-    mutate(
-      idx_padu_final = if (n_idx < 7) {
-        mean(c_across(all_of(idx_cols)))
-      } else {
-        sum(
-          c_across(all_of(idx_cols)) *
-            weights$value[match(idx_code, weights$code)]
-        )
+
+  # Indicator pillar groupings:
+  # MFL (Mendukung Fungsi Lindung): ke, hs, kl, kh, ki
+  # MFB (Mendukung Fungsi Budidaya): rtp, se, ki
+  mfl_keys <- c("ke", "hs", "kl", "kh", "ki")
+  mfb_keys <- c("rtp", "se", "ki")
+
+  # Helper to compute composite vector with dynamic weight rescaling
+  compute_composite <- function(df, target_keys) {
+    matched_idx <- which(idx_codes %in% target_keys)
+    if (length(matched_idx) == 0) {
+      return(rep(NA_real_, nrow(df)))
+    }
+
+    cols_to_use  <- idx_cols[matched_idx]
+    codes_to_use <- idx_codes[matched_idx]
+    k <- length(cols_to_use)
+
+    w <- rep(1 / k, k)
+    if (!is.null(weights_df)) {
+      matched_weights <- weights_df$value[match(codes_to_use, weights_df$code)]
+      if (all(!is.na(matched_weights)) && sum(matched_weights, na.rm = TRUE) > 0) {
+        w <- matched_weights / sum(matched_weights, na.rm = TRUE)
       }
-    ) %>%
-    ungroup()
-  
+    }
+
+    mat <- as.matrix(sf::st_drop_geometry(df[, cols_to_use, drop = FALSE]))
+    storage.mode(mat) <- "double"
+    as.vector(mat %*% w)
+  }
+
+  # Calculate the 3 composite indices
+  comp_all      <- compute_composite(idx_padu_map, idx_codes)
+  comp_lindung  <- compute_composite(idx_padu_map, mfl_keys)
+  comp_budidaya <- compute_composite(idx_padu_map, mfb_keys)
+
+  # Assign active idx_padu_final based on fungsi
+  if ("fungsi" %in% names(idx_padu_map)) {
+    f_clean <- tolower(trimws(as.character(idx_padu_map$fungsi)))
+    comp_final <- ifelse(
+      f_clean == "lindung" & !is.na(comp_lindung),
+      comp_lindung,
+      ifelse(
+        f_clean == "budidaya" & !is.na(comp_budidaya),
+        comp_budidaya,
+        comp_all
+      )
+    )
+  } else {
+    comp_final <- comp_all
+  }
+
+  idx_padu_map$idx_padu_all      <- comp_all
+  idx_padu_map$idx_padu_lindung  <- comp_lindung
+  idx_padu_map$idx_padu_budidaya <- comp_budidaya
+  idx_padu_map$idx_padu_final    <- comp_final
+
   return(idx_padu_map)
 }
 

@@ -823,6 +823,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
             RTRW      = as.character(df$RTRW),
             RZWP3K    = as.character(df$RZWP3K),
             admin     = if ("admin" %in% names(df)) as.character(df$admin) else NA_character_,
+            fungsi    = if ("fungsi" %in% names(df)) as.character(df$fungsi) else if ("fungsi" %in% names(rv$idx_padan_map_filter)) as.character(rv$idx_padan_map_filter$fungsi[match(df$id_pu, rv$idx_padan_map_filter$id_pu)]) else NA_character_,
             length    = if ("length" %in% names(df)) as.numeric(df$length) else NA_real_,
             area_ha        = unname(area_ha_lookup[as.character(df$id_pu)]),
             idx_serasi     = df$idx_serasi,
@@ -834,7 +835,8 @@ recommendation_overlaps_server <- function(id, output_dir) {
           
           sub_padu_cols <- c("idx_padu_ke", "idx_padu_hs", "idx_padu_kl",
                              "idx_padu_kh", "idx_padu_rtp", "idx_padu_se",
-                             "idx_padu_ki")
+                             "idx_padu_ki", "idx_padu_all", "idx_padu_lindung",
+                             "idx_padu_budidaya")
           for (col in sub_padu_cols) {
             if (col %in% names(rv$idx_padan_map_filter)) {
               lk <- extract_by_id_pu(rv$idx_padan_map_filter, col)
@@ -1190,10 +1192,14 @@ recommendation_overlaps_server <- function(id, output_dir) {
         id_rtrw         = reactable::colDef(name = "ID RTRW",                  minWidth = 90),
         id_rzwp3k       = reactable::colDef(name = "ID RZWP3K",                minWidth = 90),
         admin           = reactable::colDef(name = "Wilayah Administratif",    minWidth = 140),
+        fungsi          = reactable::colDef(name = "Fungsi Kawasan",           minWidth = 120),
         area_ha         = reactable::colDef(name = "Luas (ha)",                minWidth = 130, format = num2_fmt),
         idx_serasi      = reactable::colDef(name = "Indeks SERASI Aktual",     minWidth = 130, format = num2_fmt),
         idx_serasi_new  = reactable::colDef(name = "Potensi Indeks SERASI Baru", minWidth = 140, format = num2_fmt),
-        idx_padu_final  = reactable::colDef(name = "Indeks PADU Kombinasi",    minWidth = 130, format = num2_fmt),
+        idx_padu_all    = reactable::colDef(name = "Indeks PADU Campuran",                 minWidth = 110, format = num2_fmt),
+        idx_padu_lindung = reactable::colDef(name = "Indeks PADU Lindung",             minWidth = 110, format = num2_fmt),
+        idx_padu_budidaya = reactable::colDef(name = "Indeks PADU Budidaya",          minWidth = 110, format = num2_fmt),
+        idx_padu_final  = reactable::colDef(name = "Indeks PADU Akhir",    minWidth = 130, format = num2_fmt),
         idx_padan       = reactable::colDef(name = "Indeks PADAN Aktual",      minWidth = 130, format = num2_fmt),
         idx_padan_new   = reactable::colDef(name = "Potensi Indeks PADAN Baru", minWidth = 140, format = num2_fmt),
         idx_padu_ke     = reactable::colDef(name = "Indeks PADU-KE",  html = TRUE, minWidth = 110),

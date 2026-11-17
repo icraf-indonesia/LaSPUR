@@ -48,16 +48,16 @@ test_that("assign_area_function classifies all four priority combinations correc
   expect_type(res$fungsi, "character")
   
   # 1. Lindung: (1, 1) -> HL + KKP
-  expect_equal(res$fungsi[1], "lindung")
+  expect_equal(res$fungsi[1], "Lindung")
   
   # 2. Budidaya: (0, 0) -> HP + KPU_AL
-  expect_equal(res$fungsi[2], "budidaya")
+  expect_equal(res$fungsi[2], "Budidaya")
   
   # 3. Campuran: (1, 0) -> HL + KPU_AL
-  expect_equal(res$fungsi[3], "campuran")
+  expect_equal(res$fungsi[3], "Campuran")
   
   # 4. Campuran: (0, 1) -> HP + KKP
-  expect_equal(res$fungsi[4], "campuran")
+  expect_equal(res$fungsi[4], "Campuran")
 })
 
 # --- Overlap (Single-row per PU) Format ---
@@ -88,7 +88,7 @@ test_that("assign_area_function handles single-row per PU (overlap) format corre
   
   res <- assign_area_function(overlap_sf, prio_rtrw, prio_rzwp)
   
-  expect_equal(res$fungsi, c("lindung", "budidaya", "campuran"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya", "Campuran"))
   expect_equal(res$id_pu, c(101, 102, 103))
   expect_equal(res$area_ha, c(200.5, 350.2, 180.0))
 })
@@ -122,13 +122,13 @@ test_that("assign_area_function handles paired-rows per PU (adjacent) format cor
   res <- assign_area_function(adjacent_sf, prio_rtrw, prio_rzwp)
   
   # Both rows for id_pu 1 must be "lindung"
-  expect_equal(res$fungsi[res$id_pu == 1], c("lindung", "lindung"))
+  expect_equal(res$fungsi[res$id_pu == 1], c("Lindung", "Lindung"))
   
   # Both rows for id_pu 2 must be "budidaya"
-  expect_equal(res$fungsi[res$id_pu == 2], c("budidaya", "budidaya"))
+  expect_equal(res$fungsi[res$id_pu == 2], c("Budidaya", "Budidaya"))
   
   # Both rows for id_pu 3 must be "campuran"
-  expect_equal(res$fungsi[res$id_pu == 3], c("campuran", "campuran"))
+  expect_equal(res$fungsi[res$id_pu == 3], c("Campuran", "Campuran"))
 })
 
 # --- Plain Data Frame / Tibble Input ---
@@ -148,7 +148,7 @@ test_that("assign_area_function supports plain data frames without geometry", {
   
   expect_s3_class(res, "data.frame")
   expect_false(inherits(res, "sf"))
-  expect_equal(res$fungsi, c("lindung", "budidaya", "campuran"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya", "Campuran"))
 })
 
 # --- Column Name Flexibility in Priority Tables ---
@@ -176,7 +176,7 @@ test_that("assign_area_function is flexible with column names in reference table
   )
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 test_that("assign_area_function handles character priorities (e.g. '1'/'0' or 'Lindung'/'Budidaya')", {
@@ -190,7 +190,7 @@ test_that("assign_area_function handles character priorities (e.g. '1'/'0' or 'L
   prio_rzwp <- data.frame(RZWP3K = c("KKP", "KPU"), Prioritas = c("Lindung", "Budidaya"))
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 # --- Whitespace Tolerance ---
@@ -206,7 +206,7 @@ test_that("assign_area_function handles whitespace discrepancies gracefully", {
   prio_rzwp <- data.frame(RZWP3K = c(" Zona Konservasi", "Zona Pelabuhan"), Prioritas = c(1, 0))
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 # --- Edge Cases: Unknown Zones, Missing Values, Empty Input ---
@@ -227,7 +227,7 @@ test_that("assign_area_function issues warning and returns NA for unmatched zone
     "could not be matched"
   )
   
-  expect_equal(res$fungsi[1], "lindung")
+  expect_equal(res$fungsi[1], "Lindung")
   expect_true(is.na(res$fungsi[2]))
   expect_true(is.na(res$fungsi[3]))
 })
@@ -335,7 +335,7 @@ test_that("assign_area_function works with real repo priority Excel tables", {
   )
   
   res <- assign_area_function(test_sf, tbl_rtrw, tbl_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya", "campuran"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya", "Campuran"))
 })
 
 # --- Full Pipeline Simulation: Overlap & Adjacent ---
@@ -375,7 +375,7 @@ test_that("Overlap pipeline integration: assign_area_function persists 'fungsi' 
   final_map <- assign_area_function(serasi_map, prio_rtrw, prio_rzwp)
   
   expect_true("fungsi" %in% names(final_map))
-  expect_equal(final_map$fungsi, "lindung")
+  expect_equal(final_map$fungsi, "Lindung")
   
   # Step 5: Verify persistence to GPKG and Excel
   tmp_dir <- tempfile("serasi_overlap_test_")
@@ -391,11 +391,11 @@ test_that("Overlap pipeline integration: assign_area_function persists 'fungsi' 
   
   read_gpkg <- sf::st_read(gpkg_file, quiet = TRUE)
   expect_true("fungsi" %in% names(read_gpkg))
-  expect_equal(read_gpkg$fungsi, "lindung")
+  expect_equal(read_gpkg$fungsi, "Lindung")
   
   read_xlsx <- openxlsx::read.xlsx(xlsx_file)
   expect_true("fungsi" %in% names(read_xlsx))
-  expect_equal(read_xlsx$fungsi, "lindung")
+  expect_equal(read_xlsx$fungsi, "Lindung")
 })
 
 test_that("Adjacent pipeline integration: assign_area_function persists 'fungsi' into GPKG, Excel, and dissolved output", {
@@ -432,7 +432,7 @@ test_that("Adjacent pipeline integration: assign_area_function persists 'fungsi'
   final_map <- assign_area_function(serasi_map, prio_rtrw, prio_rzwp)
   
   expect_true("fungsi" %in% names(final_map))
-  expect_equal(final_map$fungsi, c("budidaya", "budidaya"))
+  expect_equal(final_map$fungsi, c("Budidaya", "Budidaya"))
   
   # Step 4: Add admin column to test dissolve_id_pu integration
   final_map$admin <- "Wilayah_A"
@@ -440,7 +440,7 @@ test_that("Adjacent pipeline integration: assign_area_function persists 'fungsi'
   
   dissolved <- dissolve_id_pu(final_map)
   expect_true("fungsi" %in% names(dissolved))
-  expect_equal(dissolved$fungsi, "budidaya")
+  expect_equal(dissolved$fungsi, "Budidaya")
   
   # Step 5: Verify persistence to GPKG and Excel
   tmp_dir <- tempfile("serasi_adjacent_test_")
@@ -456,11 +456,11 @@ test_that("Adjacent pipeline integration: assign_area_function persists 'fungsi'
   
   read_gpkg <- sf::st_read(gpkg_file, quiet = TRUE)
   expect_true("fungsi" %in% names(read_gpkg))
-  expect_equal(read_gpkg$fungsi, c("budidaya", "budidaya"))
+  expect_equal(read_gpkg$fungsi, c("Budidaya", "Budidaya"))
   
   read_xlsx <- openxlsx::read.xlsx(xlsx_file)
   expect_true("fungsi" %in% names(read_xlsx))
-  expect_equal(read_xlsx$fungsi, c("budidaya", "budidaya"))
+  expect_equal(read_xlsx$fungsi, c("Budidaya", "Budidaya"))
 })
 
 # --- Robustness & Edge Cases ---
@@ -477,7 +477,7 @@ test_that("assign_area_function correctly handles mixed character and numeric pr
   prio_rzwp <- data.frame(RZWP3K = c("KKP", "KPU"), Prioritas = c(1, 0), stringsAsFactors = FALSE)
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 test_that("assign_area_function warns on invalid priority values outside {0, 1}", {
@@ -495,7 +495,7 @@ test_that("assign_area_function warns on invalid priority values outside {0, 1}"
     res <- assign_area_function(df, prio_rtrw, prio_rzwp),
     "outside \\{0, 1\\}"
   )
-  expect_equal(res$fungsi[1], "lindung")
+  expect_equal(res$fungsi[1], "Lindung")
   expect_true(is.na(res$fungsi[2]))
 })
 
@@ -518,7 +518,7 @@ test_that("assign_area_function warns on duplicate zone entries with conflicting
     "conflicting priorities"
   )
   # Uses first occurrence (1 -> "lindung")
-  expect_equal(res$fungsi[1], "lindung")
+  expect_equal(res$fungsi[1], "Lindung")
 })
 
 test_that("assign_area_function does not misidentify overlap data with duplicate id_pu as paired adjacent", {
@@ -536,7 +536,7 @@ test_that("assign_area_function does not misidentify overlap data with duplicate
   # Row 1 is HL (1) + KKP (1) -> lindung
   # Row 2 is HP (0) + KPU (0) -> budidaya
   # Must NOT overwrite row 2 with row 1's lindung!
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 test_that("assign_area_function handles paired adjacent with NA in id_pu gracefully", {
@@ -550,7 +550,7 @@ test_that("assign_area_function handles paired adjacent with NA in id_pu gracefu
   prio_rzwp <- data.frame(RZWP3K = c("KKP", "KPU"), Prioritas = c(1, 0), stringsAsFactors = FALSE)
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi[1:2], c("lindung", "lindung"))
+  expect_equal(res$fungsi[1:2], c("Lindung", "Lindung"))
   expect_true(is.na(res$fungsi[3]))
   expect_true(is.na(res$fungsi[4]))
 })
@@ -570,7 +570,7 @@ test_that("assign_area_function warns on conflicting zone classes within same id
     "Conflicting RTRW zone classes detected within the same id_pu"
   )
   # Uses first occurrence (HL = 1 + KKP = 1 -> lindung)
-  expect_equal(res$fungsi, c("lindung", "lindung", "lindung"))
+  expect_equal(res$fungsi, c("Lindung", "Lindung", "Lindung"))
 })
 
 test_that("assign_area_function supports case-insensitive zone matching fallback", {
@@ -592,7 +592,7 @@ test_that("assign_area_function supports case-insensitive zone matching fallback
   )
   
   res <- assign_area_function(df, prio_rtrw, prio_rzwp)
-  expect_equal(res$fungsi, c("lindung", "budidaya"))
+  expect_equal(res$fungsi, c("Lindung", "Budidaya"))
 })
 
 
@@ -870,10 +870,10 @@ test_that("PADU-combine configuration dictionary accurately covers all multi-com
     "RZWP3K"            = "RZWP3K",
     "admin"             = "Administrasi",
     "fungsi"            = "Fungsi Kawasan",
-    "idx_padu_all"      = "PADU All",
-    "idx_padu_lindung"   = "PADU Lindung",
-    "idx_padu_budidaya"  = "PADU Budidaya",
-    "idx_padu_final"    = "PADU Final Terpilih"
+    "idx_padu_all"      = "Indeks PADU Campuran",
+    "idx_padu_lindung"   = "Indeks PADU Lindung",
+    "idx_padu_budidaya"  = "Indeks PADU Budidaya",
+    "idx_padu_final"    = "Indeks PADU Akhir"
   )
   
   for (col in names(expected_table_cols)) {

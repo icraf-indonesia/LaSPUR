@@ -834,6 +834,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
             RTRW           = as.character(df$RTRW),
             RZWP3K         = as.character(df$RZWP3K),
             admin          = if ("admin" %in% names(df)) as.character(df$admin) else NA_character_,
+            fungsi         = if ("fungsi" %in% names(df)) as.character(df$fungsi) else if ("fungsi" %in% names(rv$idx_padan_map_filter)) as.character(rv$idx_padan_map_filter$fungsi[match(df$id_pu, rv$idx_padan_map_filter$id_pu)]) else NA_character_,
             length         = as.numeric(df$length),
             area_ha_rtrw   = if ("area_ha_rtrw"   %in% names(df)) as.numeric(df$area_ha_rtrw)   else NA_real_,
             area_ha_rzwp3k = if ("area_ha_rzwp3k" %in% names(df)) as.numeric(df$area_ha_rzwp3k) else NA_real_,
@@ -861,7 +862,8 @@ recommendation_adjacent_server <- function(id, output_dir) {
           
           sub_padu_cols <- c("idx_padu_ke", "idx_padu_hs", "idx_padu_kl",
                              "idx_padu_kh", "idx_padu_rtp", "idx_padu_se",
-                             "idx_padu_ki")
+                             "idx_padu_ki", "idx_padu_all", "idx_padu_lindung",
+                             "idx_padu_budidaya")
           for (col in sub_padu_cols) {
             if (col %in% names(rv$idx_padan_map_filter)) {
               lk <- extract_by_id_pu(rv$idx_padan_map_filter, col)
@@ -1313,13 +1315,17 @@ recommendation_adjacent_server <- function(id, output_dir) {
         RZWP3K             = reactable::colDef(name = "RZWP3K Aktual",         minWidth = 190),
         id_pu              = reactable::colDef(name = "ID PU",                 minWidth = 60),
         admin              = reactable::colDef(name = "Wilayah Administratif", minWidth = 140),
+        fungsi             = reactable::colDef(name = "Fungsi Kawasan",        minWidth = 120),
         length             = reactable::colDef(name = "Panjang Segmen (m)",    minWidth = 120, format = num2_fmt),
         area_ha_rtrw       = reactable::colDef(name = "Luas Area RTRW (ha)",  minWidth = 130, format = num2_fmt),
         area_ha_rzwp3k     = reactable::colDef(name = "Luas Area RZWP3K (ha)", minWidth = 140, format = num2_fmt),
         area_ha_total      = reactable::colDef(name = "Luas Area Total (ha)",  minWidth = 130, format = num2_fmt),
         idx_serasi         = reactable::colDef(name = "Indeks SERASI Aktual",  minWidth = 130, format = num2_fmt),
         idx_serasi_new     = reactable::colDef(name = "Potensi Indeks SERASI Baru", minWidth = 140, format = num2_fmt),
-        idx_padu_final     = reactable::colDef(name = "Indeks PADU Kombinasi",      minWidth = 130, format = num2_fmt),
+        idx_padu_all       = reactable::colDef(name = "Indeks PADU Campuran",              minWidth = 110, format = num2_fmt),
+        idx_padu_lindung    = reactable::colDef(name = "Indeks PADU Lindung",          minWidth = 110, format = num2_fmt),
+        idx_padu_budidaya  = reactable::colDef(name = "Indeks PADU Budidaya",         minWidth = 110, format = num2_fmt),
+        idx_padu_final     = reactable::colDef(name = "Indeks PADU Akhir",      minWidth = 130, format = num2_fmt),
         idx_padan          = reactable::colDef(name = "Indeks PADAN Aktual",        minWidth = 130, format = num2_fmt),
         idx_padan_new      = reactable::colDef(name = "Potensi Indeks PADAN Baru",  minWidth = 140, format = num2_fmt),
         idx_padu_ke        = reactable::colDef(name = "Indeks PADU-KE",  html = TRUE, minWidth = 110),

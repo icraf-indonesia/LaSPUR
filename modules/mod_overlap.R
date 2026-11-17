@@ -460,6 +460,8 @@ overlap_server <- function(id, output_dir) {
             
             append_log("   Semua nama kelas cocok. Menggabungkan indeks SERASI...")
             idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
+            idx_serasi_map <- assign_area_function(idx_serasi_map, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
+            append_log("   Klasifikasi fungsi kawasan (fungsi) berhasil ditentukan.")
             
             # Merge with administrative map 
             if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
@@ -644,15 +646,17 @@ overlap_server <- function(id, output_dir) {
         "Status"        = "stat_pu",
         "RTRW"          = "RTRW",
         "RZWP3K"        = "RZWP3K",
+        "Fungsi"        = "fungsi",
         "Luas (ha)"     = "area_ha",
         "Indeks SERASI" = "idx_serasi"
       ),
       table_cols = c(
-        "id_pu"     = "ID PU",
-        "RTRW"      = "RTRW",
-        "RZWP3K"    = "RZWP3K",
-        "admin"     = "Administrasi",
-        "area_ha"   = "Luas (ha)",
+        "id_pu"      = "ID PU",
+        "RTRW"       = "RTRW",
+        "RZWP3K"     = "RZWP3K",
+        "fungsi"     = "Fungsi Kawasan",
+        "admin"      = "Administrasi",
+        "area_ha"    = "Luas (ha)",
         "idx_serasi" = "Indeks SERASI"
       ),
       table_round_cols = c("Luas (ha)", "Indeks SERASI")

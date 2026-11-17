@@ -868,22 +868,31 @@ padan_server <- function(id, output_dir) {
       map_title = "Indeks PADAN",
       map_palette = "RdYlGn",
       map_label_cols = c(
-        "ID PU"        = "id_pu",
-        "RTRW"         = "RTRW",
-        "RZWP3K"       = "RZWP3K",
-        "Indeks SERASI" = "idx_serasi",
-        "Indeks PADU"  = "idx_padu_final",
-        "Indeks PADAN" = "idx_padan"
-      ),
-      table_cols = c(
-        "id_pu"         = "ID PU",
+        "ID PU"         = "id_pu",
         "RTRW"          = "RTRW",
         "RZWP3K"        = "RZWP3K",
-        "idx_serasi"    = "Indeks SERASI",
-        "idx_padu_final" = "Indeks PADU",
-        "idx_padan"     = "Indeks PADAN"
+        "Fungsi"        = "fungsi",
+        "Indeks SERASI" = "idx_serasi",
+        "Indeks PADU"   = "idx_padu_final",
+        "Indeks PADAN"  = "idx_padan"
       ),
-      table_round_cols = c("Indeks SERASI", "Indeks PADU", "Indeks PADAN")
+      table_cols = c(
+        "id_pu"             = "ID PU",
+        "RTRW"              = "RTRW",
+        "RZWP3K"            = "RZWP3K",
+        "admin"             = "Administrasi",
+        "fungsi"            = "Fungsi Kawasan",
+        "idx_serasi"        = "Indeks SERASI",
+        "idx_padu_all"      = "Indeks PADU Campuran",
+        "idx_padu_lindung"   = "Indeks PADU Lindung",
+        "idx_padu_budidaya"  = "Indeks PADU Budidaya",
+        "idx_padu_final"    = "Indeks PADU Akhir",
+        "idx_padan"         = "Indeks PADAN"
+      ),
+      table_round_cols = c(
+        "Indeks SERASI", "Indeks PADU Campuran", "Indeks PADU Lindung", "Indeks PADU Budidaya",
+        "Indeks PADU Akhir", "Indeks PADAN"
+      )
     )
     
     render_result_server(input, output, session, rv, padan_config)

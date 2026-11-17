@@ -417,10 +417,18 @@ padu_combine_server <- function(id, output_dir) {
       
       idx_serasi_map <- serasi_in$idx_serasi_map()
 
-      if (is.null(idx_serasi_map)) {
-        showNotification(
-          "Peta SERASI belum tersedia. Jalankan modul 1.1/1.2 terlebih dahulu atau unggah berkas.",
-          type = "warning", duration = 6)
+      val_check <- validate_padu_combine_serasi(idx_serasi_map)
+      if (!val_check$valid) {
+        showModal(modalDialog(
+          title = tagList(tags$i(class = "bi bi-exclamation-triangle-fill me-2", style = "color:#dc2626;"),
+                          "Validasi Peta SERASI Gagal"),
+          tags$p(val_check$message),
+          tags$p("Fitur PADU berdasarkan fungsi kawasan mewajibkan peta SERASI hasil analisis terbaru yang telah memuat klasifikasi fungsi kawasan (lindung, budidaya, atau campuran)."),
+          tags$p("Silakan jalankan ulang modul SERASI (1.1 Overlap atau 1.2 Adjacent) dengan menyertakan Tabel Acuan Prioritas RTRW dan RZWP3K, lalu muat kembali hasilnya ke modul ini."),
+          easyClose = TRUE,
+          footer = modalButton("Tutup")
+        ))
+        showNotification(val_check$message, type = "error", duration = 8)
         return()
       }
       if (length(disc$files) == 0) {
@@ -607,6 +615,23 @@ padu_combine_server <- function(id, output_dir) {
                          type = "error", duration = 5)
         return()
       }
+      
+      idx_serasi_map <- serasi_in$idx_serasi_map()
+      val_check <- validate_padu_combine_serasi(idx_serasi_map)
+      if (!val_check$valid) {
+        showModal(modalDialog(
+          title = tagList(tags$i(class = "bi bi-exclamation-triangle-fill me-2", style = "color:#dc2626;"),
+                          "Validasi Peta SERASI Gagal"),
+          tags$p(val_check$message),
+          tags$p("Fitur PADU berdasarkan fungsi kawasan mewajibkan peta SERASI hasil analisis terbaru yang telah memuat klasifikasi fungsi kawasan (lindung, budidaya, atau campuran)."),
+          tags$p("Silakan jalankan ulang modul SERASI (1.1 Overlap atau 1.2 Adjacent) dengan menyertakan Tabel Acuan Prioritas RTRW dan RZWP3K, lalu muat kembali hasilnya ke modul ini."),
+          easyClose = TRUE,
+          footer = modalButton("Tutup")
+        ))
+        showNotification(val_check$message, type = "error", duration = 8)
+        return()
+      }
+      
       cs <- consistency()
       if (isTRUE(cs$mismatch)) {
         rows_ui <- lapply(names(cs$rows), function(k) {
@@ -760,14 +785,21 @@ padu_combine_server <- function(id, output_dir) {
     # ── Status box ──────────────────────────────────────────
     output$status_box <- renderUI({
       disc <- padu_discovery()
+      idx_serasi_map <- serasi_in$idx_serasi_map()
       if (!is.null(rv$analysis_result)) {
         div(class = "alert alert-success mb-0",
             tags$i(class = "bi bi-check-circle me-2"),
             "Analisis selesai.")
-      } else if (!is.null(serasi_in$idx_serasi_map()) && length(disc$files) > 0) {
-        div(class = "alert alert-secondary mb-0",
-            tags$i(class = "bi bi-circle me-2"),
-            "Siap menjalankan analisis.")
+      } else if (!is.null(idx_serasi_map) && length(disc$files) > 0) {
+        if (!("fungsi" %in% names(idx_serasi_map))) {
+          div(class = "alert alert-warning mb-0",
+              tags$i(class = "bi bi-exclamation-triangle me-2"),
+              "Peta SERASI belum memiliki kolom 'fungsi'. Jalankan ulang SERASI dengan tabel prioritas.")
+        } else {
+          div(class = "alert alert-secondary mb-0",
+              tags$i(class = "bi bi-circle me-2"),
+              "Siap menjalankan analisis.")
+        }
       } else {
         div(class = "alert alert-secondary mb-0",
             tags$i(class = "bi bi-circle me-2"),
@@ -781,29 +813,37 @@ padu_combine_server <- function(id, output_dir) {
       map_title      = "Indeks PADU",
       map_palette    = "RdYlGn",
       map_label_cols = c(
-        "ID PU"       = "id_pu",
-        "RTRW"        = "RTRW",
-        "RZWP3K"      = "RZWP3K",
-        "Indeks PADU" = "idx_padu_final"
-      ),
-      table_cols = c(
-        "id_pu"          = "ID PU",
+        "ID PU"          = "id_pu",
         "RTRW"           = "RTRW",
         "RZWP3K"         = "RZWP3K",
-        "admin"          = "Administrasi",
-        "idx_padu_ke"    = "Indeks PADU-KE",
-        "idx_padu_hs"    = "Indeks PADU-HS",
-        "idx_padu_kl"    = "Indeks PADU-KL",
-        "idx_padu_kh"    = "Indeks PADU-KH",
-        "idx_padu_rtp"   = "Indeks PADU-RTp",
-        "idx_padu_se"    = "Indeks PADU-SE",
-        "idx_padu_ki"    = "Indeks PADU-KI",
-        "idx_padu_final" = "Indeks PADU kombinasi"
+        "Fungsi"         = "fungsi",
+        "Indeks PADU Campuran"       = "idx_padu_all",
+        "Indeks PADU Lindung"   = "idx_padu_lindung",
+        "Indeks PADU Budidaya"  = "idx_padu_budidaya",
+        "Indeks PADU Akhir"    = "idx_padu_final"
+      ),
+      table_cols = c(
+        "id_pu"            = "ID PU",
+        "RTRW"             = "RTRW",
+        "RZWP3K"           = "RZWP3K",
+        "admin"            = "Administrasi",
+        "fungsi"           = "Fungsi Kawasan",
+        "idx_padu_ke"      = "Indeks PADU-KE",
+        "idx_padu_hs"      = "Indeks PADU-HS",
+        "idx_padu_kl"      = "Indeks PADU-KL",
+        "idx_padu_kh"      = "Indeks PADU-KH",
+        "idx_padu_rtp"     = "Indeks PADU-RTp",
+        "idx_padu_se"      = "Indeks PADU-SE",
+        "idx_padu_ki"      = "Indeks PADU-KI",
+        "idx_padu_all"     = "Indeks PADU Campuran",
+        "idx_padu_lindung"  = "Indeks PADU Lindung",
+        "idx_padu_budidaya" = "Indeks PADU Budidaya",
+        "idx_padu_final"   = "Indeks PADU Akhir"
       ),
       table_round_cols = c(
         "Indeks PADU-KE", "Indeks PADU-HS", "Indeks PADU-KL", "Indeks PADU-KH",
         "Indeks PADU-RTp", "Indeks PADU-SE", "Indeks PADU-KI",
-        "Indeks PADU kombinasi"
+        "Indeks PADU Campuran", "Indeks PADU Lindung", "Indeks PADU Budidaya", "Indeks PADU Akhir"
       )
     )
     
