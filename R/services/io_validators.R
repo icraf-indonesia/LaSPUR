@@ -389,16 +389,11 @@ load_and_validate_raster <- function(raster_path,
 #'
 #' @export
 validate_output_dir <- function(dir_path) {
-  if (is.null(dir_path) || dir_path == "") {
+  if (is.null(dir_path) || !nzchar(dir_path)) {
     return(FALSE)
   }
   if (!dir.exists(dir_path)) {
-    tryCatch({
-      dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-      return(TRUE)
-    }, error = function(e) {
-      return(FALSE)
-    })
+    return(FALSE)
   }
   return(TRUE)
 }

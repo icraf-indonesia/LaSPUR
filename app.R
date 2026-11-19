@@ -3,8 +3,7 @@
 # LaSPUR – Land and Seascape Planning Unit Reconciliation
 # ============================================================
 
-source("R/helpers.R")
-source("R/shared_inputs.R")
+source("R/init.R")
 
 plan(multisession)
 options(shiny.maxRequestSize = 2000 * 1024^2)

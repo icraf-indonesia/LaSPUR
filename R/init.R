@@ -38,6 +38,8 @@ options(shiny.maxRequestSize = 2000 * 1024^2)
 .source_laspur("R/services/storage_service.R")
 .source_laspur("R/services/io_validators.R")
 .source_laspur("R/services/formatters.R")
+.source_laspur("R/services/map_renderers.R")
+.source_laspur("R/services/report_generator.R")
 
 # 4. Core Analytical Engine
 .source_laspur("R/engine/01_spatial_primitives.R")
@@ -59,13 +61,6 @@ options(shiny.maxRequestSize = 2000 * 1024^2)
 .source_laspur("R/engine/08_export_excel.R")
 
 # 5. UI Presentation Components
+.source_laspur("R/ui_components/result_views.R")
 .source_laspur("R/shared_inputs.R")
 .source_laspur("R/visualisation.R")
-
-# 6. Legacy Bridge (Active during incremental migration until Ticket 05)
-if (file.exists(file.path(.laspur_root, "R/helpers.R"))) {
-  .source_laspur("R/helpers.R")
-}
-if (file.exists(file.path(.laspur_root, "R/functions.R"))) {
-  .source_laspur("R/functions.R")
-}

@@ -19,15 +19,6 @@ old_wd <- getwd()
 setwd(proj_root)
 
 # Initialize LaSPUR environment via master init
-if (file.exists(file.path(proj_root, "R/init.R"))) {
-  source(file.path(proj_root, "R/init.R"), local = FALSE)
-} else {
-  if (!exists("ensure_geometry_name", mode = "function")) {
-    source(file.path(proj_root, "R/helpers.R"), local = FALSE)
-  }
-  if (!exists("identify_overlaps", mode = "function")) {
-    source(file.path(proj_root, "R/functions.R"), local = FALSE)
-  }
-}
+source(file.path(proj_root, "R/init.R"), local = FALSE)
 
 setwd(old_wd)

@@ -215,7 +215,7 @@ calculate_padu_se <- function(idx_serasi_map,
                               facilities = list(),
                               id_col = "id_pu",
                               fill_na = NA,
-                              keep_intermediates = FALSE,
+                              keep_intermediates = TRUE,
                               standardized = FALSE) {
   # Input validation
   if (!inherits(idx_serasi_map, "sf")) {
