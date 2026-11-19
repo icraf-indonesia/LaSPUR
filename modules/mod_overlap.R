@@ -229,7 +229,13 @@ overlap_server <- function(id, output_dir) {
         
         # Extract column names (drop geometry)
         col_names <- names(admin_sf)
-        col_names <- col_names[!col_names %in% c("geometry", "geom")]
+        col_names <- col_names[!col_names %in% c("geometry", "geom", attr(admin_sf, "sf_column"))]
+        if (length(col_names) == 0) {
+          stop("Peta Administratif tidak memiliki kolom atribut identitas wilayah.")
+        }
+        
+        rv$admin_vect <- admin_sf
+        rv$admin_col <- if (!is.null(rv$admin_col) && rv$admin_col %in% col_names) rv$admin_col else col_names[1]
         
         # Render the dropdown for admin field selection
         output$admin_field_ui <- renderUI({
@@ -238,13 +244,14 @@ overlap_server <- function(id, output_dir) {
             ns("admin_field"),
             label = "Pilih kolom identitas wilayah administratif",
             choices = col_names,
-            selected = if (!is.null(rv$admin_col) && rv$admin_col %in% col_names) rv$admin_col else col_names[1]
+            selected = rv$admin_col
           )
         })
         
         showNotification("Peta Administratif berhasil dimuat.", type = "message")
       }, error = function(e) {
         rv$admin_vect <- NULL
+        rv$admin_col <- NULL
         output$admin_field_ui <- renderUI(NULL)
         showNotification(paste("Gagal memuat Peta Administratif:", e$message), type = "error")
       })
@@ -252,7 +259,10 @@ overlap_server <- function(id, output_dir) {
     
     # Store selected admin column
     observeEvent(input$admin_field, {
-      rv$admin_col <- input$admin_field
+      req(input$admin_field)
+      if (nzchar(input$admin_field)) {
+        rv$admin_col <- input$admin_field
+      }
     })
     
     observeEvent(input$rtrw_prioritas_file, {
@@ -445,7 +455,12 @@ overlap_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Menyaring berdasarkan luas minimum...")
           threshold <- input$threshold_ha
           append_log(paste0(">> Menyaring poligon dengan luas >= ", threshold, " ha..."))
-          filtered_union_sf <- filter_overlaps(union_sf, threshold)
+          filtered_union_sf <- filter_overlaps(
+            union_sf,
+            threshold_ha = threshold,
+            admin_sf = rv$admin_vect,
+            admin_col = rv$admin_col
+          )
           append_log(paste0("   ", nrow(filtered_union_sf), " poligon tersisa setelah penyaringan."))
           
           incProgress(0.2, detail = "Memvalidasi kesesuaian kelas zona...")
@@ -462,23 +477,6 @@ overlap_server <- function(id, output_dir) {
             idx_serasi_map <- merge_attributes_to_map(filtered_union_sf, rv$matriks_serasi)
             idx_serasi_map <- assign_area_function(idx_serasi_map, rv$rtrw_prioritas, rv$rzwp3k_prioritas)
             append_log("   Klasifikasi fungsi kawasan (fungsi) berhasil ditentukan.")
-            
-            # Merge with administrative map 
-            if (!is.null(rv$admin_vect) && !is.null(rv$admin_col) && nzchar(rv$admin_col)) {
-              append_log(">> Menggabungkan hasil dengan peta administratif...")
-              admin_sf <- rv$admin_vect
-              if (sf::st_crs(admin_sf) != sf::st_crs(idx_serasi_map)) {
-                admin_sf <- sf::st_transform(admin_sf, sf::st_crs(idx_serasi_map))
-              }
-              idx_serasi_map <- sf::st_join(
-                idx_serasi_map,
-                admin_sf[, rv$admin_col, drop = FALSE],
-                join = sf::st_intersects,
-                largest = TRUE
-              )
-              names(idx_serasi_map)[names(idx_serasi_map) == rv$admin_col] <- "admin"
-              append_log("   Penggabungan administratif selesai.")
-            }
             
             # Prepare table and save
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
@@ -647,6 +645,7 @@ overlap_server <- function(id, output_dir) {
         "RTRW"          = "RTRW",
         "RZWP3K"        = "RZWP3K",
         "Fungsi"        = "fungsi",
+        "Administrasi"  = "admin",
         "Luas (ha)"     = "area_ha",
         "Indeks SERASI" = "idx_serasi"
       ),
