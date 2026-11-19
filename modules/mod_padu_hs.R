@@ -3,9 +3,9 @@
 #  MODULE: PADU-HS (2.2)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(class = "alert alert-secondary mb-0",
@@ -302,15 +302,16 @@ padu_hs_server <- function(id, output_dir) {
           incProgress(0.2, detail = "Menyimpan hasil...")
           append_log("Menyimpan hasil ke disk...")
           
-          padu_hs_dir <- file.path(output_dir(), "Analisis PADU-HS")
-          if (!dir.exists(padu_hs_dir))
-            dir.create(padu_hs_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_hs_dir <- storage_get_module_dir(output_dir(), "padu_hs", create = TRUE)
           
-          gpkg_path <- file.path(padu_hs_dir, "idx_padu_hs.gpkg")
-          xlsx_path <- file.path(padu_hs_dir, "idx_padu_hs.xlsx")
-          
-          sf::st_write(idx_padu_hs_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          openxlsx::write.xlsx(idx_padu_hs_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj = idx_padu_hs_map,
+            dir_path = padu_hs_dir,
+            base_filename = "idx_padu_hs",
+            formats = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path

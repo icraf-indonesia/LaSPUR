@@ -3,9 +3,9 @@
 #  MODULE: PADU-KL (2.3 Conservation Area Analysis)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 padu_kl_ui <- function(id) {
   ns <- NS(id)
@@ -126,28 +126,29 @@ padu_kl_server <- function(id, output_dir) {
           append_log("Data berhasil dimuat.")
           
           incProgress(0.1, detail = "Menghitung tumpang tindih kawasan lindung...")
-          idx_padu_kl_map <- calculate_overlay_pct(
-            pu           = pu,
-            overlay_area = overlay,
-            title        = "protected",
-            parallel     = input$parallel,
-            workers      = input$workers
-          ) %>%
-            mutate(idx_padu_kl = protected_pct / 100)
+          padu_kl_res <- calculate_padu_kl(
+            pu             = pu,
+            protected_area = overlay,
+            parallel       = input$parallel,
+            workers        = input$workers
+          )
+          idx_padu_kl_map <- padu_kl_res$data
+          res_table <- padu_kl_res$idx_padu_kl
           
           incProgress(0.6, detail = "Pemrosesan selesai...")
           append_log("Perhitungan persentase selesai.")
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          padu_kl_dir <- file.path(output_dir(), "Analisis PADU-KL")
-          if (!dir.exists(padu_kl_dir))
-            dir.create(padu_kl_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_kl_dir <- storage_get_module_dir(output_dir(), "padu_kl", create = TRUE)
           
-          gpkg_path <- file.path(padu_kl_dir, "idx_padu_kl.gpkg")
-          xlsx_path <- file.path(padu_kl_dir, "idx_padu_kl.xlsx")
-          sf::st_write(idx_padu_kl_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          res_table <- as_tibble(sf::st_drop_geometry(idx_padu_kl_map))
-          openxlsx::write.xlsx(res_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padu_kl_map,
+            dir_path      = padu_kl_dir,
+            base_filename = "idx_padu_kl",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path

@@ -3,9 +3,9 @@
 #  MODULE: PADU-KI (2.7 PADU-KI: Disaster Risk Analysis)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 padu_ki_ui <- function(id) {
   ns <- NS(id)
@@ -176,15 +176,17 @@ padu_ki_server <- function(id, output_dir) {
           idx_padu_ki_map <- padu_ki$idx_padu_ki_map
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          padu_ki_dir <- file.path(output_dir(), "Analisis PADU-KI")
-          if (!dir.exists(padu_ki_dir))
-            dir.create(padu_ki_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_ki_dir <- storage_get_module_dir(output_dir(), "padu_ki", create = TRUE)
           
-          gpkg_path <- file.path(padu_ki_dir, "idx_padu_ki.gpkg")
-          xlsx_path <- file.path(padu_ki_dir, "idx_padu_ki.xlsx")
-          sf::st_write(idx_padu_ki_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          res_table <- as_tibble(sf::st_drop_geometry(idx_padu_ki_map))
-          openxlsx::write.xlsx(res_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padu_ki_map,
+            dir_path      = padu_ki_dir,
+            base_filename = "idx_padu_ki",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
+          res_table <- padu_ki$idx_padu_ki
           
           rv$gpkg_path <- gpkg_path; rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_ki_map, table = res_table)

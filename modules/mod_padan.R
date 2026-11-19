@@ -3,8 +3,9 @@
 #  MODULE: PADAN Analysis (3. PADAN)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -363,20 +364,20 @@ padan_server <- function(id, output_dir) {
           
           incProgress(0.3, detail = "Menyimpan hasil...")
           
-          padan_dir <- file.path(output_dir(), "Analisis PADAN")
-          if (!dir.exists(padan_dir)) {
-            dir.create(padan_dir, recursive = TRUE, showWarnings = FALSE)
-          }
+          padan_dir <- storage_get_module_dir(output_dir(), "padan", create = TRUE)
           if (!dir.exists(padan_dir)) {
             stop("Tidak dapat membuat atau mengakses direktori: ", padan_dir)
           }
           
-          gpkg_path <- file.path(padan_dir, "idx_padan.gpkg")
-          xlsx_path <- file.path(padan_dir, "idx_padan.xlsx")
-          
-          sf::st_write(idx_padan_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padan_map,
+            dir_path      = padan_dir,
+            base_filename = "idx_padan",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           res_table <- sf::st_drop_geometry(idx_padan_map)
-          openxlsx::write.xlsx(res_table, xlsx_path)
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path

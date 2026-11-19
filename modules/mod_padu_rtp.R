@@ -3,9 +3,9 @@
 #  MODULE: PADU-RTp (2.5 PADU-RTp)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(class = "alert alert-secondary mb-0",
@@ -373,15 +373,17 @@ padu_rtp_server <- function(id, output_dir) {
           idx_padu_rtp_map <- padu_rtp$idx_padu_rtp_map
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          padu_rtp_dir <- file.path(output_dir(), "Analisis PADU-RTp")
-          if (!dir.exists(padu_rtp_dir))
-            dir.create(padu_rtp_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_rtp_dir <- storage_get_module_dir(output_dir(), "padu_rtp", create = TRUE)
           
-          gpkg_path <- file.path(padu_rtp_dir, "idx_padu_rtp.gpkg")
-          xlsx_path <- file.path(padu_rtp_dir, "idx_padu_rtp.xlsx")
-          sf::st_write(idx_padu_rtp_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          res_table <- as_tibble(sf::st_drop_geometry(idx_padu_rtp_map))
-          openxlsx::write.xlsx(res_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padu_rtp_map,
+            dir_path      = padu_rtp_dir,
+            base_filename = "idx_padu_rtp",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
+          res_table <- padu_rtp$idx_padu_rtp
           
           rv$gpkg_path <- gpkg_path; rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_rtp_map, table = res_table)

@@ -3,9 +3,9 @@
 #  MODULE: PADU Combine (2.8 PADU-Combine)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -523,15 +523,17 @@ padu_combine_server <- function(id, output_dir) {
           }
           
           incProgress(0.15, detail = "Menyimpan hasil...")
-          padu_combine_dir <- file.path(output_dir(), "Analisis PADU-Kombinasi")
-          if (!dir.exists(padu_combine_dir)) {
-            dir.create(padu_combine_dir, recursive = TRUE, showWarnings = FALSE)
-          }
-          gpkg_path <- file.path(padu_combine_dir, "idx_padu_combine.gpkg")
-          xlsx_path <- file.path(padu_combine_dir, "idx_padu_combine.xlsx")
-          sf::st_write(idx_padu_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
+          padu_combine_dir <- storage_get_module_dir(output_dir(), "padu_combine", create = TRUE)
+          
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padu_map,
+            dir_path      = padu_combine_dir,
+            base_filename = "idx_padu_combine",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           res_table <- sf::st_drop_geometry(idx_padu_map)
-          openxlsx::write.xlsx(res_table, xlsx_path)
           
           rv$gpkg_path       <- gpkg_path
           rv$xlsx_path       <- xlsx_path

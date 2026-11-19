@@ -1,8 +1,9 @@
 # ui/modules/mod_reconcile.R
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -891,8 +892,7 @@ reconcile_server <- function(id, output_dir) {
       withProgress(message = "Membuat Templat Rekonsiliasi", value = 0, {
         tryCatch({
           incProgress(0.2, detail = "Menyiapkan direktori modul...")
-          module_dir <- file.path(output_dir(), .RECON_MODULE_FOLDER)
-          dir.create(module_dir, recursive = TRUE, showWarnings = FALSE)
+          module_dir <- storage_get_module_dir(output_dir(), "reconcile", create = TRUE)
           file_name <- if (rv$detected_step == 1) "overlaps_reconcilliation_table.xlsx"
           else                        "adjacent_reconcilliation_table.xlsx"
           incProgress(0.5, detail = "Menjalankan pembuat templat...")
@@ -2263,10 +2263,9 @@ reconcile_server <- function(id, output_dir) {
       
       withProgress(message = "Menjalankan Rekonsiliasi Spasial", value = 0, {
         tryCatch({
-          module_dir <- file.path(output_dir(), .RECON_MODULE_FOLDER)
+          module_dir <- storage_get_module_dir(output_dir(), "reconcile", create = TRUE)
           log_dir    <- file.path(module_dir, .RECON_PNG_DIR)
-          dir.create(module_dir, recursive = TRUE, showWarnings = FALSE)
-          dir.create(log_dir,    recursive = TRUE, showWarnings = FALSE)
+          if (!dir.exists(log_dir)) dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           
           alpha_info <- .resolve_alpha_from_recommendation(
             step = rv$detected_step, output_dir = output_dir(), session = session)
@@ -2366,10 +2365,14 @@ reconcile_server <- function(id, output_dir) {
           stale_files <- stale_files[file.exists(stale_files)]
           if (length(stale_files) > 0) file.remove(stale_files)
           
-          out_gpkg <- file.path(module_dir, paste0(base_name, ".gpkg"))
-          sf::st_write(combined, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-          out_xlsx <- file.path(module_dir, paste0(base_name, ".xlsx"))
-          openxlsx::write.xlsx(sf::st_drop_geometry(combined), out_xlsx)
+          saved <- storage_save_spatial(
+            sf_obj        = combined,
+            dir_path      = module_dir,
+            base_filename = base_name,
+            formats       = c("gpkg", "xlsx")
+          )
+          out_gpkg <- saved$gpkg
+          out_xlsx <- saved$xlsx
           
           tryCatch({
             plot_categorical_map(

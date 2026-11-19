@@ -3,9 +3,9 @@
 #  MODULE: PADU-SE (2.6 Social Economy Analysis)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 padu_se_ui <- function(id) {
   ns <- NS(id)
@@ -305,14 +305,16 @@ padu_se_server <- function(id, output_dir) {
           res_table       <- calc_res$idx_padu_se_table
           
           incProgress(0.3, detail = "Menyimpan hasil...")
-          padu_se_dir <- file.path(output_dir(), "Analisis PADU-SE")
-          if (!dir.exists(padu_se_dir))
-            dir.create(padu_se_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_se_dir <- storage_get_module_dir(output_dir(), "padu_se", create = TRUE)
           
-          gpkg_path <- file.path(padu_se_dir, "idx_padu_se.gpkg")
-          xlsx_path <- file.path(padu_se_dir, "idx_padu_se.xlsx")
-          sf::st_write(idx_padu_se_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          openxlsx::write.xlsx(res_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj        = idx_padu_se_map,
+            dir_path      = padu_se_dir,
+            base_filename = "idx_padu_se",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           
           rv$gpkg_path <- gpkg_path; rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_se_map, table = res_table)

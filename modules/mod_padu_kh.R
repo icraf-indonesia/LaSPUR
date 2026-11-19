@@ -3,9 +3,9 @@
 #  MODULE: PADU-KH (2.4 PADU-KH: Habitat Presence/Quality)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
-source("R/shared_inputs.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
   div(class = "alert alert-secondary mb-0",
@@ -360,32 +360,30 @@ padu_kh_server <- function(id, output_dir) {
           }
           
           incProgress(0.2, detail = "Habitat siap...")
-          incProgress(0.1, detail = "Menghitung tumpang tindih habitat...")
-          append_log("Menghitung persentase tumpang tindih habitat dalam unit perencanaan...")
-          res_map <- calculate_overlay_pct(
+          incProgress(0.1, detail = "Menghitung indeks PADU-KH...")
+          append_log("Menghitung indeks akhir PADU-KH...")
+          padu_kh_res <- calculate_padu_kh(
             pu           = pu,
-            overlay_area = coastal_habitat,
-            title        = "coastal_habitat",
+            habitat_area = coastal_habitat,
             parallel     = input$parallel,
             workers      = input$workers
           )
+          res_map <- padu_kh_res$data
+          res_table <- padu_kh_res$idx_padu_kh
           incProgress(0.3, detail = "Perhitungan selesai...")
-          
-          incProgress(0.1, detail = "Menghitung indeks PADU-KH...")
-          append_log("Menghitung indeks akhir PADU-KH...")
-          res_map <- res_map %>% mutate(idx_padu_kh = coastal_habitat_pct / 100)
           append_log("Perhitungan indeks selesai.")
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          padu_kh_dir <- file.path(output_dir(), "Analisis PADU-KH")
-          if (!dir.exists(padu_kh_dir))
-            dir.create(padu_kh_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_kh_dir <- storage_get_module_dir(output_dir(), "padu_kh", create = TRUE)
           
-          gpkg_path <- file.path(padu_kh_dir, "idx_padu_kh.gpkg")
-          xlsx_path <- file.path(padu_kh_dir, "idx_padu_kh.xlsx")
-          sf::st_write(res_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-          res_table <- sf::st_drop_geometry(res_map)
-          openxlsx::write.xlsx(res_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj        = res_map,
+            dir_path      = padu_kh_dir,
+            base_filename = "idx_padu_kh",
+            formats       = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           
           rv$gpkg_path <- gpkg_path
           rv$xlsx_path <- xlsx_path

@@ -1,8 +1,9 @@
 # ui/modules/mod_recommendation_overlaps.R
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -758,8 +759,7 @@ recommendation_overlaps_server <- function(id, output_dir) {
           rv$threshold_serasi <- input$threshold_serasi
           rv$threshold_padu   <- input$threshold_padu
           
-          out_dir_step2 <- file.path(output_dir(), "Penyusunan Alternatif")
-          dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
+          out_dir_step2 <- storage_get_module_dir(output_dir(), "recommendation_overlaps", create = TRUE)
           
           incProgress(0.5, detail = "Menghitung opsi alternatif...")
           result <- determine_alternative_zones(
@@ -1785,13 +1785,15 @@ recommendation_overlaps_server <- function(id, output_dir) {
           )
           
           incProgress(0.8, detail = "Menyimpan hasil...")
-          recom_overlaps_dir <- file.path(output_dir(), "Penyusunan Alternatif")
-          if (!dir.exists(recom_overlaps_dir))
-            dir.create(recom_overlaps_dir, recursive = TRUE, showWarnings = FALSE)
-          out_gpkg <- file.path(recom_overlaps_dir, "idx_alternatives_overlaps.gpkg")
-          out_xlsx <- file.path(recom_overlaps_dir, "idx_alternatives_overlaps.xlsx")
-          sf::st_write(df, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-          openxlsx::write.xlsx(sf::st_drop_geometry(df), out_xlsx)
+          recom_overlaps_dir <- storage_get_module_dir(output_dir(), "recommendation_overlaps", create = TRUE)
+          saved <- storage_save_spatial(
+            sf_obj        = df,
+            dir_path      = recom_overlaps_dir,
+            base_filename = "idx_alternatives_overlaps",
+            formats       = c("gpkg", "xlsx")
+          )
+          out_gpkg <- saved$gpkg
+          out_xlsx <- saved$xlsx
           
           log_lines <- c(
             "Ringkasan alternatif:",

@@ -3,8 +3,9 @@
 #  MODULE: Overlap (1.1 Type 1: Overlap)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 # ── small UI helpers ────────────────────────────────────────────
 .locked_panel <- function(msg = "Selesaikan langkah sebelumnya terlebih dahulu.") {
@@ -481,24 +482,20 @@ overlap_server <- function(id, output_dir) {
             # Prepare table and save
             idx_serasi_table <- as_tibble(idx_serasi_map %>% sf::st_drop_geometry())
             
-            serasi_dir <- file.path(output_dir(), "Analisis SERASI")
-            if (!dir.exists(serasi_dir)) {
-              dir.create(serasi_dir, recursive = TRUE, showWarnings = FALSE)
-            }
+            serasi_dir <- storage_get_module_dir(output_dir(), "overlap", create = TRUE)
             log_dir <- file.path(serasi_dir, "log")
             if (!dir.exists(log_dir)) {
               dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
             }
             
-            if (!dir.exists(serasi_dir)) {
-              stop("Tidak dapat membuat atau mengakses direktori: ", serasi_dir)
-            }
-            
-            gpkg_path <- file.path(serasi_dir, "idx_serasi_overlaps.gpkg")
-            xlsx_path <- file.path(serasi_dir, "idx_serasi_overlaps.xlsx")
-            
-            sf::st_write(idx_serasi_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
-            openxlsx::write.xlsx(idx_serasi_table, xlsx_path)
+            saved <- storage_save_spatial(
+              sf_obj = idx_serasi_map,
+              dir_path = serasi_dir,
+              base_filename = "idx_serasi_overlaps",
+              formats = c("gpkg", "xlsx")
+            )
+            gpkg_path <- saved$gpkg
+            xlsx_path <- saved$xlsx
 
             matriks_filled_name <- "matriks_serasi_overlaps_filled.xlsx"
             matriks_filled_xlsx <- file.path(log_dir, matriks_filled_name)

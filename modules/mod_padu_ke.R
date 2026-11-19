@@ -3,8 +3,9 @@
 #  MODULE: PADU-KE (2.1 PADU-KE)
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -340,18 +341,20 @@ padu_ke_server <- function(id, output_dir) {
           idx_padu_ke_map <- padu_ke$idx_padu_ke_map
           
           incProgress(0.1, detail = "Menyimpan hasil...")
-          padu_ke_dir <- file.path(output_dir(), "Analisis PADU-KE")
-          if (!dir.exists(padu_ke_dir))
-            dir.create(padu_ke_dir, recursive = TRUE, showWarnings = FALSE)
+          padu_ke_dir <- storage_get_module_dir(output_dir(), "padu_ke", create = TRUE)
           log_dir <- file.path(padu_ke_dir, "log")
           if (!dir.exists(log_dir))
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
           
-          gpkg_path <- file.path(padu_ke_dir, "idx_padu_ke.gpkg")
-          xlsx_path <- file.path(padu_ke_dir, "idx_padu_ke.xlsx")
-          sf::st_write(idx_padu_ke_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           result_table <- as_tibble(idx_padu_ke_map %>% sf::st_drop_geometry())
-          openxlsx::write.xlsx(result_table, xlsx_path)
+          saved <- storage_save_spatial(
+            sf_obj = idx_padu_ke_map,
+            dir_path = padu_ke_dir,
+            base_filename = "idx_padu_ke",
+            formats = c("gpkg", "xlsx")
+          )
+          gpkg_path <- saved$gpkg
+          xlsx_path <- saved$xlsx
           
           matriks_filled_name <- "matriks_padu_ke_filled.xlsx"
           matriks_filled_xlsx <- file.path(log_dir, matriks_filled_name)

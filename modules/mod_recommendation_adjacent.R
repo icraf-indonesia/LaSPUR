@@ -1,8 +1,9 @@
 # ui/modules/mod_recommendation_adjacent.R
 # ============================================================
 
-source("R/functions.R")
-source("R/helpers.R")
+if (!exists("storage_get_module_dir", mode = "function")) {
+  source("R/init.R")
+}
 
 if (!exists("%||%", mode = "function")) {
   `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -786,8 +787,7 @@ recommendation_adjacent_server <- function(id, output_dir) {
           rv$priority_rzwp3k <- priority_rz_vec
           rv$alpha           <- input$alpha_val
           
-          out_dir_step2 <- file.path(output_dir(), "Penyusunan Alternatif")
-          dir.create(out_dir_step2, recursive = TRUE, showWarnings = FALSE)
+          out_dir_step2 <- storage_get_module_dir(output_dir(), "recommendation_adjacent", create = TRUE)
           
           incProgress(0.5, detail = "Menghitung opsi alternatif + rekomendasi...")
           result <- determine_alternative_zones(
@@ -2176,13 +2176,15 @@ recommendation_adjacent_server <- function(id, output_dir) {
             dplyr::left_join(recommendation_decision_filter, by = "id_pu")
           
           incProgress(0.8, detail = "Menyimpan hasil...")
-          recom_adjacent_dir <- file.path(output_dir(), "Penyusunan Alternatif")
-          if (!dir.exists(recom_adjacent_dir))
-            dir.create(recom_adjacent_dir, recursive = TRUE, showWarnings = FALSE)
-          out_gpkg <- file.path(recom_adjacent_dir, "idx_alternatives_adjacent.gpkg")
-          out_xlsx <- file.path(recom_adjacent_dir, "idx_alternatives_adjacent.xlsx")
-          sf::st_write(adjacent_recom_map, out_gpkg, delete_dsn = TRUE, quiet = TRUE)
-          openxlsx::write.xlsx(sf::st_drop_geometry(adjacent_recom_map), out_xlsx)
+          recom_adjacent_dir <- storage_get_module_dir(output_dir(), "recommendation_adjacent", create = TRUE)
+          saved <- storage_save_spatial(
+            sf_obj        = adjacent_recom_map,
+            dir_path      = recom_adjacent_dir,
+            base_filename = "idx_alternatives_adjacent",
+            formats       = c("gpkg", "xlsx")
+          )
+          out_gpkg <- saved$gpkg
+          out_xlsx <- saved$xlsx
           
           log_lines <- c(
             log_lines,
