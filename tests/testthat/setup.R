@@ -18,11 +18,16 @@ if (basename(cur_dir) == "testthat") {
 old_wd <- getwd()
 setwd(proj_root)
 
-if (!exists("ensure_geometry_name", mode = "function")) {
-  source(file.path(proj_root, "R/helpers.R"), local = FALSE)
-}
-if (!exists("identify_overlaps", mode = "function")) {
-  source(file.path(proj_root, "R/functions.R"), local = FALSE)
+# Initialize LaSPUR environment via master init
+if (file.exists(file.path(proj_root, "R/init.R"))) {
+  source(file.path(proj_root, "R/init.R"), local = FALSE)
+} else {
+  if (!exists("ensure_geometry_name", mode = "function")) {
+    source(file.path(proj_root, "R/helpers.R"), local = FALSE)
+  }
+  if (!exists("identify_overlaps", mode = "function")) {
+    source(file.path(proj_root, "R/functions.R"), local = FALSE)
+  }
 }
 
 setwd(old_wd)
