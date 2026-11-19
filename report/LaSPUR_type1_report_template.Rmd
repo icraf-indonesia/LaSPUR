@@ -44,8 +44,7 @@ plot_with_autokey <- function(obj, start_cm = 5, step = 3, max_cm = 80) {
 untuk plot vector bisa gunakan cowplot untuk antisipasi peta legenda terpotong
 
 ```{r load function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
-source(here::here("R/functions.R"))
-source(here::here("R/helpers.R"))
+if (!exists("storage_get_module_dir", mode = "function")) source(here::here("R/init.R"))
 ```
 
 <details>

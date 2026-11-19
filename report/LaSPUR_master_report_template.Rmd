@@ -25,7 +25,7 @@ knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FA
 # Load required libraries
 if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
 pacman::p_load(knitr, rmarkdown, here)
-source(here::here("R/helpers.R"))
+if (!exists("storage_get_module_dir", mode = "function")) source(here::here("R/init.R"))
 
 # Callback bridge to the parent Shiny session
 report_progress <- function(module_name) {

@@ -30,8 +30,7 @@ if (!exists("params")) {
   )
 }
 
-source(here::here("R/functions.R"))
-source(here::here("R/helpers.R"))
+if (!exists("storage_get_module_dir", mode = "function")) source(here::here("R/init.R"))
 ```
 
 # Penyusunan Alternatif

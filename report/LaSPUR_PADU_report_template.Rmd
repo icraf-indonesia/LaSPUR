@@ -180,8 +180,7 @@ padu_data_output_dir <- resolve_padu_output_dir()
 ```
 
 ```{r load-function, include=FALSE, error=TRUE, warning=TRUE, message=TRUE}
-source(here::here("R/functions.R"))
-source(here::here("R/helpers.R"))
+if (!exists("storage_get_module_dir", mode = "function")) source(here::here("R/init.R"))
 ```
 
 # Analisis PADU
