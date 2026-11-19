@@ -1,0 +1,1278 @@
+# R/ui_components/ui_shell.R
+# ============================================================
+# Application UI Shell & Layout Components
+# ============================================================
+
+#' Sidebar Navigation Item Component
+#'
+#' @param input_id Shiny input ID triggered on click
+#' @param number Step or section indicator (e.g. "1.1")
+#' @param label Human-readable module label
+#' @export
+nav_item <- function(input_id, number, label) {
+  div(
+    id = paste0("wrapper_", input_id),
+    class = "nav-item-wrapper",
+    title = label,
+    style = "display: flex; align-items: center; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; margin-bottom: 4px; border: 1px solid transparent; width: 100%; box-sizing: border-box;",
+    onmouseover = "this.style.background='#eef6fc'; this.style.borderColor='#E2E8F0'; this.style.color='#1b75ba'",
+    onmouseout  = "this.style.background='transparent'; this.style.borderColor='transparent'; this.style.color='inherit'",
+    onclick     = sprintf("Shiny.setInputValue('%s', Math.random())", input_id),
+    
+    tags$div(
+      class = "nav-item-content",
+      style = "display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;",
+      tags$span(
+        class = "nav-number",
+        style = "font-size: 0.75rem; font-weight: 700; color: #106665; background: #e6f2f2; border-radius: 6px; padding: 2px 8px; min-width: 32px; text-align: center; flex-shrink: 0;",
+        number
+      ),
+      tags$span(
+        class = "nav-label",
+        style = "font-size: 0.85rem; font-weight: 600; color: #334155; line-height: 1.3;",
+        label
+      )
+    )
+  )
+}
+
+#' Accordion Header Wrapper Component
+#'
+#' @param fa_icon FontAwesome icon tag
+#' @param label_text Header title string
+#' @export
+acc_title <- function(fa_icon, label_text) {
+  tags$div(
+    class = "acc-title-wrapper",
+    title = label_text,
+    style = "display: flex; align-items: center; width: 100%; justify-content: space-between; box-sizing: border-box;",
+    fa_icon,
+    tags$span(class = "menu-text", label_text)
+  )
+}
+
+#' Default Landing Page Tab Component
+#' @export
+landing_page <- tabPanel(
+  title = "Beranda",
+  value = "home",
+  div(
+    style = "padding: 60px 20px; max-width: 1100px; margin: 0 auto; text-align: center;",
+    
+    tags$img(src = "logo_laspur.png", style = "max-width: 600px; margin-bottom: 24px; border-radius: 20px;"),
+    
+    p(
+      "Land and Seascape Planning Unit Reconciliation adalah alat bantu perancangan tata ruang darat (RTRWP) dengan tata ruang laut (RZWP3K).",
+      style = "font-size: 1.15rem; color: #64748B; margin-bottom: 60px; max-width: 750px; margin-left: auto; margin-right: auto; line-height: 1.6; font-weight: 400;"
+    ),
+    
+    layout_columns(
+      col_widths = c(4, 4, 4),
+      
+      div(
+        class = "landing-card",
+        style = "background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 24px; padding: 40px 30px; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease;",
+        div(
+          style = "width: 80px; height: 80px; border-radius: 20px; background-color: #e6f2f2; color: #106665; margin: 0 auto 24px auto; display: flex; align-items: center; justify-content: center;",
+          icon("layer-group", style = "font-size: 2.5rem;")
+        ),
+        h3("Tumpang Tindih", style = "font-weight: 700; color: #1E293B; margin-bottom: 16px; font-size: 1.4rem;"),
+        p("Rekomendasi penyelesaian alokasi ruang darat & laut saling bertampalan secara spasial pada lokasi yang sama.",
+          style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
+        actionButton("btn_path_overlap", "Pilih Tumpang Tindih", class = "btn-primary w-100 mt-4",
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+      ),
+      
+      div(
+        class = "landing-card",
+        style = "background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 24px; padding: 40px 30px; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease;",
+        div(
+          style = "width: 80px; height: 80px; border-radius: 20px; background-color: #eef6fc; color: #1b75ba; margin: 0 auto 24px auto; display: flex; align-items: center; justify-content: center;",
+          icon("map", style = "font-size: 2.5rem;")
+        ),
+        h3("Bertetangga", style = "font-weight: 700; color: #1E293B; margin-bottom: 16px; font-size: 1.4rem;"),
+        p("Rekomendasi penyelesaian persoalan batas peruntukan ruang darat dan laut saling berbatasan langsung.",
+          style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
+        actionButton("btn_path_adjacent", "Pilih Bertetangga", class = "btn-primary w-100 mt-4",
+                     style = "background-color: #1b75ba; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+      ),
+      
+      div(
+        class = "landing-card",
+        style = "background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 24px; padding: 40px 30px; display: flex; flex-direction: column; height: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease;",
+        div(
+          style = "width: 80px; height: 80px; border-radius: 20px; background-color: #F8FAFC; color: #94A3B8; margin: 0 auto 24px auto; display: flex; align-items: center; justify-content: center;",
+          icon("diagram-project", style = "font-size: 2.5rem;")
+        ),
+        h3("Berpengaruh", style = "font-weight: 700; color: #1E293B; margin-bottom: 16px; font-size: 1.4rem;"),
+        p("Rekomendasi alokasi ruang yang memberi dampak sosio-ekologis melalui keterhubungan alami fungsional.",
+          style = "font-size: 0.95rem; color: #64748B; flex-grow: 1; line-height: 1.6;"),
+        actionButton("btn_path_interconnect", "Segera Hadir", class = "btn-light w-100 mt-4",
+                     style = "background-color: #F1F5F9; color: #64748B; border: none; font-weight: 600; padding: 12px; border-radius: 12px;")
+      )
+    ),
+    
+    div(
+      style = "margin-top: 80px; text-align: center; opacity: 0.85;",
+      tags$img(src = "logo_konsorsium.png", style = "max-height: 60px;")
+    )
+  )
+)
+
+#' Client-side JavaScript logic for LaSPUR Shell
+#' @export
+laspur_client_js <- "
+window.laspurAutoSizeReactable = function(widgetId, capPx, retries) {
+  retries = (typeof retries === 'number') ? retries : 25;
+  (function attempt() {
+    try {
+      var widget = document.getElementById(widgetId);
+      if (!widget) { if (retries-- > 0) setTimeout(attempt, 200); return; }
+
+      var probe = widget.querySelector('.rt-table');
+      if (!probe) { if (retries-- > 0) setTimeout(attempt, 200); return; }
+      if (widget._laspurAttached) return;
+      widget._laspurAttached = true;
+
+      function doResize() {
+        try {
+          var tblEl = widget.querySelector('.rt-table');
+          var thead = widget.querySelector('.rt-thead');
+          if (!tblEl) return;
+          var total  = tblEl.scrollHeight;
+          var target = Math.min(capPx, total + 2);
+          widget.style.height = target + 'px';
+          if (thead) {
+            thead.style.position   = 'sticky';
+            thead.style.top        = '0';
+            thead.style.zIndex     = '5';
+            thead.style.background = '#F8FAFC';
+          }
+        } catch (e) {}
+      }
+
+      doResize();
+
+      widget._laspurMo = new MutationObserver(function() {
+        if (widget._laspurDebounce) clearTimeout(widget._laspurDebounce);
+        widget._laspurDebounce = setTimeout(doResize, 30);
+      });
+      widget._laspurMo.observe(widget, { childList: true, subtree: true });
+    } catch (e) { console.warn('laspurAutoSizeReactable:', e); }
+  })();
+};
+
+$(document).ready(function() {
+  $('body').addClass('sidebar-mini');
+
+  function addUserGuideButton() {
+    if ($('#navbar-user-guide').length) return;
+    var btn = $('#user-guide-link');
+    if (!btn.length) return;
+    btn.attr('id', 'navbar-user-guide');
+    btn.css('display', 'inline-flex');
+    $('.navbar > .container-fluid').append(
+      $('<div>').css({'margin-left':'auto', 'margin-right':'12px'}).append(btn)
+    );
+  }
+  addUserGuideButton();
+
+  $(document).on('click', '#sidebar-toggle-btn', function() {
+    $('body').toggleClass('sidebar-mini');
+  });
+
+  Shiny.addCustomMessageHandler('expand_sidebar', function(msg) {
+    $('body').removeClass('sidebar-mini');
+  });
+
+  function injectToggleButtons() {
+    $('.module-panel-wrapper').each(function() {
+      var $wrapper = $(this);
+
+      if ($wrapper.find('.panel-toggle-btn').length) return;
+
+      var $row = $wrapper.children('.row').first();
+      if (!$row.length) return;
+
+      var $cols = $row.children();
+      if ($cols.length < 2) return;
+
+      var $rightCol = $cols.last();
+      var $header   = $rightCol.find('.card-header').first();
+
+      var $btn = $('<button class=\"panel-toggle-btn\" type=\"button\" ' +
+                   'title=\"Sembunyikan / Tampilkan Panel Input\">' +
+                   '<i class=\"bi bi-layout-sidebar-inset-reverse\"></i>' +
+                   '<span>Perluas</span></button>');
+
+      if ($header.length) {
+        $header.css('position', 'relative');
+        $btn.css({ float: 'right', 'margin-top': '5px', 'margin-right': '5px' });
+        $header.append($btn);
+      } else {
+        var $container = $('<div class=\"panel-toggle-container\" ' +
+                           'style=\"display:flex;justify-content:flex-end;padding:8px 16px;\"></div>');
+        $container.append($btn);
+        $rightCol.prepend($container);
+      }
+    });
+  }
+
+  $(document)
+    .off('click.laspurToggle', '.panel-toggle-btn')
+    .on('click.laspurToggle', '.panel-toggle-btn', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var $btn     = $(this);
+      var $wrapper = $btn.closest('.module-panel-wrapper');
+      if (!$wrapper.length) return;
+
+      var $row  = $wrapper.children('.row').first();
+      var $cols = $row.children();
+      if ($cols.length < 2) return;
+
+      var $leftCol  = $cols.first();
+      var $rightCol = $cols.last();
+
+      var collapse  = !$wrapper.hasClass('panel-collapsed');
+      var transition = 'flex 0.35s cubic-bezier(0.4,0,0.2,1),' +
+                       'max-width 0.35s cubic-bezier(0.4,0,0.2,1),' +
+                       'opacity 0.25s ease, padding 0.35s ease';
+
+      $wrapper.toggleClass('panel-collapsed', collapse);
+
+      if (collapse) {
+        $leftCol.css({
+          'flex': '0 0 0%', 'max-width': '0', 'opacity': '0',
+          'padding-left': '0', 'padding-right': '0',
+          'overflow': 'hidden', 'pointer-events': 'none',
+          'transition': transition
+        });
+        $rightCol.css({
+          'flex': '1 1 100%', 'max-width': '100%', 'transition': transition
+        });
+      } else {
+        $leftCol.css({
+          'flex': '', 'max-width': '', 'opacity': '',
+          'padding-left': '', 'padding-right': '',
+          'overflow': 'hidden', 'pointer-events': '',
+          'transition': transition
+        });
+        $rightCol.css({
+          'flex': '', 'max-width': '', 'transition': transition
+        });
+      }
+
+      var $icon  = $btn.find('i');
+      var $label = $btn.find('span');
+      if (collapse) {
+        $icon.removeClass('bi-layout-sidebar-inset')
+             .addClass('bi-layout-sidebar-inset-reverse');
+        $label.text('Perluas');
+      } else {
+        $icon.removeClass('bi-layout-sidebar-inset-reverse')
+             .addClass('bi-layout-sidebar-inset');
+        $label.text('Ringkas');
+      }
+
+      setTimeout(function () { $(window).trigger('resize'); }, 380);
+    });
+
+  function relocateNavButtons() {
+    $('.laspur-nav-buttons').each(function() {
+      var $nav = $(this);
+
+      if ($nav.closest('.col-sm-4').length > 0 &&
+          $nav.attr('data-relocated') === '1') return;
+
+      var $tabPane = $nav.closest('.tab-pane');
+      if (!$tabPane.length) return;
+
+      var $wrapper = $tabPane.find('.module-panel-wrapper').first();
+      if (!$wrapper.length) return;
+
+      var $leftCol = $wrapper.find('.col-sm-4').first();
+      if (!$leftCol.length) return;
+
+      if ($nav.parent()[0] !== $leftCol[0]) {
+        $leftCol.append($nav);
+      }
+      $nav.attr('data-relocated', '1');
+
+      $nav.css({
+        'display': 'flex',
+        'flex-direction': 'row',
+        'gap': '8px',
+        'margin-top': '12px',
+        'margin-bottom': '0',
+        'padding-bottom': '0',
+        'border-bottom': 'none',
+        'justify-content': 'stretch',
+        'align-items': 'stretch',
+        'align-self': 'flex-start',
+        'flex': '0 0 auto',
+        'height': 'auto',
+        'width': '100%',
+        'box-sizing': 'border-box'
+      });
+      
+      $leftCol.css({ 'display': 'flex', 'flex-direction': 'column' });
+      $leftCol.children('.card').css({ 'flex': '1 1 auto' });
+      
+      $nav.find('.btn').css({
+        'flex': '1 1 0',
+        'min-width': '0',
+        'padding': '8px 12px',
+        'font-size': '0.85rem',
+        'height': 'auto',
+        'align-self': 'center'
+      });
+    });
+  }
+
+  function attachCloseButtons() {
+    $('#tabs.nav-pills .nav-link').each(function() {
+      var $link = $(this);
+      var tabId = $link.attr('data-value');
+      if (tabId && tabId !== 'home' && $link.find('.close-tab-btn').length === 0) {
+        var $btn = $('<span class=\"close-tab-btn\" title=\"Tutup Tab\"><i class=\"fa fa-times\"></i></span>');
+        $btn.on('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          Shiny.setInputValue('request_close_tab', tabId, {priority: 'event'});
+        });
+        $link.append($btn);
+      }
+    });
+  }
+
+  function injectModuleDirButtons() {
+    $('[id$=\"-status_box\"]').each(function() {
+      var $statusBox = $(this);
+      var $moduleWrapper = $statusBox.closest('.module-panel-wrapper');
+      if (!$moduleWrapper.length) return;
+
+      var moduleDir = $moduleWrapper.attr('data-module-dir');
+      if (!moduleDir) return;
+
+      var $success = $statusBox.find('.alert-success, .alert-info').first();
+      var $existingRow = $statusBox.find('.laspur-status-row').first();
+
+      if ($success.length > 0 && $existingRow.length === 0) {
+        var $alert = $success;
+        var $row = $('<div class=\"laspur-status-row\"></div>').css({
+          'display': 'flex',
+          'justify-content': 'space-between',
+          'align-items': 'center',
+          'gap': '12px',
+          'flex-wrap': 'wrap',
+          'width': '100%'
+        });
+        var $left = $('<div></div>').css({
+          'flex': '1 1 220px',
+          'min-width': '0'
+        });
+        var $right = $('<div></div>').css({'flex-shrink': '0'});
+
+        var $btn = $('<button type=\"button\" class=\"btn btn-sm laspur-open-dir-btn\"></button>')
+          .css({
+            'background-color': '#106665',
+            'color': '#FFFFFF',
+            'border': 'none',
+            'font-weight': '600',
+            'padding': '8px 16px',
+            'border-radius': '8px',
+            'white-space': 'nowrap'
+          })
+          .html('<i class=\"bi bi-folder2-open\" style=\"margin-right:6px;\"></i>Buka Direktori Modul')
+          .on('click', function(e) {
+            e.stopPropagation();
+            Shiny.setInputValue('open_module_dir_click', moduleDir, {priority: 'event'});
+          });
+
+        $left.append($alert.detach());
+        $right.append($btn);
+        $row.append($left).append($right);
+
+        $statusBox.empty().append($row);
+
+      } else if ($success.length === 0 && $existingRow.length > 0) {
+        var $alertRestore = $existingRow.find('.alert').first().detach();
+        $statusBox.empty().append($alertRestore);
+      }
+    });
+  }
+
+  attachCloseButtons();
+  injectToggleButtons();
+  injectModuleDirButtons();
+  relocateNavButtons();
+
+  var observer = new MutationObserver(function(mutations) {
+    attachCloseButtons();
+    setTimeout(injectToggleButtons, 100);
+    setTimeout(injectModuleDirButtons, 100);
+    setTimeout(relocateNavButtons, 100);
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  Shiny.addCustomMessageHandler('show_info_modal', function(msg) {
+    document.getElementById('info_modal_title').innerText = msg.title;
+    document.getElementById('info_modal_body_text').innerHTML = msg.body_text;
+    var link = document.getElementById('info_modal_link');
+    link.href = msg.link_href;
+    link.innerText = msg.link_text;
+    var modal = new bootstrap.Modal(document.getElementById('info_confirm_modal'));
+    modal.show();
+  });
+
+  Shiny.addCustomMessageHandler('hide_info_modal', function(msg) {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('info_confirm_modal'));
+    if (modal) modal.hide();
+  });
+
+  $('#info_confirm_modal').on('hidden.bs.modal', function() {
+    Shiny.setInputValue('info_modal_dismissed', Math.random());
+  });
+
+  Shiny.addCustomMessageHandler('show_close_modal', function(msg) {
+    var modal = new bootstrap.Modal(document.getElementById('close_confirm_modal'));
+    modal.show();
+  });
+  Shiny.addCustomMessageHandler('hide_close_modal', function(msg) {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('close_confirm_modal'));
+    if (modal) modal.hide();
+  });
+  Shiny.addCustomMessageHandler('update_modal_label', function(msg) {
+    document.getElementById('modal_tab_label').innerText = msg.label;
+  });
+
+  // Global analysis button freezing
+  (function () {
+    var RUN_BUTTON_SELECTOR = [
+      'button[id$=\"-btn_run\"]',
+      'button[id$=\"-btn_run_final\"]',
+      'button[id$=\"-btn_run_reconcile\"]',
+      'button[id$=\"-btn_calc_npv\"]',
+      'button[id$=\"-btn_calc_estuari_dist\"]',
+      'button[id$=\"-btn_calc_ind_dist\"]',
+      'button[id$=\"-btn_calc_pel_dist\"]',
+      'button[id$=\"-btn_apply_filter\"]'
+    ].join(',');
+
+    var lastClickTime = 0;
+    var MIN_START_DELAY_MS = 750;  
+
+    function isAnalysisRunning() {
+      return $('#shiny-notification-panel .progress').length > 0;
+    }
+
+    function setRunButtonsState(disabled) {
+      var $btns = $(RUN_BUTTON_SELECTOR);
+      if (disabled) {
+        $btns.prop('disabled', true).addClass('laspur-btn-loading');
+      } else {
+        $btns.prop('disabled', false).removeClass('laspur-btn-loading');
+      }
+    }
+
+    $(document).on('click', RUN_BUTTON_SELECTOR, function () {
+      lastClickTime = Date.now();
+      setRunButtonsState(true);
+    });
+
+    setInterval(function () {
+      var elapsed = Date.now() - lastClickTime;
+      if (elapsed < MIN_START_DELAY_MS) return;
+
+      if (!isAnalysisRunning()) {
+        $('#laspur-stale-check').remove();
+        var $stale = $('.laspur-btn-loading');
+        if ($stale.length > 0) {
+          $stale.removeClass('laspur-btn-loading').prop('disabled', false);
+        }
+      }
+    }, 600);
+
+    $(document).on('shown.bs.modal hidden.bs.modal', function () {
+      if (!isAnalysisRunning()) setRunButtonsState(false);
+    });
+  })();
+
+  Shiny.addCustomMessageHandler('set_fileinput_text', function(msg) {
+    if (!msg || !msg.input_id || !msg.filename) return;
+    [30, 90, 200, 400, 700].forEach(function(d) {
+      setTimeout(function() {
+        var input = document.getElementById(msg.input_id);
+        if (!input) return;
+        var group = input.closest('.input-group');
+        if (!group) return;
+        var txt = group.querySelector('.form-control');
+        if (!txt) return;
+        txt.value = msg.filename;
+        txt.placeholder = msg.filename;
+        txt.dataset.laspurAutofilled = '1';
+      }, d);
+    });
+  });
+});
+"
+
+#' Construct the Top-Level Shiny Application UI Shell
+#'
+#' @param landing Shiny tabPanel representing the default landing page
+#' @return Shiny page layout object
+#' @export
+create_ui_shell <- function(landing = landing_page) {
+  ui_page <- page_sidebar(
+    window_title = "LaSPUR",
+    useShinyjs(),
+    
+    tags$head(
+      tags$link(rel = "icon", type = "image/x-icon", href = "icon_web.ico"),
+      tags$link(rel = "icon", type = "image/png", href = "icon_web.png"),
+      tags$link(rel = "stylesheet", href = "icons/bootstrap-icons.css"),
+      tags$style(HTML("
+        @font-face {
+          font-family: 'Plus Jakarta Sans';
+          src: url('fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
+          font-weight: 200 800;
+          font-style: normal;
+        }
+      "))
+    ),
+    
+    title = tags$div(
+      id = "logo_home",
+      class = "d-flex align-items-center",
+      style = "padding-left: 10px; cursor: pointer;",
+      tags$img(src = "logotype_laspur.png", style = "height: 25px; margin-right: 12px; border-radius: 6px;"),
+      uiOutput("active_path_indicator", inline = TRUE)
+    ),
+    
+    theme = bs_theme(
+      version = 5,
+      bg = "#F8FAFC",
+      fg = "#1E293B",
+      primary = "#1b75ba",
+      success = "#106665",
+      base_font = font_google("Plus Jakarta Sans")
+    ),
+    
+    tags$style(HTML("
+      /* Base Overrides */
+      body { font-family: 'Plus Jakarta Sans', sans-serif !important; overflow-x: hidden; }
+      .navbar { border-bottom: 1px solid #E2E8F0 !important; background-color: #FFFFFF !important; box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;}
+
+      /* Scrollbar Auto-hide */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0); border-radius: 10px; transition: background-color 0.3s ease; }
+      :hover::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.4); }
+      ::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.7); }
+      * { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 184, 0.4) transparent; }
+
+      /* Pulse badge indicator in navbar */
+      .pulse-badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px; margin-left: 18px;
+        animation: fadeIn 0.4s ease forwards;
+      }
+      @keyframes fadeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+      .pulse-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+      .pulse-overlap { background-color: #e6f2f2; color: #106665; border: 1px solid #106665; }
+      .pulse-overlap .pulse-dot { background-color: #106665; animation: pulse-emerald 1.5s infinite; }
+      @keyframes pulse-emerald { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 102, 101, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 102, 101, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 102, 101, 0); } }
+
+      .pulse-adjacent { background-color: #eef6fc; color: #1b75ba; border: 1px solid #1b75ba; }
+      .pulse-adjacent .pulse-dot { background-color: #1b75ba; animation: pulse-blue 1.5s infinite; }
+      @keyframes pulse-blue { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(27, 117, 186, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(27, 117, 186, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(27, 117, 186, 0); } }
+
+      /* Sidebar layout overrides */
+      .bslib-sidebar-layout > .collapse-toggle,
+      .bslib-sidebar-layout > .bslib-sidebar-resizer,
+      [data-bslib-sidebar-resizer] { display: none !important; pointer-events: none !important; }
+
+      @media (min-width: 768px) {
+        .bslib-sidebar-layout { display: grid !important; grid-template-columns: 330px minmax(0, 1fr) !important; transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important; }
+        body.sidebar-mini .bslib-sidebar-layout { grid-template-columns: 80px minmax(0, 1fr) !important; }
+      }
+      .bslib-sidebar-layout > aside {
+        width: 100% !important; max-width: 100% !important; min-width: 100% !important;
+        border-right: 1px solid #E2E8F0 !important; background-color: #FFFFFF !important;
+        padding-top: 15px !important; overflow-x: hidden !important;
+      }
+
+      /* Common Cards */
+      .card { border: 1px solid #E2E8F0 !important; border-radius: 16px !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important; background-color: #FFFFFF !important;}
+      .btn-primary { background-color: #1b75ba !important; border: none !important; box-shadow: 0 4px 6px -1px rgba(27, 117, 186, 0.2) !important; }
+      .btn-primary:hover { background-color: #155d96 !important; transform: translateY(-1px); box-shadow: 0 6px 8px -1px rgba(27, 117, 186, 0.3) !important;}
+      .btn-outline-secondary { color: #475569 !important; border: 1px solid #CBD5E1 !important; background: transparent; }
+      .btn-outline-secondary:hover { background-color: #F8FAFC !important; border-color: #94A3B8 !important; color: #1E293B !important;}
+      .landing-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important; }
+
+      /* Alignment (accordion button & body) */
+      aside .menu-text { display: block; font-weight: 700; white-space: nowrap; }
+      aside .menu-icon { display: none !important; }
+      aside .accordion-item { border: none !important; background: transparent !important; }
+
+      aside #btn_home,
+      aside #btn_generate_report,
+      aside #btn_open_report {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 10px !important;
+        line-height: 1 !important;
+      }
+      aside #btn_home .menu-icon,
+      aside #btn_generate_report .menu-icon,
+      aside #btn_open_report .menu-icon,
+      aside #btn_home .menu-text,
+      aside #btn_generate_report .menu-text,
+      aside #btn_open_report .menu-text {
+        display: inline-flex !important;
+        align-items: center !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+      }
+      body:not(.sidebar-mini) aside #btn_home .menu-icon,
+      body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
+      body:not(.sidebar-mini) aside #btn_open_report .menu-icon {
+        margin-right: 0 !important;
+      }
+
+      body.sidebar-mini aside #btn_home,
+      body.sidebar-mini aside #btn_generate_report,
+      body.sidebar-mini aside #btn_open_report {
+        flex-direction: row !important;
+        justify-content: center !important;
+        gap: 0 !important;
+        padding: 14px 0 !important;
+      }
+      body.sidebar-mini aside #btn_home .menu-text,
+      body.sidebar-mini aside #btn_generate_report .menu-text,
+      body.sidebar-mini aside #btn_open_report .menu-text {
+        display: none !important;
+      }
+      body.sidebar-mini aside #btn_home .menu-icon,
+      body.sidebar-mini aside #btn_generate_report .menu-icon,
+      body.sidebar-mini aside #btn_open_report .menu-icon {
+        display: flex !important;
+        margin: 0 !important;
+      }
+
+      /* keep icon white on Buka Laporan button */
+      aside #btn_open_report .menu-icon,
+      body.sidebar-mini aside #btn_open_report .menu-icon { color: #FFFFFF !important; }
+
+      aside .accordion-button {
+        background-color: transparent !important; color: #475569 !important; font-size: 0.95rem;
+        padding: 16px 14px !important; width: 100% !important; box-sizing: border-box !important;
+        box-shadow: none !important; border-bottom: 1px solid #F1F5F9; white-space: nowrap; transition: all 0.2s ease;
+      }
+      aside .accordion-body {
+        padding: 8px 14px 16px 14px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      aside .accordion-button:not(.collapsed) { color: #1b75ba !important; background-color: transparent !important; }
+      aside .accordion-button:focus { box-shadow: none !important; }
+
+      /* Mini Mode */
+      body.sidebar-mini aside .menu-text,
+      body.sidebar-mini aside .nav-label,
+      body.sidebar-mini aside .sidebar-title-text { display: none !important; }
+
+      body.sidebar-mini aside .menu-icon { display: flex !important; justify-content: center; align-items: center; margin: 0 auto !important; font-size: 1.35rem !important; width: 32px !important; height: 32px !important; color: #1b75ba; }
+
+      body.sidebar-mini aside .accordion-button { padding: 16px 0 !important; justify-content: center !important; display: flex !important; width: 100% !important; box-sizing: border-box !important; }
+      body.sidebar-mini aside .accordion-button::after { display: none !important; }
+
+      body.sidebar-mini aside .accordion-body {
+        padding: 8px 0 16px 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      body.sidebar-mini aside .sidebar-header { justify-content: center !important; padding-bottom: 16px !important; }
+      body.sidebar-mini aside #sidebar-toggle-btn { margin: 0 auto; }
+      body.sidebar-mini aside #btn_home { padding: 14px 0 !important; justify-content: center !important; background-color: transparent !important; }
+      body.sidebar-mini aside #btn_home:hover { background-color: #eef6fc !important; }
+
+      body.sidebar-mini aside .dir-chooser-wrapper { opacity: 0; height: 0; padding: 0 !important; margin: 0 !important; overflow: hidden; border: none !important; }
+
+      body.sidebar-mini aside .nav-item-wrapper {
+        padding: 8px 0 !important; justify-content: center !important; background: transparent !important; border: none !important;
+        width: 48px !important; margin: 0 0 4px 0 !important; box-sizing: border-box !important;
+      }
+      body.sidebar-mini aside .nav-item-content { justify-content: center !important; width: 100% !important; gap: 0 !important; }
+      body.sidebar-mini aside .nav-number {
+        margin: 0 !important; font-size: 0.75rem !important; padding: 0 !important;
+        width: 32px !important; min-width: 32px !important; height: 32px !important;
+        display: flex !important; align-items: center !important; justify-content: center !important; border-radius: 8px !important;
+      }
+
+      body:not(.sidebar-mini) aside #btn_generate_report .menu-icon,
+      body:not(.sidebar-mini) aside #btn_home .menu-icon {
+        display: inline-block !important;
+        margin-right: 8px !important;
+      }
+
+      body.sidebar-mini aside .report-sidebar-footer {
+        border-top: none !important;
+        padding-top: 8px !important;
+        margin-top: 8px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      body.sidebar-mini aside .report-sidebar-footer .report-sidebar-subtitle { display: none !important; }
+      body.sidebar-mini aside #btn_generate_report {
+        width: 48px !important;
+        padding: 14px 0 !important;
+        justify-content: center !important;
+        background-color: transparent !important;
+      }
+      body.sidebar-mini aside #btn_generate_report:hover { background-color: #eef6fc !important; }
+
+      /* Tab pills */
+      .card-header { padding: 0 !important; border-bottom: 1px solid #E2E8F0 !important; background-color: #F8FAFC !important; border-radius: 16px 16px 0 0 !important; }
+
+      #tabs.nav-pills { padding-top: 8px; padding-left: 8px; margin: 0 !important; border-bottom: none !important;}
+      #tabs.nav-pills .nav-link {
+        border: 1px solid transparent !important; color: #64748B !important; font-weight: 600;
+        padding: 10px 16px; margin-right: 4px; border-radius: 10px 10px 0 0 !important; display: flex; align-items: center; transition: all 0.2s ease;
+      }
+      #tabs.nav-pills .nav-link:hover { background-color: #F1F5F9; border-color: #E2E8F0 #E2E8F0 transparent; }
+
+      #tabs.nav-pills .nav-link.active {
+        background-color: #FFFFFF !important; color: #1b75ba !important;
+        border-color: #E2E8F0 #E2E8F0 #FFFFFF !important; margin-bottom: -1px; padding-bottom: 11px;
+      }
+      #tabs.nav-pills li:first-child a { display: none !important; }
+
+      .close-tab-btn {
+        margin-left: 12px; padding: 2px; width: 20px; height: 20px; display: inline-flex; align-items: center;
+        justify-content: center; border-radius: 50%; color: #94A3B8; font-size: 0.85rem; transition: all 0.2s ease; cursor: pointer;
+        opacity: 0;
+      }
+
+      #tabs.nav-pills .nav-link:hover .close-tab-btn,
+      #tabs.nav-pills .nav-link.active .close-tab-btn { opacity: 1; }
+      .close-tab-btn:hover { background-color: #FEE2E2 !important; color: #EF4444 !important; }
+
+      /* Collapsible left panel */
+      .module-panel-wrapper > .row {
+        flex-wrap: nowrap;
+        overflow: hidden;
+      }
+
+      .module-panel-wrapper > .row > *:first-child {
+        flex: 0 0 33.3333% !important;
+        max-width: 33.3333% !important;
+        overflow: hidden;
+        transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                    max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity   0.25s ease,
+                    padding   0.35s ease;
+      }
+
+      .module-panel-wrapper > .row > *:last-child {
+        flex: 1 1 auto !important;
+        max-width: 66.6667% !important;
+        min-width: 0;
+        transition: flex      0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                    max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .module-panel-wrapper.panel-collapsed > .row > *:first-child {
+        flex: 0 0 0% !important;
+        max-width: 0 !important;
+        opacity: 0;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        pointer-events: none;
+      }
+      .module-panel-wrapper.panel-collapsed > .row > *:last-child {
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+      }
+      
+      /* Compact status box */
+      [id$='-status_box'] .alert,
+      .laspur-status-row .alert {
+        padding: 8px 16px !important;
+        margin-bottom: 0 !important;
+        font-size: 0.85rem;
+        line-height: 1.3;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        border-radius: 8px;
+      }
+      [id$='-status_box'] .alert i,
+      [id$='-status_box'] .alert .bi,
+      .laspur-status-row .alert i,
+      .laspur-status-row .alert .bi {
+        margin-right: 8px;
+        font-size: 1rem;
+      }
+
+      [id$='-status_box'] .alert-success,
+      .laspur-status-row .alert-success {
+        background-color: #e6f2f2 !important;
+        border-color: #c9e4e4 !important;
+        color: #106665 !important;
+      }
+      [id$='-status_box'] .alert-secondary,
+      .laspur-status-row .alert-secondary {
+        background-color: #F8FAFC !important;
+        border-color: #E2E8F0 !important;
+        color: #64748B !important;
+      }
+      [id$='-status_box'] .alert-info,
+      .laspur-status-row .alert-info {
+        background-color: #eef6fc !important;
+        border-color: #cfe3f5 !important;
+        color: #1b75ba !important;
+      }
+      [id$='-status_box'] .alert-warning,
+      .laspur-status-row .alert-warning {
+        background-color: #FEF3C7 !important;
+        border-color: #FDE68A !important;
+        color: #92400E !important;
+      }
+      [id$='-status_box'] .alert-danger,
+      .laspur-status-row .alert-danger {
+        background-color: #FEF2F2 !important;
+        border-color: #FECACA !important;
+        color: #b91c1c !important;
+      }
+
+      .laspur-status-row .laspur-open-dir-btn {
+        min-height: 38px;
+        padding: 8px 16px;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      /* Sticky toggle button */
+      .panel-toggle-container {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #FFFFFF;
+        padding: 8px 16px;
+        border-bottom: 1px solid #E2E8F0;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        border-radius: 0 0 8px 8px;
+        margin-bottom: 8px;
+      }
+      .panel-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        background-color: #F1F5F9;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        line-height: 1.4;
+      }
+      .panel-toggle-btn:hover {
+        background-color: #eef6fc;
+        color: #1b75ba;
+        border-color: #1b75ba;
+      }
+
+      .module-panel-wrapper > .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+      }
+      .module-panel-wrapper > .row > [class*='col-'] {
+        display: flex;
+        flex-direction: column;
+      }
+      .module-panel-wrapper > .row > [class*='col-'] > .card,
+      .module-panel-wrapper > .row > [class*='col-'] > div:not(.panel-toggle-container) {
+        flex: 1;
+        height: 100%;
+      }
+
+      .card-header {
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 20px !important;
+        border-radius: 16px 16px 0 0 !important;
+        overflow: visible !important;
+      }
+
+      .card-header .card-title,
+      .card-header h5,
+      .card-header h4,
+      .card-header h3 {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex-shrink: 1;
+        margin: 0;
+      }
+
+      .panel-toggle-btn {
+        margin: 0 !important;
+        align-self: center;
+      }
+
+      .card {
+        margin-bottom: 0.75rem !important;
+      }
+      .card-body {
+        padding: 0.75rem 1rem !important;
+      }
+      .card-header {
+        padding: 0.5rem 1rem !important;
+      }
+
+      .module-panel-wrapper > .row {
+        margin-left: -8px;
+        margin-right: -8px;
+      }
+      .module-panel-wrapper > .row > [class*='col-'] {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      .landing-card {
+        padding: 24px 20px !important;
+      }
+
+      .module-panel-wrapper .form-group,
+      .module-panel-wrapper .shiny-input-container {
+        margin-bottom: 0.5rem !important;
+      }
+      .module-panel-wrapper .form-group label,
+      .module-panel-wrapper .shiny-input-container label {
+        margin-bottom: 0.15rem !important;
+        font-size: 0.9rem;
+      }
+      .module-panel-wrapper .shiny-input-container .btn-file {
+        padding: 0.25rem 0.9rem !important;
+      }
+      .module-panel-wrapper .shiny-file-input .progress {
+        height: 8px !important;
+      }
+      .module-panel-wrapper .shiny-input-container .help-block {
+        margin-top: 0.1rem !important;
+        font-size: 0.85rem;
+      }
+      .module-panel-wrapper > .row > .col-sm-4 .card-body {
+        padding: 0.5rem 0.75rem !important;
+      }
+      .module-panel-wrapper p,
+      .module-panel-wrapper ul,
+      .module-panel-wrapper ol {
+        margin-bottom: 0.3rem !important;
+      }
+      .module-panel-wrapper hr {
+        margin: 0.5rem 0 !important;
+      }
+
+      .laspur-fileinput-with-bar {
+        margin-bottom: 16px !important;
+      }
+      .laspur-fileinput-with-bar .form-group.shiny-input-container {
+        margin-bottom: 0 !important;
+      }
+      .laspur-fileinput-with-bar .laspur-loaded-bar {
+        margin-top: 3px !important;
+        margin-bottom: 0 !important;
+      }
+      @keyframes laspur-loaded-bar-fade {
+        0%   { opacity: 0; }
+        100% { opacity: 1; }
+      }
+      .laspur-loaded-bar {
+        animation: laspur-loaded-bar-fade 0.4s ease-out;
+      }
+      
+      /* Full-width inputs inside module panels */
+      .module-panel-wrapper .shiny-input-container,
+      .module-panel-wrapper .form-group,
+      .module-panel-wrapper .selectize-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .module-panel-wrapper input.form-control,
+      .module-panel-wrapper textarea.form-control,
+      .module-panel-wrapper select.form-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .module-panel-wrapper .input-group {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .module-panel-wrapper .input-group > .form-control,
+      .module-panel-wrapper .input-group > input.form-control {
+        flex: 1 1 auto !important;
+        width: 1% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+      }
+
+      .module-panel-wrapper .input-group > .input-group-prepend,
+      .module-panel-wrapper .input-group > .input-group-append,
+      .module-panel-wrapper .input-group > .input-group-text,
+      .module-panel-wrapper .input-group > .btn,
+      .module-panel-wrapper .input-group > .btn-file,
+      .module-panel-wrapper .input-group > label.btn-file {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+      }
+
+      .module-panel-wrapper .shiny-input-container .irs,
+      .module-panel-wrapper .shiny-input-container .irs-with-grid,
+      .module-panel-wrapper .shiny-input-container .irs-line,
+      .module-panel-wrapper .shiny-input-container .irs-bar {
+        width: 100% !important;
+      }
+
+      .module-panel-wrapper .shiny-input-container .checkbox,
+      .module-panel-wrapper .shiny-input-container .radio {
+        width: auto !important;
+      }
+
+      /* Button loading state */
+      .laspur-btn-loading {
+        opacity: 0.55 !important;
+        cursor: not-allowed !important;
+        pointer-events: none !important;
+        filter: grayscale(0.35);
+        position: relative;
+      }
+      .laspur-btn-loading::after {
+        content: '';
+        display: inline-block;
+        width: 0.85em;
+        height: 0.85em;
+        margin-left: 8px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: laspur-spin 0.7s linear infinite;
+        vertical-align: -0.15em;
+      }
+      @keyframes laspur-spin {
+        to { transform: rotate(360deg); }
+      }
+    ")),
+    
+    sidebar = sidebar(
+      tags$div(
+        class = "sidebar-header d-flex align-items-center",
+        style = "margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #F1F5F9; justify-content: space-between;",
+        tags$span("Dashboard", class = "sidebar-title-text", style = "font-weight: 700; font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px;"),
+        tags$button(
+          id = "sidebar-toggle-btn",
+          class = "btn btn-sm btn-light",
+          title = "Tampilkan/Sembunyikan Menu",
+          style = "background: transparent; border: none; color: #64748B; padding: 4px 8px; box-shadow: none;",
+          icon("bars", class = "fa-fw", style = "font-size: 1.25rem;")
+        )
+      ),
+      
+      div(
+        class = "dir-chooser-wrapper",
+        style = "margin-bottom: 16px; padding: 16px; background-color: #F8FAFC; border-radius: 12px; border: 1px dashed #CBD5E1; transition: all 0.3s ease;",
+        tags$label("Direktori Output",
+                   style = paste("font-size: 0.8rem; font-weight: 700; color: #64748B;",
+                                 "margin-bottom: 10px; display: block; text-transform: letter-spacing: 0.5px;")),
+        shinyDirButton(
+          id    = "btn_browse_output",
+          label = "Pilih Folder",
+          title = "Pilih Direktori Output",
+          icon  = icon("folder-open"),
+          class = "btn-light w-100",
+          style = "background-color: #FFFFFF; border: 1px solid #E2E8F0; color: #475569; font-weight: 600; border-radius: 8px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
+        ),
+        div(style = "margin-top: 10px;",
+            uiOutput("output_dir_status"))
+      ),
+      
+      actionButton("btn_home",
+                   tagList(
+                     icon("home", class = "menu-icon fa-fw"),
+                     tags$span(class = "menu-text", "Beranda Utama")
+                   ),
+                   title = "Beranda Utama",
+                   class = "btn w-100 d-flex align-items-center",
+                   style = "text-align: left; color: #1b75ba; background-color: #eef6fc; border: none; padding: 14px 16px; margin-bottom: 12px; border-radius: 8px;"),
+      
+      div(
+        id = "sidebar_menus",
+        style = "display: none;",
+        accordion(
+          open = FALSE,
+          accordion_panel(
+            title = acc_title(icon("search", class = "menu-icon fa-fw"), "1. Analisis SERASI"),
+            value = "panel_identifikasi",
+            nav_item("nav_overlap",         "1.1", "Area Tumpang Tindih"),
+            nav_item("nav_adjacent",        "1.2", "Area Bertetangga"),
+            shinyjs::hidden(nav_item("nav_interconnection", "1.3", "Area Saling Terhubung"))
+          ),
+          accordion_panel(
+            title = acc_title(icon("chart-line", class = "menu-icon fa-fw"), "2. Analisis PADU"),
+            value = "panel_padu",
+            nav_item("nav_padu_ke",      "2.1", "PADU-KE"),
+            nav_item("nav_padu_hs",      "2.2", "PADU-HS"),
+            nav_item("nav_padu_kl",      "2.3", "PADU-KL"),
+            nav_item("nav_padu_kh",      "2.4", "PADU-KH"),
+            nav_item("nav_padu_rtp",     "2.5", "PADU-RTp"),
+            nav_item("nav_padu_se",      "2.6", "PADU-SE"),
+            nav_item("nav_padu_ki",      "2.7", "PADU-KI"),
+            nav_item("nav_padu_combine", "2.8", "PADU-Kombinasi")
+          ),
+          accordion_panel(
+            title = acc_title(icon("scale-balanced", class = "menu-icon fa-fw"), "3. Analisis PADAN"),
+            value = "panel_padan",
+            nav_item("nav_padan", "3", "Analisis PADAN")
+          ),
+          accordion_panel(
+            title = acc_title(icon("lightbulb", class = "menu-icon fa-fw"), "4. Penyusunan Alternatif"),
+            value = "panel_rekomendasi",
+            nav_item("nav_recommendation_overlaps", "4.1", "Penyusunan Alternatif Tumpang Tindih"),
+            nav_item("nav_recommendation_adjacent", "4.2", "Penyusunan Alternatif Bertetangga")
+          ),
+          accordion_panel(
+            title = acc_title(icon("handshake", class = "menu-icon fa-fw"), "5. Rekonsiliasi"),
+            value = "panel_rekonsiliasi",
+            nav_item("nav_reconcile", "5", "Rekonsiliasi")
+          )
+        )
+      ),
+      div(
+        class = "report-sidebar-footer",
+        style = "margin-top: 20px; padding-top: 16px; border-top: 1px solid #E2E8F0;",
+        actionButton(
+          "btn_generate_report",
+          tagList(
+            icon("file-lines", class = "menu-icon fa-fw"),
+            tags$span(class = "menu-text", "Buat Laporan")
+          ),
+          title = "Buat Laporan",
+          class = "btn w-100 d-flex align-items-center",
+          style = "text-align: left; color: #1b75ba; background-color: #eef6fc; border: none; padding: 14px 16px; font-weight: 600; border-radius: 8px;"
+        ),
+        uiOutput("btn_open_report_ui")
+      )
+    ),
+    
+    tags$div(
+      id = "close_confirm_modal", class = "modal fade",
+      tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
+      tags$div(class = "modal-dialog modal-dialog-centered",
+               tags$div(class = "modal-content", style = "border-radius: 16px; border: none; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);",
+                        tags$div(class = "modal-header", style = "background-color: #FEF2F2; color: #DC2626; border-bottom: 1px solid #FEE2E2; padding: 20px 24px;",
+                                 tags$h5(class = "modal-title d-flex align-items-center", style = "font-weight: 700; font-size: 1.1rem;",
+                                         icon("triangle-exclamation", class="me-2"),
+                                         "Tutup Tab Konfirmasi"),
+                                 tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "modal")
+                        ),
+                        tags$div(class = "modal-body", style = "padding: 24px; color: #475569; font-size: 1.05rem;",
+                                 tags$p(class = "mb-0",
+                                        "Apakah Anda yakin ingin menutup tab ",
+                                        tags$strong(id = "modal_tab_label", style = "color: #0F172A;"),
+                                        "? Semua perubahan yang belum tersimpan mungkin akan hilang.")
+                        ),
+                        tags$div(class = "modal-footer", style = "border-top: 1px solid #F1F5F9; padding: 16px 24px; background-color: #F8FAFC;",
+                                 tags$button(type = "button", class = "btn btn-light", style = "font-weight: 600; color: #64748B; border: 1px solid #E2E8F0;",
+                                             `data-bs-dismiss` = "modal", "Batal"),
+                                 actionButton("confirm_close_yes",
+                                              label = "Ya, Tutup Tab",
+                                              class = "btn btn-danger", style = "font-weight: 600; background-color: #DC2626; border: none; box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.2);")
+                        )
+               )
+      )
+    ),
+    
+    tags$div(
+      id = "info_confirm_modal", class = "modal fade",
+      tabindex = "-1", `data-bs-backdrop` = "static", `data-bs-keyboard` = "false",
+      tags$div(class = "modal-dialog modal-dialog-centered modal-lg",
+               tags$div(class = "modal-content", style = "border-radius: 16px; border: none; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);",
+                        tags$div(class = "modal-header", style = "background-color: #eef6fc; color: #1b75ba; border-bottom: 1px solid #dbeafe; padding: 20px 24px;",
+                                 tags$h5(class = "modal-title d-flex align-items-center", style = "font-weight: 700; font-size: 1.1rem;",
+                                         icon("info-circle", class="me-2"),
+                                         tags$span(id = "info_modal_title", "Konfirmasi")),
+                                 tags$button(type = "button", class = "btn-close", `data-bs-dismiss` = "modal")
+                        ),
+                        tags$div(class = "modal-body", style = "padding: 24px; color: #1e293b; font-size: 1rem; line-height: 1.6;",
+                                 tags$div(id = "info_modal_body_text", style = "margin-bottom: 12px;"),
+                                 tags$p(style = "margin-top: 8px;",
+                                        tags$a(id = "info_modal_link", href = "#", target = "_blank",
+                                               style = "font-weight: 600; color: #1b75ba; text-decoration: underline;",
+                                               "Pelajari lebih lanjut")
+                                 )
+                        ),
+                        tags$div(class = "modal-footer", style = "border-top: 1px solid #E2E8F0; padding: 16px 24px; background-color: #F8FAFC;",
+                                 tags$button(type = "button", class = "btn btn-light", style = "font-weight: 600; color: #64748B; border: 1px solid #E2E8F0;",
+                                             `data-bs-dismiss` = "modal", "Kembali"),
+                                 actionButton("confirm_info_yes",
+                                              label = "Ya, saya mengerti",
+                                              class = "btn-primary", style = "font-weight: 600; border: none; box-shadow: 0 4px 6px -1px rgba(27,117,186,0.2);")
+                        )
+               )
+      )
+    ),
+    
+    tags$a(
+      id = "user-guide-link",
+      href = "https://laspur.landseascape.id/",
+      target = "_blank",
+      class = "btn btn-sm",
+      style = "display: none; white-space: nowrap; padding: 8px 18px; font-weight: 700; background-color: #eef6fc; color: #1b75ba; border: 1px solid #E2E8F0; border-radius: 8px; align-items: center; gap: 10px; transition: all 0.2s ease;",
+      onmouseover = "this.style.backgroundColor='#1b75ba'; this.style.color='#FFFFFF'; this.style.borderColor='#1b75ba';",
+      onmouseout = "this.style.backgroundColor='#eef6fc'; this.style.color='#1b75ba'; this.style.borderColor='#E2E8F0';",
+      icon("book"),
+      span("Panduan Pengguna")
+    ),
+    
+    navset_card_pill(id = "tabs", landing)
+  )
+  
+  # Attach client JavaScript to root of UI
+  ui_page$children <- c(ui_page$children, list(tags$script(HTML(laspur_client_js))))
+  ui_page
+}
