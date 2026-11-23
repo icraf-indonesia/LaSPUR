@@ -417,6 +417,26 @@ test_that("identify_adjacent detects touching pairs and namespaces IDs", {
   expect_equal(res$RZWP3K[!is.na(res$RZWP3K)], "Zona Wisata Bahari")
 })
 
+test_that("identify_adjacent detects touching pairs on geographic WGS 84 data (real world coordinates)", {
+  # Adjacent polygons in Central Sulawesi coordinates (lon ~120, lat ~ -1)
+  poly_rtrw <- make_square_sf(120.0, -1.0, 120.1, -0.9, crs = 4326, attrs = list(RTRW = "Hutan Lindung"))
+  poly_rzwp <- make_square_sf(120.1, -1.0, 120.2, -0.9, crs = 4326, attrs = list(RZWP3K = "Zona Konservasi"))
+  
+  res <- identify_adjacent(
+    rtrw = poly_rtrw,
+    rzwp = poly_rzwp,
+    min_area_ha = 0,
+    show_detailed_progress = FALSE
+  )
+  
+  expect_s3_class(res, "sf")
+  expect_equal(nrow(res), 2)
+  expect_equal(res$id_pu, c(1, 1))
+  expect_equal(res$id, c("R1", "Z1"))
+  expect_equal(res$RTRW[!is.na(res$RTRW)], "Hutan Lindung")
+  expect_equal(res$RZWP3K[!is.na(res$RZWP3K)], "Zona Konservasi")
+})
+
 test_that("identify_adjacent_group assigns graph connected components", {
   # Build a 2-pair adjacent dataset (4 rows, 2 planning units)
   # Pair 1: R1 and Z1

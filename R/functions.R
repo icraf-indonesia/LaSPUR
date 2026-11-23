@@ -482,7 +482,7 @@ validate_zone_class <- function(sf_obj, tibble1, tibble2) {
 #' )
 #' }
 #'
-#' @importFrom sf st_crs st_transform st_touches st_geometry st_as_sf st_write st_simplify
+#' @importFrom sf st_crs st_transform st_touches st_geometry st_as_sf st_write st_simplify st_zm st_is_longlat st_bbox
 #' @importFrom dplyr bind_rows mutate select
 #' @importFrom units set_units
 #' @importFrom utils object.size
@@ -500,11 +500,25 @@ identify_adjacent <- function(rtrw,
   if (!inherits(rtrw, "sf")) stop("rtrw harus berupa objek sf")
   if (!inherits(rzwp, "sf")) stop("rzwp harus berupa objek sf")
   
+  # Ensure 2D geometry (drop Z/M coordinates if present)
+  rtrw <- sf::st_zm(rtrw, drop = TRUE, what = "ZM")
+  rzwp <- sf::st_zm(rzwp, drop = TRUE, what = "ZM")
+  
   rtrw <- rtrw %>% sf::st_make_valid()
   rzwp <- rzwp %>% sf::st_make_valid()
   
-  if (sf::st_crs(rtrw) != sf::st_crs(rzwp)) {
-    rzwp <- sf::st_transform(rzwp, sf::st_crs(rtrw))
+  # Ensure projected metric CRS for accurate spatial operations, precision, and buffer
+  if (isTRUE(sf::st_is_longlat(rtrw))) {
+    bbox <- sf::st_bbox(rtrw)
+    mean_lon <- (bbox[["xmin"]] + bbox[["xmax"]]) / 2
+    mean_lat <- (bbox[["ymin"]] + bbox[["ymax"]]) / 2
+    utm_zone <- floor((mean_lon + 180) / 6) + 1
+    epsg_metric <- if (mean_lat >= 0) 32600 + utm_zone else 32700 + utm_zone
+    message("Transformasi dari CRS geografis ke UTM zone ", utm_zone, " (EPSG:", epsg_metric, ")")
+    rtrw <- sf::st_transform(rtrw, epsg_metric) %>% sf::st_make_valid()
+    rzwp <- sf::st_transform(rzwp, epsg_metric) %>% sf::st_make_valid()
+  } else if (sf::st_crs(rtrw) != sf::st_crs(rzwp)) {
+    rzwp <- sf::st_transform(rzwp, sf::st_crs(rtrw)) %>% sf::st_make_valid()
   } 
   
   # Calculate and filter based on area size
@@ -893,12 +907,15 @@ process_adjacent <- function(pu_sf,
   return(pu_sf_result)
 }
 
-#' Convert meter precision to CRS-native precision for st_set_precision
+#' Convert meter precision to scale factor for sf::st_set_precision
+#'
+#' In sf::st_set_precision, coordinates are rounded as round(x * precision) / precision.
+#' Hence, precision is the SCALE FACTOR (1 / grid_size), not the grid size itself.
 #'
 #' @param x sf object (used to determine CRS and bounding box)
 #' @param m_precision Numeric: desired grid size in meters. Default = 1.
 #' @param silent Logical: if FALSE, print conversion details. Default = FALSE.
-#' @return Numeric: grid size in CRS units (meters for projected, degrees for geographic)
+#' @return Numeric: scale factor for sf::st_set_precision
 st_get_precision_for_meters <- function(x, m_precision = 1, silent = FALSE) {
   if (sf::st_is_longlat(x)) {
     bbox <- sf::st_bbox(x)
@@ -908,23 +925,28 @@ st_get_precision_for_meters <- function(x, m_precision = 1, silent = FALSE) {
     meters_per_deg_lon <- 111320 * cos(mean_lat * pi / 180)
     min_meters_per_deg <- min(meters_per_deg_lat, meters_per_deg_lon)
     
-    precision_deg <- m_precision / min_meters_per_deg
+    # Scale factor for st_set_precision is 1 / grid_size_deg
+    precision_scale <- min_meters_per_deg / m_precision
+    grid_deg <- m_precision / min_meters_per_deg
     
     if (!silent) {
       message(sprintf(
-        "CRS Geografis: 1° ≈ %.0f m → precision = %.8f° (≈ %.2f m grid)",
-        min_meters_per_deg, precision_deg, m_precision
+        "CRS Geografis: 1° ≈ %.0f m → scale factor = %.2f (≈ %.8f° / %.2f m grid)",
+        min_meters_per_deg, precision_scale, grid_deg, m_precision
       ))
     }
-    return(precision_deg)
+    return(precision_scale)
   } else {
+    # For projected CRS (satuan meter), grid size = m_precision meters
+    # Scale factor for st_set_precision is 1 / m_precision
+    precision_scale <- 1 / m_precision
     if (!silent) {
       message(sprintf(
-        "CRS Terproyeksi: precision = %.3f (satuan CRS = meter, grid = %.2f m)",
-        m_precision, m_precision
+        "CRS Terproyeksi: scale factor = %.3f (satuan CRS = meter, grid = %.2f m)",
+        precision_scale, m_precision
       ))
     }
-    return(m_precision)
+    return(precision_scale)
   }
 }
 
