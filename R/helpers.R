@@ -559,6 +559,601 @@ normalize_legacy_ids <- function(sf_obj, id_col = "id") {
   sf_obj
 }
 
+#' Generate HTML Popup Table for Overlay Vector Features
+#'
+#' @description
+#' Builds an HTML key-value table string for each feature in an `sf` object,
+#' enabling attribute inspection on Leaflet click.
+#'
+#' @param sf_obj An `sf` object with attribute columns.
+#' @return A character vector of HTML popup strings corresponding to each row.
+#'
+#' @importFrom htmltools htmlEscape HTML
+#' @export
+generate_overlay_popups <- function(sf_obj) {
+  df_attr <- sf::st_drop_geometry(sf_obj)
+  n <- nrow(sf_obj)
+  if (n == 0) return(character(0))
+  if (ncol(df_attr) == 0) {
+    return(rep("<div style='padding: 6px; font-family: sans-serif; font-size: 12px;'><em>Tidak ada atribut</em></div>", n))
+  }
+  
+  col_names <- colnames(df_attr)
+  popups <- vector("character", n)
+  
+  for (i in seq_len(n)) {
+    rows_html <- character(0)
+    for (col in col_names) {
+      val <- df_attr[[col]][i]
+      if (is.null(val) || length(val) == 0 || is.na(val)) {
+        val_str <- "-"
+      } else if (is.numeric(val)) {
+        val_str <- as.character(round(val, 3))
+      } else {
+        val_str <- htmltools::htmlEscape(as.character(val))
+      }
+      rows_html <- c(rows_html, paste0(
+        "<tr style='border-bottom: 1px solid #f1f5f9;'>",
+        "<td style='padding: 4px 8px; font-weight: 600; color: #334155;'>", htmltools::htmlEscape(col), "</td>",
+        "<td style='padding: 4px 8px; color: #1e293b;'>", val_str, "</td>",
+        "</tr>"
+      ))
+    }
+    
+    popups[i] <- paste0(
+      "<div style='max-height: 240px; overflow-y: auto; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; font-size: 11px;'>",
+      "<table style='width: 100%; border-collapse: collapse; text-align: left;'>",
+      "<thead><tr style='background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;'>",
+      "<th style='padding: 5px 8px; color: #64748b; font-size: 10px; text-transform: uppercase;'>Atribut</th>",
+      "<th style='padding: 5px 8px; color: #64748b; font-size: 10px; text-transform: uppercase;'>Nilai</th>",
+      "</tr></thead>",
+      "<tbody>", paste(rows_html, collapse = ""), "</tbody>",
+      "</table></div>"
+    )
+  }
+  popups
+}
+
+#' Distinct Contrast Palette for Vector Overlay Layers
+#' @export
+OVERLAY_CONTRAST_PALETTE <- c("#2563EB", "#DC2626", "#16A34A", "#D97706", "#9333EA", "#0891B2", "#EA580C")
+
+#' Process Uploaded Vector Dataset for Map Overlay
+#'
+#' @description
+#' Validates and processes uploaded Shapefiles (requiring `.shp`, `.shx`, `.dbf`, `.prj`)
+#' or GeoPackages into an EPSG:4326 `sf` object ready for Leaflet canvas overlay.
+#' Reprojects to EPSG:4326, repairs invalid geometries via `st_make_valid()`,
+#' drops Z/M dimensions, applies geometry simplification for dense datasets (> 500 features
+#' or > 5000 vertices), and generates interactive popup tables.
+#'
+#' @param file_df A dataframe returned by Shiny `fileInput` containing columns `name` and `datapath`.
+#' @param simplify_tolerance Numeric. Simplification tolerance (in map units / meters) applied
+#'   to dense geometries (> 500 features or > 5000 vertices). Default `5`.
+#' @param color Character. Optional hex color code. If `NULL`, automatically cycles through
+#'   `OVERLAY_CONTRAST_PALETTE` based on `existing_count`.
+#' @param existing_count Integer. Number of existing vector overlay layers for color cycling. Default `0`.
+#' @param layer_id Character. Optional deterministic layer ID for testing. Defaults to timestamp + random hash.
+#' @param z_index Integer. Visual stacking index for layer. Default `1`.
+#'
+#' @return A standardized list with `id`, `name`, `type = "vector"`, `data` (sf object in EPSG:4326),
+#'   `popups` (HTML character vector), `bbox` (named numeric vector), `color`, `visible`, `opacity`, and `z_index`.
+#'
+#' @importFrom sf st_read st_geometry st_zm st_is_valid st_make_valid st_crs st_transform st_bbox st_simplify st_coordinates st_is_longlat
+#' @export
+process_overlay_vector <- function(file_df, simplify_tolerance = 5, color = NULL, existing_count = 0, layer_id = NULL, z_index = 1) {
+  if (!is.data.frame(file_df) || nrow(file_df) == 0 || !all(c("name", "datapath") %in% names(file_df))) {
+    stop("Input file vektor tidak valid.")
+  }
+  
+  shp_idx <- grep("\\.shp$", file_df$name, ignore.case = TRUE)
+  gpkg_idx <- grep("\\.gpkg$", file_df$name, ignore.case = TRUE)
+  
+  if (length(shp_idx) == 0 && length(gpkg_idx) == 0) {
+    stop("Komponen .shp tidak ditemukan. Unggah file Shapefile (.shp, .shx, .dbf, .prj) atau GeoPackage (.gpkg).")
+  }
+  
+  if (length(shp_idx) > 0) {
+    shp_row <- file_df[shp_idx[1], ]
+    stem_name <- tools::file_path_sans_ext(shp_row$name)
+    
+    # Check sidecars matching the stem name
+    matching_files <- file_df$name[tolower(tools::file_path_sans_ext(file_df$name)) == tolower(stem_name)]
+    present_exts <- tolower(paste0(".", tools::file_ext(matching_files)))
+    required_exts <- c(".shp", ".shx", ".dbf", ".prj")
+    missing_exts <- setdiff(required_exts, present_exts)
+    
+    if (length(missing_exts) > 0) {
+      stop("Komponen shapefile tidak lengkap. File yang dibutuhkan hilang: ", paste(missing_exts, collapse = ", "))
+    }
+    
+    # Stage into temporary directory
+    stage_dir <- tempfile(pattern = "overlay_vec_stage_")
+    dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
+    for (i in seq_len(nrow(file_df))) {
+      dest_file <- file.path(stage_dir, file_df$name[i])
+      file.copy(file_df$datapath[i], dest_file, overwrite = TRUE)
+    }
+    
+    target_shp <- file.path(stage_dir, shp_row$name)
+    sf_obj <- tryCatch(
+      sf::st_read(target_shp, quiet = TRUE),
+      error = function(e) stop("Gagal membaca shapefile: ", conditionMessage(e))
+    )
+  } else {
+    gpkg_row <- file_df[gpkg_idx[1], ]
+    stem_name <- tools::file_path_sans_ext(gpkg_row$name)
+    sf_obj <- tryCatch(
+      sf::st_read(gpkg_row$datapath, quiet = TRUE),
+      error = function(e) stop("Gagal membaca GeoPackage: ", conditionMessage(e))
+    )
+  }
+  
+  if (is.null(sf::st_geometry(sf_obj)) || nrow(sf_obj) == 0) {
+    stop("Dataset vektor tidak memiliki fitur atau geometri valid.")
+  }
+  
+  # Ensure 2D geometry (drop Z and M coordinates)
+  sf_obj <- sf::st_zm(sf_obj, drop = TRUE, what = "ZM")
+  
+  # Validate and repair geometries
+  invalid_mask <- !sf::st_is_valid(sf_obj)
+  if (any(invalid_mask, na.rm = TRUE)) {
+    s2_was_on <- sf::sf_use_s2()
+    if (isTRUE(s2_was_on)) sf::sf_use_s2(FALSE)
+    sf_obj <- sf::st_make_valid(sf_obj)
+    if (isTRUE(s2_was_on)) sf::sf_use_s2(TRUE)
+  }
+  
+  # Coordinate Reference System verification and reprojection
+  if (is.na(sf::st_crs(sf_obj))) {
+    stop("Dataset vektor tidak memiliki sistem koordinat (CRS) terdefinisi.")
+  }
+  
+  # Apply geometry simplification for dense geometries (> 500 features or > 5000 vertices)
+  num_features <- nrow(sf_obj)
+  num_vertices <- tryCatch(nrow(sf::st_coordinates(sf_obj)), error = function(e) 0)
+  
+  if ((num_features > 500 || num_vertices > 5000) && !is.null(simplify_tolerance) && simplify_tolerance > 0) {
+    tol <- if (isTRUE(sf::st_is_longlat(sf_obj)) && simplify_tolerance >= 0.5) {
+      simplify_tolerance / 111320
+    } else {
+      simplify_tolerance
+    }
+    sf_obj <- tryCatch({
+      simp <- sf::st_simplify(sf_obj, dTolerance = tol, preserveTopology = TRUE)
+      if (any(!sf::st_is_valid(simp))) {
+        simp <- sf::st_make_valid(simp)
+      }
+      simp
+    }, error = function(e) sf_obj)
+  }
+  
+  crs_epsg <- sf::st_crs(sf_obj)$epsg
+  if (is.null(crs_epsg) || is.na(crs_epsg) || crs_epsg != 4326) {
+    sf_obj <- sf::st_transform(sf_obj, 4326)
+  }
+  
+  popups <- generate_overlay_popups(sf_obj)
+  
+  bb <- sf::st_bbox(sf_obj)
+  bbox <- c(
+    xmin = unname(bb["xmin"]),
+    ymin = unname(bb["ymin"]),
+    xmax = unname(bb["xmax"]),
+    ymax = unname(bb["ymax"])
+  )
+  
+  final_id <- if (!is.null(layer_id) && nzchar(layer_id)) {
+    layer_id
+  } else {
+    paste0("overlay_", as.integer(Sys.time()), "_", sample(1000:9999, 1))
+  }
+  
+  layer_color <- if (!is.null(color) && nzchar(color)) {
+    color
+  } else {
+    idx <- if (is.numeric(existing_count)) (as.integer(existing_count) %% length(OVERLAY_CONTRAST_PALETTE)) + 1 else 1
+    OVERLAY_CONTRAST_PALETTE[idx]
+  }
+  
+  list(
+    id = final_id,
+    name = stem_name,
+    type = "vector",
+    data = sf_obj,
+    popups = popups,
+    bbox = bbox,
+    color = layer_color,
+    visible = TRUE,
+    opacity = 0.7,
+    z_index = z_index
+  )
+}
+
+#' Process Uploaded Raster Dataset for Map Overlay
+#'
+#' @description
+#' Validates and processes uploaded GeoTIFF files into an EPSG:4326 `SpatRaster`
+#' ready for Leaflet canvas overlay. Automatically downsamples rasters exceeding
+#' 1500 pixels along either dimension to prevent browser freezing, and prepares
+#' a continuous Viridis color palette.
+#'
+#' @param file_df A dataframe returned by Shiny `fileInput` containing columns `name` and `datapath`.
+#' @return A standardized list with `id`, `name`, `type = "raster"`, `data` (SpatRaster in EPSG:4326),
+#'   `pal` (colorNumeric palette function), `domain` (numeric range), and `bbox` (named numeric vector).
+#'
+#' @importFrom terra rast crs ext same.crs project aggregate values
+#' @importFrom leaflet colorNumeric
+#' @export
+process_overlay_raster <- function(file_df, layer_id = NULL, z_index = 1) {
+  if (!is.data.frame(file_df) || nrow(file_df) == 0 || !all(c("name", "datapath") %in% names(file_df))) {
+    stop("Input file raster tidak valid.")
+  }
+  
+  tif_idx <- grep("\\.(tif|tiff)$", file_df$name, ignore.case = TRUE)
+  if (length(tif_idx) == 0) {
+    stop("File raster harus berformat GeoTIFF (.tif atau .tiff).")
+  }
+  
+  tif_row <- file_df[tif_idx[1], ]
+  stem_name <- tools::file_path_sans_ext(tif_row$name)
+  
+  # Stage to clean file with correct extension
+  stage_tif <- tempfile(pattern = "overlay_rast_stage_", fileext = paste0(".", tools::file_ext(tif_row$name)))
+  file.copy(tif_row$datapath, stage_tif, overwrite = TRUE)
+  
+  r <- tryCatch(
+    terra::rast(stage_tif),
+    error = function(e) stop("Gagal membaca file raster: ", conditionMessage(e))
+  )
+  
+  # Check CRS
+  r_crs <- terra::crs(r)
+  if (is.na(r_crs) || r_crs == "") {
+    stop("File raster tidak memiliki sistem koordinat (CRS) terdefinisi.")
+  }
+  
+  # Check extent
+  ext_r <- terra::ext(r)
+  if (is.null(ext_r) || any(is.na(as.vector(ext_r)))) {
+    stop("File raster tidak memiliki extent spasial yang valid.")
+  }
+  
+  # Reproject to EPSG:4326 if not already
+  if (!terra::same.crs(r, "EPSG:4326")) {
+    r <- terra::project(r, "EPSG:4326")
+  }
+  
+  # Downsample/resample if dimensions exceed 1500 px
+  max_dim <- max(nrow(r), ncol(r))
+  if (max_dim > 1500) {
+    fact <- ceiling(max_dim / 1500)
+    if (fact > 1) {
+      r <- terra::aggregate(r, fact = fact, fun = "mean", na.rm = TRUE)
+    }
+  }
+  
+  # Prepare Viridis palette and domain
+  vals <- terra::values(r, mat = FALSE)
+  vals <- vals[!is.na(vals) & !is.nan(vals) & !is.infinite(vals)]
+  domain <- if (length(vals) > 0) range(vals) else c(0, 1)
+  pal <- leaflet::colorNumeric(palette = "viridis", domain = domain, na.color = "transparent")
+  
+  # Compute bounding box
+  ext_v <- as.vector(terra::ext(r))
+  bbox <- c(
+    xmin = unname(ext_v["xmin"]),
+    ymin = unname(ext_v["ymin"]),
+    xmax = unname(ext_v["xmax"]),
+    ymax = unname(ext_v["ymax"])
+  )
+  
+  final_id <- if (!is.null(layer_id) && nzchar(layer_id)) {
+    layer_id
+  } else {
+    paste0("overlay_", as.integer(Sys.time()), "_", sample(1000:9999, 1))
+  }
+  
+  list(
+    id = final_id,
+    name = stem_name,
+    type = "raster",
+    data = r,
+    pal = pal,
+    domain = domain,
+    bbox = bbox,
+    visible = TRUE,
+    opacity = 0.7,
+    color = NULL,
+    z_index = z_index
+  )
+}
+
+#' Mutate Single Layer in Overlay Stack
+#'
+#' @description
+#' Finds a layer by `layer_id` in `layers` and applies `mutate_fn(layer)` to it,
+#' returning the updated `layers` list. If the layer is not found or inputs are invalid,
+#' returns `layers` unchanged.
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to mutate.
+#' @param mutate_fn Function taking a single layer list and returning the modified layer list.
+#' @return Updated list of overlay layers.
+#' @export
+overlay_mutate_layer <- function(layers, layer_id, mutate_fn) {
+  if (!is.list(layers) || length(layers) == 0) return(layers)
+  if (!is.function(mutate_fn)) return(layers)
+  
+  for (i in seq_along(layers)) {
+    if (identical(layers[[i]]$id, layer_id)) {
+      layers[[i]] <- mutate_fn(layers[[i]])
+      break
+    }
+  }
+  layers
+}
+
+#' Update Overlay Layer Opacity
+#'
+#' @description
+#' Updates the opacity of a target layer in the overlay layer list.
+#' Automatically clamps the opacity value to between 0.0 and 1.0.
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to update.
+#' @param opacity Numeric. Desired opacity value between 0.0 and 1.0.
+#' @return Updated list of overlay layers.
+#' @export
+overlay_update_layer_opacity <- function(layers, layer_id, opacity) {
+  if (is.null(opacity) || is.na(opacity)) return(layers)
+  op <- min(max(as.numeric(opacity), 0.0), 1.0)
+  overlay_mutate_layer(layers, layer_id, function(layer) {
+    layer$opacity <- op
+    layer
+  })
+}
+
+#' Toggle or Set Overlay Layer Visibility
+#'
+#' @description
+#' Toggles or explicitly sets the visibility flag of a target layer in the
+#' overlay layer list.
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to toggle or set.
+#' @param visible Optional logical. If `NULL`, toggles current visibility. If logical, sets explicitly.
+#' @return Updated list of overlay layers.
+#' @export
+overlay_toggle_layer_visibility <- function(layers, layer_id, visible = NULL) {
+  overlay_mutate_layer(layers, layer_id, function(layer) {
+    if (is.null(visible)) {
+      cur_vis <- if (is.null(layer$visible)) TRUE else isTRUE(layer$visible)
+      layer$visible <- !cur_vis
+    } else {
+      layer$visible <- isTRUE(visible)
+    }
+    layer
+  })
+}
+
+#' Update Overlay Layer Color
+#'
+#' @description
+#' Updates the display color of a target vector layer in the overlay layer list.
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to update.
+#' @param color Character. Hex color code string (e.g. `"#EF4444"`).
+#' @return Updated list of overlay layers.
+#' @export
+overlay_update_layer_color <- function(layers, layer_id, color) {
+  if (is.null(color) || !nzchar(color)) return(layers)
+  overlay_mutate_layer(layers, layer_id, function(layer) {
+    layer$color <- color
+    layer
+  })
+}
+
+#' Update Z-Indices for Overlay Layers
+#'
+#' @description
+#' Assigns explicit z-index values to layers in the stack. Layer at index 1
+#' (top of list) receives the highest z-index value (`length(layers)`), while the
+#' last layer receives index 1.
+#'
+#' @param layers List of overlay layer objects.
+#' @return Updated list of overlay layers with sequential `z_index` fields.
+#' @export
+overlay_update_z_indices <- function(layers) {
+  if (!is.list(layers) || length(layers) == 0) return(layers)
+  n <- length(layers)
+  for (i in seq_along(layers)) {
+    layers[[i]]$z_index <- n - i + 1
+  }
+  layers
+}
+
+#' Reorder Overlay Layers (Stacking / Z-Index)
+#'
+#' @description
+#' Moves a layer up or down in the layer stack. Moving "up" moves the layer
+#' earlier in the list (towards index 1), while "down" moves it later in the list.
+#' Layers earlier in the list are rendered with higher visual Z-index (drawn on top).
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to reorder.
+#' @param direction Character. Either `"up"` or `"down"`.
+#' @return Updated list of overlay layers with reordered elements and updated `z_index`.
+#' @export
+overlay_reorder_layer <- function(layers, layer_id, direction = c("up", "down")) {
+  direction <- match.arg(direction)
+  if (!is.list(layers) || length(layers) <= 1) return(layers)
+  
+  idx <- which(vapply(layers, function(l) identical(l$id, layer_id), logical(1)))
+  if (length(idx) == 0) return(layers)
+  
+  i <- idx[1]
+  if (direction == "up" && i > 1) {
+    tmp <- layers[[i - 1]]
+    layers[[i - 1]] <- layers[[i]]
+    layers[[i]] <- tmp
+  } else if (direction == "down" && i < length(layers)) {
+    tmp <- layers[[i + 1]]
+    layers[[i + 1]] <- layers[[i]]
+    layers[[i]] <- tmp
+  }
+  overlay_update_z_indices(layers)
+}
+
+#' Remove Layer from Overlay Stack
+#'
+#' @description
+#' Removes an overlay layer by ID from the layer stack.
+#'
+#' @param layers List of overlay layer objects.
+#' @param layer_id Character. ID of the layer to remove.
+#' @return Updated list of overlay layers without the specified layer.
+#' @export
+overlay_remove_layer <- function(layers, layer_id) {
+  if (!is.list(layers) || length(layers) == 0) return(layers)
+  res <- Filter(function(l) !identical(l$id, layer_id), layers)
+  overlay_update_z_indices(res)
+}
+
+#' Extract and Validate Bounding Box for "Zoom to Layer"
+#'
+#' @description
+#' Extracts and validates the geographic bounding box of an overlay layer
+#' suitable for Leaflet `fitBounds`.
+#'
+#' @param layer A standardized overlay layer list.
+#' @return A named numeric vector `c(xmin, ymin, xmax, ymax)` or `NULL` if invalid.
+#' @export
+overlay_get_layer_bbox <- function(layer) {
+  if (is.null(layer) || is.null(layer$bbox)) return(NULL)
+  bb <- layer$bbox
+  req_names <- c("xmin", "ymin", "xmax", "ymax")
+  if (!all(req_names %in% names(bb))) return(NULL)
+  if (any(is.na(bb[req_names]))) return(NULL)
+  bb[req_names]
+}
+
+#' Add Single Overlay Layer to Leaflet Map or LeafletProxy
+#'
+#' @description
+#' Renders a vector or raster overlay layer onto a Leaflet map or
+#' LeafletProxy object, respecting its visibility, opacity, and color settings.
+#'
+#' @param map_or_proxy A `leaflet` map or `leafletProxy` object.
+#' @param layer A standardized overlay layer list.
+#' @return The modified map or proxy object.
+#'
+#' @importFrom sf st_geometry_type
+#' @importFrom leaflet addCircleMarkers addPolylines addPolygons addRasterImage
+#' @export
+add_overlay_layer_to_map <- function(map_or_proxy, layer) {
+  if (is.null(map_or_proxy) || is.null(layer)) return(map_or_proxy)
+  
+  is_vis <- if (is.null(layer$visible)) TRUE else isTRUE(layer$visible)
+  if (!is_vis) return(map_or_proxy)
+  
+  opacity <- if (!is.null(layer$opacity) && is.numeric(layer$opacity)) {
+    min(max(as.numeric(layer$opacity), 0.0), 1.0)
+  } else {
+    0.7
+  }
+  stroke_opacity <- if (opacity <= 0) 0 else min(1, opacity + 0.2)
+  
+  if (identical(layer$type, "vector")) {
+    col <- if (!is.null(layer$color) && nzchar(layer$color)) layer$color else "#2563EB"
+    geom_type <- unique(as.character(sf::st_geometry_type(layer$data)))
+    is_line <- any(grepl("LINE", geom_type, ignore.case = TRUE))
+    is_point <- any(grepl("POINT", geom_type, ignore.case = TRUE))
+    
+    if (is_point) {
+      map_or_proxy <- leaflet::addCircleMarkers(
+        map = map_or_proxy,
+        data = layer$data,
+        group = layer$id,
+        popup = layer$popups,
+        color = col,
+        fillColor = col,
+        fillOpacity = opacity,
+        opacity = stroke_opacity,
+        radius = 5,
+        weight = 2
+      )
+    } else if (is_line) {
+      map_or_proxy <- leaflet::addPolylines(
+        map = map_or_proxy,
+        data = layer$data,
+        group = layer$id,
+        popup = layer$popups,
+        color = col,
+        weight = 3,
+        opacity = opacity,
+        highlightOptions = leaflet::highlightOptions(
+          weight = 3,
+          color = "#FFFFFF",
+          fillOpacity = min(1, opacity + 0.3),
+          bringToFront = TRUE
+        )
+      )
+    } else {
+      map_or_proxy <- leaflet::addPolygons(
+        map = map_or_proxy,
+        data = layer$data,
+        group = layer$id,
+        popup = layer$popups,
+        color = col,
+        fillColor = col,
+        fillOpacity = opacity,
+        weight = 2,
+        opacity = stroke_opacity,
+        highlightOptions = leaflet::highlightOptions(
+          weight = 3,
+          color = "#FFFFFF",
+          fillOpacity = min(1, opacity + 0.3),
+          bringToFront = TRUE
+        )
+      )
+    }
+  } else if (identical(layer$type, "raster")) {
+    map_or_proxy <- leaflet::addRasterImage(
+      map = map_or_proxy,
+      x = layer$data,
+      colors = layer$pal,
+      opacity = opacity,
+      group = layer$id
+    )
+  }
+  
+  return(map_or_proxy)
+}
+
+#' Draw Overlay Stack on Leaflet Map or LeafletProxy in Z-Index Order
+#'
+#' @description
+#' Draws a list of overlay layers onto a Leaflet map or LeafletProxy object.
+#' Draws in reverse order (`rev(layers)`), so that the layer at index 1 in the list
+#' is rendered last on the canvas and sits visually on top.
+#'
+#' @param map_or_proxy A `leaflet` map or `leafletProxy` object.
+#' @param layers List of standardized overlay layer objects.
+#' @return The modified map or proxy object.
+#' @export
+draw_overlay_stack <- function(map_or_proxy, layers) {
+  if (is.null(map_or_proxy) || is.null(layers) || length(layers) == 0) return(map_or_proxy)
+  
+  # Reverse order: layer at index 1 is drawn last (sits visually on top)
+  for (layer in rev(layers)) {
+    map_or_proxy <- add_overlay_layer_to_map(map_or_proxy, layer)
+  }
+  return(map_or_proxy)
+}
+
 #' Create Result Visualization UI
 #'
 #' @description
@@ -570,7 +1165,7 @@ normalize_legacy_ids <- function(sf_obj, id_col = "id") {
 #'
 #' @return A Shiny UI object containing the map, table, log, and download buttons.
 #'
-#' @importFrom shiny tagList fluidRow column div hr downloadButton
+#' @importFrom shiny tagList fluidRow column div hr downloadButton actionButton fileInput uiOutput tags icon
 #' @importFrom bslib navset_tab nav_panel
 #' @importFrom leaflet leafletOutput
 #' @importFrom DT DTOutput
@@ -585,7 +1180,68 @@ create_result_ui <- function(ns, extra_tab = NULL) {
           column(
             width = 12,
             style = "margin-top: 10px;",
-            leafletOutput(ns("result_map"), height = "450px")
+            div(
+              style = "position: relative;",
+              leafletOutput(ns("result_map"), height = "450px"),
+              div(
+                id = ns("overlay_widget"),
+                style = "position: absolute; top: 12px; right: 12px; z-index: 1000;",
+                actionButton(
+                  ns("toggle_overlay_panel"),
+                  label = tags$span(
+                    id = ns("overlay_active_badge"),
+                    class = "badge bg-primary",
+                    style = "display: none; margin-left: 4px; font-size: 10px; vertical-align: middle;",
+                    "0"
+                  ),
+                  icon = icon("layer-group"),
+                  class = "btn btn-light btn-sm shadow-sm",
+                  title = "Overlay Peta Kustom",
+                  style = "background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 14px; float: right; cursor: pointer;",
+                  onclick = sprintf("var p = document.getElementById('%s'); if (!p.style.display || p.style.display === 'none') { p.style.display = 'block'; } else { p.style.display = 'none'; }", ns("overlay_panel"))
+                ),
+                tags$script(HTML(sprintf("
+                  (function() {
+                    var widgetId = '%s';
+                    var panelId = '%s';
+                    document.addEventListener('click', function(e) {
+                      var widget = document.getElementById(widgetId);
+                      var panel = document.getElementById(panelId);
+                      if (widget && panel && !widget.contains(e.target)) {
+                        panel.style.display = 'none';
+                      }
+                    });
+                  })();
+                ", ns("overlay_widget"), ns("overlay_panel")))),
+                div(
+                  id = ns("overlay_panel"),
+                  style = "display: none; clear: both; margin-top: 42px; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(4px); border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px; width: 320px; max-height: 420px; overflow-y: auto;",
+                  div(
+                    style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;",
+                    tags$span(style = "font-weight: 600; color: #1e293b; font-size: 12px;", "Overlay Tambahan"),
+                    tags$button(
+                      type = "button",
+                      class = "btn-close btn-sm",
+                      style = "font-size: 10px; cursor: pointer; border: none; background: transparent; color: #64748b;",
+                      onclick = sprintf("document.getElementById('%s').style.display = 'none';", ns("overlay_panel")),
+                      "✕"
+                    )
+                  ),
+                  div(
+                    style = "margin-bottom: 8px;",
+                    fileInput(
+                      ns("overlay_file_upload"),
+                      label = NULL,
+                      accept = c(".shp", ".dbf", ".shx", ".prj", ".cpg", ".tif", ".tiff"),
+                      multiple = TRUE,
+                      buttonLabel = "Pilih Layer...",
+                      placeholder = "Shapefile / GeoTIFF"
+                    )
+                  ),
+                  uiOutput(ns("overlay_layer_list"))
+                )
+              )
+            )
           )
         ),
         hr(style = "margin: 15px 0; border-top: 1px solid #dee2e6;"),
@@ -652,8 +1308,8 @@ create_result_ui <- function(ns, extra_tab = NULL) {
 #' @return Invisibly `NULL`. Called for its side effects of registering
 #'   outputs and observers on `output` and `session`.
 #'
-#' @importFrom shiny req renderPrint observeEvent observe invalidateLater
-#' @importFrom leaflet renderLeaflet leaflet addProviderTiles addPolygons
+#' @importFrom shiny req renderPrint observeEvent observe invalidateLater reactiveVal showNotification renderUI tagList tags actionButton icon
+#' @importFrom leaflet renderLeaflet leaflet addProviderTiles addPolygons addPolylines addCircleMarkers addRasterImage
 #'   addLegend colorNumeric colorFactor leafletProxy clearGroup setView
 #'   highlightOptions leafletOptions providers
 #' @importFrom leaflet.extras addSearchFeatures searchFeaturesOptions
@@ -665,6 +1321,15 @@ create_result_ui <- function(ns, extra_tab = NULL) {
 #'
 #' @export
 render_result_server <- function(input, output, session, rv, config) {
+  
+  ns <- if (!is.null(session$ns)) session$ns else identity
+  `%||%` <- function(a, b) if (is.null(a)) b else a
+
+  # Custom Map Overlay layer state (persisted across modules in user session)
+  session$userData$overlay_layers <- session$userData$overlay_layers %||% reactiveVal(list())
+  
+  # Local reactive tracking which overlay layer IDs are currently rendered on this Leaflet canvas
+  rendered_layer_ids <- reactiveVal(character(0))
   
   # Default configurations
   map_color_col <- config$map_color_col
@@ -683,6 +1348,7 @@ render_result_server <- function(input, output, session, rv, config) {
   
   output$result_map <- renderLeaflet({
     req(rv$analysis_result)
+    rendered_layer_ids(character(0))
     
     map_sf <- rv$analysis_result$map
     
@@ -777,7 +1443,7 @@ render_result_server <- function(input, output, session, rv, config) {
       )
     }
     
-    leaflet::leaflet(
+    base_map <- leaflet::leaflet(
       map_sf,
       options = leafletOptions(preferCanvas = TRUE)
     ) %>%
@@ -817,6 +1483,13 @@ render_result_server <- function(input, output, session, rv, config) {
         title    = map_title,
         opacity  = 0.7
       )
+    
+    # Render any existing active overlay layers from session on initial map build
+    active_layers <- if (!is.null(session$userData$overlay_layers)) session$userData$overlay_layers() else list()
+    full_map <- draw_overlay_stack(base_map, active_layers)
+    rendered_layer_ids(if (length(active_layers) > 0) vapply(active_layers, function(l) l$id, character(1)) else character(0))
+    
+    full_map
   })
   
   output$result_table <- DT::renderDT({
@@ -981,6 +1654,325 @@ render_result_server <- function(input, output, session, rv, config) {
       file.copy(rv$xlsx_path, file, overwrite = TRUE)
     }
   )
+  
+  # --- Custom Map Overlay Server Handlers ---
+  
+  # Handle file upload for external vector and raster layers
+  observeEvent(input$overlay_file_upload, {
+    req(input$overlay_file_upload)
+    file_df <- input$overlay_file_upload
+    
+    is_vector <- any(grepl("\\.(shp|gpkg)$", file_df$name, ignore.case = TRUE))
+    is_raster <- any(grepl("\\.(tif|tiff)$", file_df$name, ignore.case = TRUE))
+    
+    if (!is_vector && !is_raster) {
+      showNotification(
+        "Format file tidak didukung. Harap unggah Shapefile (.shp, .shx, .dbf, .prj) atau GeoTIFF (.tif, .tiff).",
+        type = "error",
+        duration = 6
+      )
+      return()
+    }
+    
+    tryCatch({
+      current_layers <- session$userData$overlay_layers()
+      vec_count <- sum(vapply(current_layers, function(l) identical(l$type, "vector"), integer(1)))
+      
+      new_layer <- if (is_vector) {
+        process_overlay_vector(file_df, existing_count = vec_count)
+      } else {
+        process_overlay_raster(file_df)
+      }
+      
+      # Prepend new layer so it appears at top of UI list and top of canvas stack
+      all_layers <- overlay_update_z_indices(c(list(new_layer), current_layers))
+      session$userData$overlay_layers(all_layers)
+      
+      showNotification(
+        paste0("Layer '", new_layer$name, "' berhasil ditambahkan ke peta."),
+        type = "message",
+        duration = 4
+      )
+    }, error = function(e) {
+      showNotification(
+        paste0("Gagal memproses layer: ", conditionMessage(e)),
+        type = "error",
+        duration = 7
+      )
+    })
+  })
+  
+  # Render list of active overlay layers in the floating widget
+  output$overlay_layer_list <- renderUI({
+    layers <- session$userData$overlay_layers()
+    active_count <- length(layers)
+    badge_js <- tags$script(HTML(sprintf(
+      "var b = document.getElementById('%s'); if (b) { b.textContent = '%d'; b.style.display = %s; }",
+      ns("overlay_active_badge"),
+      active_count,
+      if (active_count > 0) "'inline-block'" else "'none'"
+    )))
+    
+    if (length(layers) == 0) {
+      return(tagList(
+        badge_js,
+        div(
+          style = "color: #94a3b8; font-style: italic; font-size: 11px; text-align: center; padding: 8px 0;",
+          "Belum ada layer tambahan."
+        )
+      ))
+    }
+    
+    tagList(
+      badge_js,
+      lapply(layers, function(layer) {
+        is_visible <- if (is.null(layer$visible)) TRUE else isTRUE(layer$visible)
+        opacity_val <- layer$opacity %||% 0.7
+        pct_label <- paste0(round(opacity_val * 100), "%")
+        is_vector <- identical(layer$type, "vector")
+        
+        vis_btn_id <- paste0("vis_overlay_", layer$id)
+        opacity_input_id <- paste0("opacity_overlay_", layer$id)
+        col_input_id <- paste0("col_overlay_", layer$id)
+        zoom_btn_id <- paste0("zoom_overlay_", layer$id)
+        up_btn_id <- paste0("up_overlay_", layer$id)
+        down_btn_id <- paste0("down_overlay_", layer$id)
+        del_btn_id <- paste0("del_overlay_", layer$id)
+        
+        type_badge <- if (is_vector) {
+          tags$span(
+            style = paste0(
+              "display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; flex-shrink: 0; background-color: ",
+              layer$color %||% "#2563EB", ";"
+            )
+          )
+        } else {
+          tags$span(
+            style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; flex-shrink: 0; background: linear-gradient(45deg, #440154, #21908d, #fde725);"
+          )
+        }
+        
+        div(
+          id = ns(paste0("item_overlay_", layer$id)),
+          style = paste0(
+            "padding: 6px 8px; margin-bottom: 6px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);",
+            if (!is_visible) " opacity: 0.65;" else ""
+          ),
+          # Primary Row: Reorder, Visibility, Label/Badge, Zoom, Delete
+          div(
+            style = "display: flex; align-items: center; justify-content: space-between; gap: 4px;",
+            # Up / Down order buttons
+            div(
+              style = "display: flex; gap: 2px;",
+              actionButton(
+                ns(up_btn_id),
+                label = NULL,
+                icon = icon("arrow-up"),
+                class = "btn btn-light btn-sm text-secondary",
+                style = "padding: 1px 4px; font-size: 9px; line-height: 1; border: 1px solid #e2e8f0;",
+                title = "Naikkan posisi (ke atas / visual Z-index depan)"
+              ),
+              actionButton(
+                ns(down_btn_id),
+                label = NULL,
+                icon = icon("arrow-down"),
+                class = "btn btn-light btn-sm text-secondary",
+                style = "padding: 1px 4px; font-size: 9px; line-height: 1; border: 1px solid #e2e8f0;",
+                title = "Turunkan posisi (ke bawah / visual Z-index belakang)"
+              )
+            ),
+            # Visibility toggle
+            actionButton(
+              ns(vis_btn_id),
+              label = NULL,
+              icon = icon(if (is_visible) "eye" else "eye-slash"),
+              class = paste0("btn btn-sm ", if (is_visible) "btn-outline-primary" else "btn-outline-secondary"),
+              style = "padding: 1px 5px; font-size: 10px; line-height: 1;",
+              title = if (is_visible) "Sembunyikan layer" else "Tampilkan layer"
+            ),
+            # Layer Title & Badge
+            div(
+              style = "display: flex; align-items: center; flex: 1; min-width: 0; margin: 0 4px;",
+              type_badge,
+              tags$span(
+                title = layer$name,
+                style = "overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1e293b; font-size: 11px;",
+                layer$name
+              )
+            ),
+            # Actions: Zoom & Delete
+            div(
+              style = "display: flex; gap: 2px;",
+              actionButton(
+                ns(zoom_btn_id),
+                label = NULL,
+                icon = icon("search"),
+                class = "btn btn-outline-secondary btn-sm",
+                style = "padding: 1px 5px; font-size: 10px; line-height: 1;",
+                title = "Zoom ke layer"
+              ),
+              actionButton(
+                ns(del_btn_id),
+                label = NULL,
+                icon = icon("trash"),
+                class = "btn btn-outline-danger btn-sm",
+                style = "padding: 1px 5px; font-size: 10px; line-height: 1;",
+                title = "Hapus layer"
+              )
+            )
+          ),
+          # Secondary Row: Opacity Slider & Color Picker
+          div(
+            style = "display: flex; align-items: center; justify-content: space-between; margin-top: 5px; padding-top: 4px; border-top: 1px dashed #f1f5f9; font-size: 10px; color: #64748b;",
+            # Opacity slider
+            div(
+              style = "display: flex; align-items: center; gap: 4px;",
+              tags$span(style = "font-weight: 500;", "Transparansi:"),
+              tags$input(
+                type = "range",
+                id = ns(opacity_input_id),
+                min = "0",
+                max = "1",
+                step = "0.05",
+                value = as.character(opacity_val),
+                style = "width: 70px; height: 14px; cursor: pointer; accent-color: #2563EB;",
+                oninput = sprintf(
+                  "Shiny.setInputValue('%s', parseFloat(this.value), {priority: 'event'}); var lbl = document.getElementById('%s'); if(lbl) lbl.innerText = Math.round(this.value * 100) + '%%';",
+                  ns(opacity_input_id),
+                  ns(paste0("opacity_txt_", layer$id))
+                )
+              ),
+              tags$span(
+                id = ns(paste0("opacity_txt_", layer$id)),
+                style = "width: 28px; text-align: right; font-variant-numeric: tabular-nums; font-size: 9px;",
+                pct_label
+              )
+            ),
+            # Color picker (vectors only)
+            if (is_vector) {
+              div(
+                style = "display: flex; align-items: center; gap: 4px;",
+                tags$span(style = "font-weight: 500;", "Warna:"),
+                tags$input(
+                  type = "color",
+                  id = ns(col_input_id),
+                  value = layer$color %||% "#2563EB",
+                  style = "width: 22px; height: 18px; padding: 0 1px; border: 1px solid #cbd5e1; border-radius: 3px; cursor: pointer;",
+                  title = "Pilih warna layer",
+                  oninput = sprintf(
+                    "Shiny.setInputValue('%s', this.value, {priority: 'event'});",
+                    ns(col_input_id)
+                  )
+                )
+              )
+            } else {
+              tags$span(style = "font-size: 9px; color: #94a3b8; font-style: italic;", "Viridis")
+            }
+          )
+        )
+      })
+    )
+  })
+  
+  # Register dynamic observers for overlay layer actions
+  registered_layer_handlers <- character(0)
+  
+  observe({
+    layers <- session$userData$overlay_layers()
+    req(length(layers) > 0)
+    
+    for (layer in layers) {
+      lid <- layer$id
+      if (lid %in% registered_layer_handlers) next
+      registered_layer_handlers <<- c(registered_layer_handlers, lid)
+      
+      local({
+        this_id <- lid
+        
+        # 1. Delete button
+        observeEvent(input[[paste0("del_overlay_", this_id)]], {
+          curr <- session$userData$overlay_layers()
+          session$userData$overlay_layers(overlay_remove_layer(curr, this_id))
+        }, ignoreInit = TRUE)
+        
+        # 2. Visibility toggle button / checkbox
+        observeEvent(input[[paste0("vis_overlay_", this_id)]], {
+          val <- input[[paste0("vis_overlay_", this_id)]]
+          curr <- session$userData$overlay_layers()
+          if (is.logical(val)) {
+            session$userData$overlay_layers(overlay_toggle_layer_visibility(curr, this_id, visible = val))
+          } else {
+            session$userData$overlay_layers(overlay_toggle_layer_visibility(curr, this_id))
+          }
+        }, ignoreInit = TRUE)
+        
+        # 3. Opacity slider
+        observeEvent(input[[paste0("opacity_overlay_", this_id)]], {
+          new_opacity <- as.numeric(input[[paste0("opacity_overlay_", this_id)]])
+          req(!is.na(new_opacity))
+          curr <- session$userData$overlay_layers()
+          session$userData$overlay_layers(overlay_update_layer_opacity(curr, this_id, new_opacity))
+        }, ignoreInit = TRUE)
+        
+        # 4. Color picker (strictly col_overlay_<id>)
+        observeEvent(input[[paste0("col_overlay_", this_id)]], {
+          val <- input[[paste0("col_overlay_", this_id)]]
+          req(val, nzchar(val))
+          curr <- session$userData$overlay_layers()
+          session$userData$overlay_layers(overlay_update_layer_color(curr, this_id, val))
+        }, ignoreInit = TRUE)
+        
+        # 5. Zoom to layer button
+        observeEvent(input[[paste0("zoom_overlay_", this_id)]], {
+          curr <- session$userData$overlay_layers()
+          idx <- which(vapply(curr, function(l) l$id == this_id, logical(1)))
+          if (length(idx) > 0) {
+            bb <- overlay_get_layer_bbox(curr[[idx]])
+            if (!is.null(bb)) {
+              leaflet::leafletProxy("result_map", session = session) %>%
+                leaflet::fitBounds(
+                  lng1 = as.numeric(bb[["xmin"]]),
+                  lat1 = as.numeric(bb[["ymin"]]),
+                  lng2 = as.numeric(bb[["xmax"]]),
+                  lat2 = as.numeric(bb[["ymax"]])
+                )
+            }
+          }
+        }, ignoreInit = TRUE)
+        
+        # 6. Up / Down order buttons (Z-index stacking)
+        observeEvent(input[[paste0("up_overlay_", this_id)]], {
+          curr <- session$userData$overlay_layers()
+          session$userData$overlay_layers(overlay_reorder_layer(curr, this_id, direction = "up"))
+        }, ignoreInit = TRUE)
+        observeEvent(input[[paste0("down_overlay_", this_id)]], {
+          curr <- session$userData$overlay_layers()
+          session$userData$overlay_layers(overlay_reorder_layer(curr, this_id, direction = "down"))
+        }, ignoreInit = TRUE)
+      })
+    }
+  })
+  
+  # Synchronize overlay layers with Leaflet canvas map
+  observe({
+    req(rv$analysis_result)
+    current_layers <- session$userData$overlay_layers()
+    current_ids <- if (length(current_layers) > 0) vapply(current_layers, function(l) l$id, character(1)) else character(0)
+    rendered_ids <- rendered_layer_ids()
+    
+    proxy <- leaflet::leafletProxy("result_map", session = session)
+    
+    # Clear all groups that were rendered before or are current
+    groups_to_clear <- unique(c(rendered_ids, current_ids))
+    for (gid in groups_to_clear) {
+      proxy %>% leaflet::clearGroup(gid)
+    }
+    
+    # Redraw active visible layers in reverse order (bottom to top, so top of list sits visually on top)
+    draw_overlay_stack(proxy, current_layers)
+    
+    rendered_layer_ids(current_ids)
+  })
 }
 
 #' Plot Continuous Raster or Vector (sf) Map with Optional PNG Export
