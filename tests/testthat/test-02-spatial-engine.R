@@ -458,3 +458,54 @@ test_that("identify_adjacent_group assigns graph connected components", {
   # R1-Z1 and R2-Z2 are disjoint components, so they receive different group IDs
   expect_equal(length(unique(grouped$id_group)), 2)
 })
+
+test_that("process_adjacent calculates shared boundary length sequentially and in parallel", {
+  # Two adjacent polygons sharing an edge of 1000 meters in UTM (EPSG:32750)
+  # Square 1: x in [500000, 501000], y in [9800000, 9801000]
+  # Square 2: x in [501000, 502000], y in [9800000, 9801000]
+  # Shared edge: x = 501000, y in [9800000, 9801000] -> length = 1000 m
+  poly_rtrw <- make_square_sf(500000, 9800000, 501000, 9801000, crs = 32750, attrs = list(RTRW = "Hutan Lindung"))
+  poly_rzwp <- make_square_sf(501000, 9800000, 502000, 9801000, crs = 32750, attrs = list(RZWP3K = "Zona Konservasi"))
+  
+  adj_raw <- identify_adjacent(
+    rtrw = poly_rtrw,
+    rzwp = poly_rzwp,
+    min_area_ha = 0,
+    show_detailed_progress = FALSE
+  )
+  adj_grouped <- identify_adjacent_group(adj_raw)
+  
+  # Test sequential
+  res_seq <- process_adjacent(
+    pu_sf = adj_grouped,
+    buffer_m = 100,
+    m_precision = 1,
+    snap_tolerance = 0.5,
+    parallel = FALSE,
+    progress = FALSE
+  )
+  
+  expect_s3_class(res_seq, "sf")
+  expect_equal(nrow(res_seq), 2)
+  expect_true("length" %in% names(res_seq))
+  expect_true("area_buffer_ha" %in% names(res_seq))
+  # Edge is 1000 m
+  expect_equal(res_seq$length[1], 1000, tolerance = 1)
+  # Area buffer = 1000 * 100 / 10000 = 10 ha
+  expect_equal(res_seq$area_buffer_ha[1], 10, tolerance = 0.1)
+  
+  # Test parallel
+  res_par <- process_adjacent(
+    pu_sf = adj_grouped,
+    buffer_m = 100,
+    m_precision = 1,
+    snap_tolerance = 0.5,
+    parallel = TRUE,
+    workers = 2,
+    progress = FALSE
+  )
+  
+  expect_s3_class(res_par, "sf")
+  expect_equal(res_par$length, res_seq$length)
+  expect_equal(res_par$area_buffer_ha, res_seq$area_buffer_ha)
+})

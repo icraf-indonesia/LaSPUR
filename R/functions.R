@@ -792,11 +792,36 @@ identify_adjacent_group <- function(sf_obj, tie_break = NULL) {
 #'   result <- process_adjacent(adj, buffer_m = 50, m_precision = 1, parallel = TRUE)
 #' }
 #'
+#' Internal helper to compute shared length between a pair of boundaries
+#' @noRd
+calc_pair_adjacent_length <- function(k, r_ids, z_ids, b_r_list, b_z_list, tol) {
+  r_id <- r_ids[k]
+  z_id <- z_ids[k]
+  r_b <- b_r_list[[r_id]]
+  z_b <- b_z_list[[z_id]]
+  if (is.null(r_b) || is.null(z_b) || sf::st_is_empty(r_b) || sf::st_is_empty(z_b)) {
+    return(0)
+  }
+  
+  tryCatch({
+    z_snapped <- sf::st_snap(z_b, r_b, tolerance = tol)
+    shared_line <- sf::st_intersection(r_b, z_snapped)
+    if (length(shared_line) == 0 || sf::st_is_empty(shared_line)) {
+      return(0)
+    } else {
+      return(as.numeric(sf::st_length(shared_line)))
+    }
+  }, error = function(e) {
+    0
+  })
+}
+environment(calc_pair_adjacent_length) <- baseenv()
+
 #' @importFrom sf st_crs st_transform st_geometry st_boundary st_intersection
 #'   st_length st_make_valid st_set_precision st_snap st_is_empty st_is_longlat
 #'   st_bbox
 #' @importFrom dplyr filter arrange left_join mutate select
-#' @importFrom furrr future_map_dbl furrr_options
+#' @importFrom furrr future_map_dbl future_map2_dbl furrr_options
 #' @importFrom future plan availableCores multisession multicore
 #' @export
 process_adjacent <- function(pu_sf,
@@ -833,7 +858,7 @@ process_adjacent <- function(pu_sf,
   
   # Convert m_precision to appropriate precision value for st_set_precision
   n_precision <- st_get_precision_for_meters(pu_sf_metric, m_precision, silent = FALSE)
-  pu_sf_metric <- sf::st_set_precision(pu_sf_metric, n_precision)
+  pu_sf_metric <- sf::st_set_precision(pu_sf_metric, n_precision) |> sf::st_make_valid()
   
   # Split into RTRW and RZWP3K parts (ordered by id_pu)
   rtrw_parts <- pu_sf_metric %>% dplyr::filter(!is.na(RTRW)) %>% dplyr::arrange(id_pu)
@@ -843,36 +868,46 @@ process_adjacent <- function(pu_sf,
     stop("Jumlah baris RTRW dan RZWP3K tidak sama. Pastikan data berasal dari identify_adjacent() yang benar.")
   }
   
-  # Extract boundaries
-  rtrw_boundaries <- sf::st_boundary(sf::st_geometry(rtrw_parts))
-  rzwp_boundaries <- sf::st_boundary(sf::st_geometry(rzwp_parts))
+  # Extract boundaries for UNIQUE features only to prevent exponential memory consumption.
+  # (A single large marine polygon touching many land polygons would otherwise duplicate
+  # its geometry thousands of times, exceeding memory limits during parallel serialization).
+  # Use vector indexing !duplicated(id) to avoid sf:::distinct.sf calling st_equals pairwise.
+  unique_rtrw <- rtrw_parts[!duplicated(rtrw_parts$id), ]
+  unique_rtrw_b <- sf::st_boundary(sf::st_geometry(unique_rtrw))
+  names(unique_rtrw_b) <- as.character(unique_rtrw$id)
   
-  # Define the function that computes shared length for a single pair
-  # (used both sequentially and in parallel)
-  calc_single_length <- function(i) {
-    rtrw_i <- rtrw_boundaries[i]
-    rzwp_i <- rzwp_boundaries[i]
-    rzwp_i_snapped <- sf::st_snap(rzwp_i, rtrw_i, tolerance = snap_tolerance)
-    shared_line <- sf::st_intersection(rtrw_i, rzwp_i_snapped)
-    if (length(shared_line) == 0 || sf::st_is_empty(shared_line)) {
-      return(0)
-    } else {
-      return(as.numeric(sf::st_length(shared_line)))
-    }
-  }
+  unique_rzwp <- rzwp_parts[!duplicated(rzwp_parts$id), ]
+  unique_rzwp_b <- sf::st_boundary(sf::st_geometry(unique_rzwp))
+  names(unique_rzwp_b) <- as.character(unique_rzwp$id)
+  
+  pair_r_ids <- as.character(rtrw_parts$id)
+  pair_z_ids <- as.character(rzwp_parts$id)
   
   # Compute lengths
   if (!parallel) {
     message("Menghitung panjang garis irisan untuk setiap pasangan (sekuensial)...")
     calculated_lengths <- vapply(
-      seq_along(rtrw_boundaries),
-      calc_single_length,
-      numeric(1)
+      seq_along(pair_r_ids),
+      function(k) {
+        calc_pair_adjacent_length(
+          k = k,
+          r_ids = pair_r_ids,
+          z_ids = pair_z_ids,
+          b_r_list = unique_rtrw_b,
+          b_z_list = unique_rzwp_b,
+          tol = snap_tolerance
+        )
+      },
+      FUN.VALUE = numeric(1)
     )
   } else {
     # Parallel execution
     old_plan <- future::plan("list")
     on.exit(future::plan(old_plan), add = TRUE)
+    old_max_size <- getOption("future.globals.maxSize")
+    on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
+    options(future.globals.maxSize = 2 * 1024^3) # 2 GiB safe limit
+    
     if (is.null(workers)) workers <- future::availableCores()
     if (plan_strategy == "multisession") {
       future::plan(future::multisession, workers = workers)
@@ -882,10 +917,15 @@ process_adjacent <- function(pu_sf,
     
     message("Menghitung panjang garis irisan untuk setiap pasangan (paralel, ", workers, " worker)...")
     calculated_lengths <- furrr::future_map_dbl(
-      .x = seq_along(rtrw_boundaries),
-      .f = calc_single_length,
+      .x = seq_along(pair_r_ids),
+      .f = calc_pair_adjacent_length,
+      r_ids = pair_r_ids,
+      z_ids = pair_z_ids,
+      b_r_list = unique_rtrw_b,
+      b_z_list = unique_rzwp_b,
+      tol = snap_tolerance,
       .progress = progress,
-      .options = furrr::furrr_options(packages = "sf")
+      .options = furrr::furrr_options(packages = "sf", seed = TRUE)
     )
   }
   
@@ -901,8 +941,11 @@ process_adjacent <- function(pu_sf,
     dplyr::left_join(lengths_lookup, by = "id_pu") %>%
     dplyr::mutate(
       area_buffer_ha = (length * buffer_m) / 10000
-    ) %>%
-    dplyr::select(id, id_pu, id_group, RTRW, RZWP3K, area_ha, length, area_buffer_ha, n_pairs, geometry)
+    )
+  
+  cols_order <- c("id", "id_pu", "id_group", "RTRW", "RZWP3K", "area_ha", "length", "area_buffer_ha", "n_pairs", "geometry")
+  existing_cols <- intersect(cols_order, names(pu_sf_result))
+  pu_sf_result <- pu_sf_result[, existing_cols, drop = FALSE]
   
   return(pu_sf_result)
 }
