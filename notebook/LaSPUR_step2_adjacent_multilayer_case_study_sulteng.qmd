@@ -1,0 +1,458 @@
+---
+title: "LaSPUR Step 2: Implementasi Studi Kasus Sulawesi Tengah"
+author: "Landscape Alliance Indonesia"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+    code-fold: show
+    code-line-numbers: true
+editor: visual
+---
+
+# LaSPUR: Land and Sea Planning Unit Reconcilliation
+
+## Implementasi Pendekatan Multi-layer Dalam Pembangunan Peta Identifikasi Kasus Bertetangga
+
+Dalam proses identifikasi kasus bertetangga (`identify_adjacent()` + `process_adjacent()` + `dissolve_id_pu()`), setiap pasangan poligon bertetangga (`id_pu`) menyimpan 2 baris geometri untuk poligon `RTRW` dan `RZWP3K`. Ketika satu poligon laut `RZWP3K` memiliki luasan besar bersentuhan dengan puluhan/ratusan poligon di darat `RTRW` di sepanjang garis pantai, maka:
+
+1.  Poligon laut yang sama diduplikasi hingga $N$ kali di `idx_serasi_adjacent.gpkg`, `idx_padu_combine.gpkg`, dan `idx_padan.gpkg`.
+2.  Modul PADU memanggil `dissolve_id_pu()`, membentuk $N$ buah poligon gabungan `R ∪ Z` yang masing-masing mengekstrak ulang poligon besar yang sama dan skor PADU pasangan pesisir terdistorsi karena luas gabungan didominasi poligon laut.
+
+## Multi-layer Geopackage dan Pembangunan Evaluation Unit Map
+
+Notebook ini mengimplementasikan pendekatan baru dalam proses integrasi tata ruang darat-laut untuk studi kasus Sulawesi Tengah (`Case Study/Sulteng/Data`):
+
+1.  GeoPackage Multi-Layer (`features`, `pairs`, `eval_units`):
+    - `features` (*spatial layer*): 1 baris per poligon unik (`id`) (`RXXX` / `ZXXX`) beserta geometri aslinya
+    - `pairs` (*non-spatial table*): 1 baris per `id_pu` berisi atribut `id_rtrw`, `id_rzwp3k`, `id_group`, `length`, `idx_serasi`, `fungsi`, `status_penafisan`, `penafisan_layer`, serta skor PADU dan PADAN.
+    - `eval_units` (*spatial layer*): 1 poligon *cookie-cutter* per `id_pu` dibangun sebagai unit evaluasi langsung untuk seluruh 6 modul PADU aktif (`KE`, `HS`, `KH`, `RTp`, `SE`, `KI`).
+2.  Symmetric Adaptive Cookie-Cutter + Voronoi Partitioning (`eval_units`):
+    - Jika $\text{Area}_{\text{big}} > 5 \times \text{Area}_{\text{small}}$ (simetris: berlaku baik laut $\gg$ darat maupun darat $\gg$ laut), hanya sisi yang jauh lebih besar yang dipotong di sekitar garis kontak `shared_line`.
+    - Radius jangkauan $X$ dihitung dengan *Equivalent Circular Diameter:* $$X = \max\left(100\text{ m},\; 2\sqrt{\frac{A_{\text{small}}}{\pi}}\right)$$untuk menjaga proporsi luas area evaluasi yang akan digunakan dalam perhitungan PADU \~1:1 dengan poligon kecil.
+    - Seluruh segmen `shared_line` yang menempel pada poligon dengan luasan besar yang sama dipartisi dengan `sf::st_voronoi()` sehingga irisan antar-pasangan yang bertetangga saling lepas (*disjoint*), tegak lurus, dan tidak pernah meluber ke depan wilayah tetangganya.
+
+# Step 1: Load libraries, functions, & data
+
+```{r setup-libraries}
+#| eval: false
+#| message: false
+#| warning: false
+
+# Load functions and libraries
+proj_root <- if (file.exists("R/functions.R")) "." else ".."
+source(file.path(proj_root, "R/functions.R"))
+source(file.path(proj_root, "R/helpers.R"))
+source(file.path(proj_root, "R/adjacent_multilayer.R"))
+
+library(sf)
+library(terra)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(igraph)
+library(furrr)
+library(future)
+library(openxlsx)
+library(ggplot2)
+
+sf::sf_use_s2(FALSE)
+options(future.globals.maxSize = 16 * 1024^3)
+```
+
+```{r assign-data-paths}
+#| eval: false
+
+data_dir   <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Case Study/Sulteng/Data"
+output_dir <- "D:/OneDrive - CIFOR-ICRAF/ICRAF/Project/Solusi/LaSPUR/Case Study/Sulteng/Hasil Step 2_v3/"
+
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+# SERASI Input
+rtrw_path           <- file.path(data_dir, "01_Analisis SERASI/Step 2/ST_RTRW_Int.shp")
+rzwp3k_path         <- file.path(data_dir, "01_Analisis SERASI/Step 2/ST_RZWP3K_Int.shp")
+admin_path          <- file.path(data_dir, "00_Batas Administrasi/Batas_Administrasi_Sulteng.shp")
+admin_col           <- "WADMKC"
+
+acuan_rtrw_path     <- file.path(data_dir, "01_Analisis SERASI/Step 2/tabel_acuan_pola_RTRW_step2.xlsx")
+acuan_rzwp3k_path   <- file.path(data_dir, "01_Analisis SERASI/Step 2/tabel_acuan_pola_RZWP3K_step2.xlsx")
+matriks_serasi_path <- file.path(data_dir, "01_Analisis SERASI/Step 2/matriks_serasi_adjacent.xlsx")
+
+# PADUs Input
+# PADU-KE 
+lulc_vect_path       <- file.path(data_dir, "02_Analisis PADU-KE/PL2024_Coral_Seagrass_Union.shp")
+matriks_padu_ke_path <- file.path(data_dir, "02_Analisis PADU-KE/matriks_padu_ke.xlsx")
+lulc_id_col          <- "ID"
+lulc_class_col       <- "LC"
+
+# PADU-HS
+river_vect_path       <- file.path(data_dir, "02_Analisis PADU-HS/ST_Sungai250k.shp")
+tss_rast_path         <- file.path(data_dir, "02_Analisis PADU-HS/tss_sulteng_2026.tif")
+buffer_radius_hs      <- 5000
+
+# PADU-KH
+coral_vect_path      <- file.path(data_dir, "02_Analisis PADU-KH/AC_Coral_Sulteng.shp")
+seagrass_vect_path   <- file.path(data_dir, "02_Analisis PADU-KH/AC_Seagrass_Sulteng.shp")
+mangrove_vect_path   <- file.path(data_dir, "02_Analisis PADU-KH/mangrove_sulteng.shp")
+
+# PADU-RTp 
+industry_euc_dist_path  <- file.path(data_dir, "02_Analisis PADU-RTp/Jarak_ke_titik_pabrik.tif")
+pelayaran_euc_dist_path <- file.path(data_dir, "02_Analisis PADU-RTp/euc_dist_alur_pelayaran_sulteng.tif")
+popdens_map_path        <- file.path(data_dir, "02_Analisis PADU-RTp/population_density_sulteng_2025_50S.tif")
+
+# PADU-SE 
+rs_euc_dist_path      <- file.path(data_dir, "02_Analisis PADU-SE/Jarak_ke_rumah_sakit.tif")
+pelabuhan_euc_dist_path <- file.path(data_dir, "02_Analisis PADU-SE/Jarak_ke_pelabuhan.tif")
+pasar_euc_dist_path   <- file.path(data_dir, "02_Analisis PADU-SE/Jarak_ke_pasar_sulteng.tif")
+jalan_euc_dist_path   <- file.path(data_dir, "02_Analisis PADU-SE/Jarak_ke_jalan.tif")
+
+# PADU-KI
+disaster_risk_path   <- file.path(data_dir, "02_Analisis PADU-KI/08_ST_KRB_clim_diss.shp")
+
+# Pembobotan PADU
+padu_idx_weight_path <- NULL
+
+# Legal layer check input
+filter_layers <- list(
+  Kebijakan_1 = file.path(data_dir, "01_Analisis SERASI/Step 2/filter_layer_1.shp"),
+  Kebijakan_2 = file.path(data_dir, "01_Analisis SERASI/Step 2/filter_layer_2.shp")
+)
+
+# Overlapped area with legal layer to be considered
+min_overlap_pct <- 50
+```
+
+# Step 2: Ekstraksi, penafisan, & pembangunan multi-layer SERASI
+
+```{r run-serasi-multilayer}
+#| eval: false
+
+.timing_state$rows <- list()
+
+run_timed_step("SERASI - Load Data", {
+  rtrw_vect        <-  load_and_validate_shapefile(rtrw_path)
+  rzwp3k_vect      <-  load_and_validate_shapefile(rzwp3k_path)
+  admin_vect       <-  load_and_validate_shapefile(admin_path)
+  rtrw_prioritas   <-  load_and_validate_table(acuan_rtrw_path)
+  rzwp3k_prioritas <-  load_and_validate_table(acuan_rzwp3k_path)
+  matriks_serasi   <-  load_validate_matrix_table(matriks_serasi_path, title = "serasi")
+})
+
+# Identify adjacent pairs
+adj_contacts <- run_timed_step("SERASI - extract_adjacent_contacts", {
+  extract_adjacent_contacts(
+    rtrw           = rtrw_vect,
+    rzwp           = rzwp3k_vect,
+    min_area_ha    = 1,
+    m_precision    = 1,
+    snap_tolerance = 0.5,
+    buffer_m       = 100,
+    parallel       = TRUE,
+    workers        = 4
+  )
+})
+
+# Merge administration map to adjacent map
+adj_enriched <- run_timed_step("SERASI - enrich_adjacent_pairs", {
+  enrich_adjacent_pairs(
+    adj_obj          = adj_contacts,
+    matriks_serasi   = matriks_serasi,
+    rtrw_prioritas   = rtrw_prioritas,
+    rzwp3k_prioritas = rzwp3k_prioritas,
+    admin_sf         = admin_vect,
+    admin_col        = admin_col,
+    filter_serasi_1  = TRUE
+  )
+})
+
+# Legal area check and flag
+adj_flagged <- run_timed_step("SERASI - Penafisan (flag + filter + export audit)", {
+  flagged <- flag_adjacent_pu_filters(
+    x               = adj_enriched,
+    filter_layers   = filter_layers,
+    min_overlap_pct = min_overlap_pct
+  )
+  print(table(flagged$pairs$status_penafisan))
+
+  serasi_flagged_gpkg <-  file.path(output_dir, "idx_serasi_adjacent_flagged.gpkg")
+  serasi_flagged_xlsx <-  file.path(output_dir, "idx_serasi_adjacent_flagged.xlsx")
+  write_adjacent_multilayer_gpkg(
+    gpkg_path       = serasi_flagged_gpkg,
+    features_sf     = flagged$features,
+    pairs_df        = flagged$pairs,
+    shared_lines_sf = flagged$shared_lines
+  )
+  openxlsx::write.xlsx(flagged$pairs, serasi_flagged_xlsx)
+  flagged
+})
+
+# Filter PU within legal area
+adj_filtered <- filter_serasi_penafisan(adj_flagged)
+
+# Construct evaluation units as a cookie cutter to calculate PADUs for each PU
+adj_ml <- run_timed_step("SERASI - build_eval_units (Cookie-Cutter + Voronoi)", {
+  build_eval_units(
+    adj_enriched  = adj_filtered,
+    ratio_k       = 5,
+    min_buffer_m  = 100,
+    use_voronoi   = TRUE,
+    sample_step_m = 100,
+    parallel      = TRUE,
+    workers       = 4
+  )
+})
+
+# Write result
+serasi_ml_gpkg <- file.path(output_dir, "idx_serasi_adjacent_multilayer.gpkg")
+serasi_ml_xlsx <- file.path(output_dir, "idx_serasi_adjacent.xlsx")
+
+run_timed_step("SERASI - Export Multi-Layer GPKG & XLSX", {
+  write_adjacent_multilayer_gpkg(
+    gpkg_path     = serasi_ml_gpkg,
+    features_sf   = adj_ml$features,
+    pairs_df      = adj_ml$pairs,
+    eval_units_sf = adj_ml$eval_units
+  )
+  openxlsx::write.xlsx(adj_ml$pairs, serasi_ml_xlsx)
+})
+
+save_timing_log(output_dir)
+sf::st_layers(serasi_ml_gpkg)
+```
+
+# Step 3: Hitung ringkasan kasus bertetangga
+
+```{r diagnostics-and-viz}
+#| eval: false
+
+ml <- read_adjacent_multilayer_gpkg(serasi_ml_gpkg)
+
+cat(sprintf("Unique features (layers 'features') : %d poligon\n", nrow(ml$features)))
+cat(sprintf("Total pairs (layers 'pairs')        : %d pasangan\n", nrow(ml$pairs)))
+cat(sprintf("Eval units (layers 'eval_units')    : %d cookie-cutter\n", nrow(ml$eval_units)))
+cat(sprintf("Ukuran GPKG multi-layer             : %.2f MB\n", file.info(serasi_ml_gpkg)$size / 1024^2))
+
+# Summarize
+print(table(ml$pairs$clipped_side))
+summary(ml$pairs[, c("area_ha_rtrw", "area_ha_rzwp3k", "clip_radius_m", "area_eval_ha")])
+
+# Summary visualisation
+top_group <- ml$pairs %>%
+  dplyr::count(id_group, sort = TRUE) %>%
+  dplyr::slice(1) %>%
+  dplyr::pull(id_group)
+
+grp_pairs <- ml$pairs %>% dplyr::filter(id_group == top_group)
+grp_eval  <- ml$eval_units %>% dplyr::filter(id_group == top_group)
+grp_feats <- ml$features %>%
+  dplyr::filter(id %in% unique(c(grp_pairs$id_rtrw, grp_pairs$id_rzwp3k)))
+
+ggplot() +
+  geom_sf(data = grp_feats, aes(fill = source), alpha = 0.15, color = "#475569", linewidth = 0.4) +
+  geom_sf(data = grp_eval, aes(color = factor(id_pu)), fill = NA, linewidth = 0.9) +
+  labs(
+    title = sprintf("id_group = %d (%d pasangan bertetangga)", top_group, nrow(grp_pairs)),
+    subtitle = "Garis berwarna = eval_units terpartisi Voronoi; arsiran = features unik asli",
+    fill = "Sumber Layer", color = "id_pu"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+# Step 4: Perhitungan indeks PADU & PADAN
+
+```{r run-padu-on-eval-units}
+#| eval: false
+
+ml <- read_adjacent_multilayer_gpkg(serasi_ml_gpkg)
+eval_pu <- ml$eval_units
+
+# Calculate PADU-KH
+idx_padu_kh <- run_timed_step("PADU-KH", {
+  target_crs <- sf::st_crs(eval_pu)
+  load_hab_utm <- function(path) {
+    v <- load_and_validate_shapefile(path)
+    if (sf::st_crs(v) != target_crs) {
+      v <- sf::st_transform(v, target_crs)
+    }
+    sf::st_sf(geometry = sf::st_geometry(v), crs = target_crs)
+  }
+  coral_vect    <- load_hab_utm(coral_vect_path)
+  seagrass_vect <- load_hab_utm(seagrass_vect_path)
+  mangrove_vect <- load_hab_utm(mangrove_vect_path)
+  coastal_habitat <- dplyr::bind_rows(coral_vect, seagrass_vect, mangrove_vect) %>%
+    sf::st_make_valid() %>%
+    sf::st_combine() %>%
+    sf::st_make_valid() %>%
+    sf::st_as_sf()
+
+  idx_padu_kh_map <-  .run_with_parallel_fallback(
+    "PADU-KH",
+    function() calculate_overlay_pct(pu = eval_pu, overlay_area = coastal_habitat, title = "coastal_habitat", parallel = TRUE,  workers = 4),
+    function() calculate_overlay_pct(pu = eval_pu, overlay_area = coastal_habitat, title = "coastal_habitat", parallel = FALSE)
+  ) %>%
+    dplyr::mutate(idx_padu_kh = coastal_habitat_pct / 100)
+  tibble::as_tibble(sf::st_drop_geometry(idx_padu_kh_map)) %>%
+    dplyr::select(id_pu, idx_padu_kh)
+})
+
+# Calculate PADU-HS
+idx_padu_hs <- run_timed_step("PADU-HS", {
+  river_vect <- load_and_validate_shapefile(river_vect_path)
+  tss_rast   <- load_and_validate_raster(tss_rast_path)
+  padu_hs <-  calculate_padu_hs(
+    idx_serasi_map     = eval_pu,
+    river_vect         = river_vect,
+    tss_rast           = tss_rast,
+    buffer_radius      = buffer_radius_hs,
+    tss_good_threshold = 20
+  )
+  padu_hs$idx_padu_hs %>% dplyr::select(id_pu, idx_padu_hs)
+})
+
+# Calculate PADU-RTp
+idx_padu_rtp <- run_timed_step("PADU-RTp", {
+  industry_euc_dist  <- load_and_validate_raster(industry_euc_dist_path)
+  pelayaran_euc_dist <- load_and_validate_raster(pelayaran_euc_dist_path)
+  popdens_rast       <- load_and_validate_raster(popdens_map_path)
+  padu_rtp <-  calculate_padu_rtp(
+    idx_serasi_map     = eval_pu,
+    industry_euc_dist  = industry_euc_dist,
+    pelayaran_euc_dist = pelayaran_euc_dist,
+    popdens_rast       = popdens_rast
+  )
+  padu_rtp$idx_padu_rtp %>% dplyr::select(id_pu, idx_padu_rtp)
+})
+
+# Calculate PADU-SE
+idx_padu_se <- run_timed_step("PADU-SE", {
+  facilities <- list(
+    build_facility_layer("Rumah Sakit", rs_euc_dist_path,      fac_type = "raster", pu = eval_pu, max_dist = 5000),
+    build_facility_layer("Pelabuhan",     pelabuhan_euc_dist_path, fac_type = "raster", pu = eval_pu, max_dist = 5000),
+    build_facility_layer("Pasar",       pasar_euc_dist_path,   fac_type = "raster", pu = eval_pu, max_dist = 5000),
+    build_facility_layer("Jalan",       jalan_euc_dist_path,   fac_type = "raster", pu = eval_pu, max_dist = 5000)
+  )
+  padu_se <-  calculate_padu_se(
+    idx_serasi_map     = eval_pu,
+    facilities         = facilities,
+    id_col             = "id_pu",
+    keep_intermediates = TRUE
+  )
+  padu_se$idx_padu_se %>% dplyr::select(id_pu, idx_padu_se)
+})
+
+# Calculate PADU-KI
+idx_padu_ki <- run_timed_step("PADU-KI", {
+  disaster_risk_vect <- load_and_validate_shapefile(disaster_risk_path) %>% sf::st_make_valid()
+  padu_ki <-  .run_with_parallel_fallback(
+    "PADU-KI",
+    function() calculate_padu_ki(idx_serasi_map = eval_pu, disaster_risk_vect = disaster_risk_vect, value_col = "Kerawanan", parallel = TRUE,  workers = 4),
+    function() calculate_padu_ki(idx_serasi_map = eval_pu, disaster_risk_vect = disaster_risk_vect, value_col = "Kerawanan", parallel = FALSE)
+  )
+  padu_ki$idx_padu_ki %>% dplyr::select(id_pu, idx_padu_ki)
+})
+
+# Calculate PADU-KE
+idx_padu_ke <- run_timed_step("PADU-KE", {
+  lulc_vect       <- load_and_validate_shapefile(lulc_vect_path)
+  lulc_ref        <- lulc_vect %>%
+    sf::st_drop_geometry() %>%
+    dplyr::select(ID = !!rlang::sym(lulc_id_col), LC = !!rlang::sym(lulc_class_col)) %>%
+    dplyr::distinct(ID, LC) %>%
+    dplyr::arrange(ID)
+  matriks_padu_ke <- load_validate_matrix_table(matriks_padu_ke_path, title = "padu_ke")
+
+  lulc_adjacencies <- .run_with_parallel_fallback(
+    "PADU-KE",
+    function() calculate_lulc_adjacency(lulc_vect, eval_pu, id_col = "id_pu", class_col = lulc_id_col, parallel = TRUE,  workers = 4),
+    function() calculate_lulc_adjacency(lulc_vect, eval_pu, id_col = "id_pu", class_col = lulc_id_col, parallel = FALSE)
+  )
+  padu_ke <-  calculate_padu_ke(
+    matriks_padu_ke  = matriks_padu_ke,
+    lulc_ref         = lulc_ref,
+    lulc_adjacencies = lulc_adjacencies,
+    idx_serasi_map   = eval_pu,
+    normalize        = TRUE
+  )
+  padu_ke$idx_padu_ke %>% dplyr::select(id_pu, idx_padu_ke)
+})
+
+save_timing_log(output_dir)
+```
+
+## Step 4.1. Perhitungan indeks PADU kombinasi & indeks PADAN
+
+```{r run-padu-combine-and-padan}
+#| eval: false
+
+run_timed_step("PADU-Kombinasi & PADAN", {
+  padu_idx_weight <-  if (is.null(padu_idx_weight_path)) NULL else load_and_validate_table(padu_idx_weight_path)
+  padu_list <- list(
+    idx_padu_ke, idx_padu_hs, idx_padu_kh,
+    idx_padu_rtp, idx_padu_se, idx_padu_ki
+  )
+
+  # Calculate composite value of PADU
+  idx_padu_eval <-  calculate_padu_index(
+    padu_list       = padu_list,
+    idx_padu_map    = eval_pu,
+    padu_idx_weight = padu_idx_weight
+  )
+
+  alpha <-  0.5
+  idx_padan_eval <-  idx_padu_eval %>%
+    dplyr::mutate(
+      idx_padan = (alpha * idx_serasi) + ((1 - alpha) * idx_padu_final)
+    )
+
+  # Merge PADU & PADAN index to map
+  score_cols <- setdiff(names(sf::st_drop_geometry(idx_padan_eval)), names(ml$pairs))
+  score_tbl  <- sf::st_drop_geometry(idx_padan_eval) %>%
+    dplyr::select(id_pu, dplyr::all_of(score_cols))
+
+  pairs_padan <-  ml$pairs %>%
+    dplyr::left_join(score_tbl, by = "id_pu")
+
+  padan_ml_gpkg <-  file.path(output_dir, "idx_padan_multilayer.gpkg")
+  padan_ml_xlsx <-  file.path(output_dir, "idx_padan.xlsx")
+
+  write_adjacent_multilayer_gpkg(
+    gpkg_path     = padan_ml_gpkg,
+    features_sf   = ml$features,
+    pairs_df      = pairs_padan,
+    eval_units_sf = idx_padan_eval
+  )
+  openxlsx::write.xlsx(pairs_padan, padan_ml_xlsx)
+})
+
+timing_summary <- save_timing_log(output_dir)
+print(timing_summary)
+
+sf::st_layers(padan_ml_gpkg)
+head(pairs_padan[, c("id_pu", "id_rtrw", "id_rzwp3k", "clipped_side", "clip_radius_m",
+                     "idx_serasi", "idx_padu_final", "idx_padan")])
+```
+
+# Step 6. Visualisasi hasil
+
+```{r visualize-padu-padan-radial}
+#| eval: false
+
+padu_radial_widget <- plot_padu_radial_widget(
+  idx_map         = idx_padan_eval,
+  padu_idx_weight = padu_idx_weight,
+  alpha           = alpha,
+  id_col          = "id_pu"
+)
+
+padu_radial_html <- file.path(output_dir, "padu_padan_sunburst.html")
+htmltools::save_html(
+  html = padu_radial_widget,
+  file = padu_radial_html
+)
+cat("Sunburst HTML tersimpan di:", padu_radial_html, "\n")
+
+padu_radial_widget
+```
