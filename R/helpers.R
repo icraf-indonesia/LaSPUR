@@ -1430,15 +1430,18 @@ render_result_server <- function(input, output, session, rv, config) {
     
     # Check if map_color_col is numeric to decide palette type
     if (is.numeric(map_sf[[map_color_col]])) {
+      vals <- map_sf[[map_color_col]]
+      legend_vals <- if (any(is.finite(vals))) vals[is.finite(vals)] else c(0, 1)
       pal <- leaflet::colorNumeric(
         palette = map_palette,
-        domain  = map_sf[[map_color_col]],
+        domain  = legend_vals,
         na.color = "transparent"
       )
     } else {
+      legend_vals <- map_sf[[map_color_col]]
       pal <- leaflet::colorFactor(
         palette = map_palette,
-        domain  = map_sf[[map_color_col]],
+        domain  = legend_vals,
         na.color = "transparent"
       )
     }
@@ -1479,7 +1482,7 @@ render_result_server <- function(input, output, session, rv, config) {
       leaflet::addLegend(
         position = "bottomright",
         pal      = pal,
-        values   = as.formula(paste0("~`", map_color_col, "`")),
+        values   = legend_vals,
         title    = map_title,
         opacity  = 0.7
       )
@@ -3335,4 +3338,108 @@ css_carousel <- function(paths) {
     ),
     imgs
   )
+}
+
+# ==============================================================================
+# Execution & Timing Utilities
+# ==============================================================================
+
+#' Run Expression in Parallel with Sequential Fallback
+#'
+#' @description
+#' Executes `parallel_fn()` inside `tryCatch()`; if it errors, emits a warning
+#' and falls back to `sequential_fn()`.
+#'
+#' @param label Character label identifying the step in warning messages.
+#' @param parallel_fn Zero-argument function executing the parallel path.
+#' @param sequential_fn Zero-argument function executing the sequential fallback.
+#'
+#' @return The return value of `parallel_fn()`, or `sequential_fn()` on error.
+#' @keywords internal
+.run_with_parallel_fallback <- function(label, parallel_fn, sequential_fn) {
+  tryCatch(
+    parallel_fn(),
+    error = function(e) {
+      warning(sprintf("[%s] Eksekusi paralel gagal (%s); beralih ke mode sekuensial.",
+                      label, conditionMessage(e)), call. = FALSE)
+      sequential_fn()
+    }
+  )
+}
+
+.timing_state <- new.env(parent = emptyenv())
+.timing_state$rows <- list()
+
+#' Reset Execution Timing Log
+#'
+#' @description
+#' Clears accumulated step timing records stored in `.timing_state`.
+#'
+#' @return Invisibly returns `NULL`.
+#' @export
+reset_timing_log <- function() {
+  .timing_state$rows <- list()
+  invisible(NULL)
+}
+
+#' Execute and Time a Pipeline Step
+#'
+#' @description
+#' Evaluates `expr`, logs start/end timestamps and elapsed duration into
+#' `.timing_state$rows`, and prints progress messages.
+#'
+#' @param step_name Character label for the pipeline step.
+#' @param expr Expression to evaluate.
+#'
+#' @return The result of evaluating `expr`.
+#' @export
+run_timed_step <- function(step_name, expr) {
+  t0 <- Sys.time()
+  message(sprintf("[%s] Mulai: %s ...", format(t0, "%Y-%m-%d %H:%M:%S"), step_name))
+  res <- force(expr)
+  t1 <- Sys.time()
+  sec <- as.numeric(difftime(t1, t0, units = "secs"))
+  .timing_state$rows[[length(.timing_state$rows) + 1L]] <- tibble::tibble(
+    step        = step_name,
+    started_at  = format(t0, "%Y-%m-%d %H:%M:%S"),
+    finished_at = format(t1, "%Y-%m-%d %H:%M:%S"),
+    elapsed_sec = round(sec, 2),
+    elapsed_min = round(sec / 60, 2)
+  )
+  message(sprintf("[%s] Selesai: %s (%.2f detik / %.2f menit)",
+                  format(t1, "%Y-%m-%d %H:%M:%S"), step_name, sec, sec / 60))
+  res
+}
+
+#' Save Execution Timing Log to Excel and CSV
+#'
+#' @description
+#' Aggregates recorded step timings from `.timing_state$rows`, appends a
+#' `TOTAL_TERCATAT` summary row, and writes both `.xlsx` and `.csv` files into
+#' `output_dir`.
+#'
+#' @param output_dir Character directory path where timing files will be saved.
+#' @param filename Character Excel filename. Default `"processing_time_log.xlsx"`.
+#'
+#' @return A `tibble` of recorded step timings including the total row, or
+#'   `NULL` invisibly if no steps were recorded.
+#' @export
+save_timing_log <- function(output_dir, filename = "processing_time_log.xlsx") {
+  if (length(.timing_state$rows) == 0L) return(invisible(NULL))
+  df <- dplyr::bind_rows(.timing_state$rows)
+  tot_sec <- sum(df$elapsed_sec, na.rm = TRUE)
+  summary_df <- dplyr::bind_rows(
+    df,
+    tibble::tibble(
+      step        = "TOTAL_TERCATAT",
+      started_at  = df$started_at[1],
+      finished_at = df$finished_at[nrow(df)],
+      elapsed_sec = round(tot_sec, 2),
+      elapsed_min = round(tot_sec / 60, 2)
+    )
+  )
+  xlsx_path <- file.path(output_dir, filename)
+  openxlsx::write.xlsx(summary_df, xlsx_path)
+  utils::write.csv(summary_df, sub("\\.xlsx$", ".csv", xlsx_path), row.names = FALSE)
+  summary_df
 }

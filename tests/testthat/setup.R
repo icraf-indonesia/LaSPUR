@@ -24,5 +24,8 @@ if (!exists("ensure_geometry_name", mode = "function")) {
 if (!exists("identify_overlaps", mode = "function")) {
   source(file.path(proj_root, "R/functions.R"), local = FALSE)
 }
+if (!exists("extract_adjacent_contacts", mode = "function")) {
+  source(file.path(proj_root, "R/adjacent_multilayer.R"), local = FALSE)
+}
 
 setwd(old_wd)

@@ -4,6 +4,7 @@
 # ============================================================
 
 source("R/helpers.R")
+source("R/adjacent_multilayer.R")
 source("R/shared_inputs.R")
 
 plan(multisession)
@@ -2015,7 +2016,6 @@ $(document).ready(function() {
       'button[id$=\"-btn_run_final\"]',
       'button[id$=\"-btn_run_reconcile\"]',
       'button[id$=\"-btn_calc_npv\"]',
-      'button[id$=\"-btn_calc_estuari_dist\"]',
       'button[id$=\"-btn_calc_ind_dist\"]',
       'button[id$=\"-btn_calc_pel_dist\"]',
       'button[id$=\"-btn_apply_filter\"]'
