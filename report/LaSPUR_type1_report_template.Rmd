@@ -70,10 +70,9 @@ analysis_log <- tribble(
   "Land Use & Environmental Data",   "",
   "1. LULC Vector Path",             params$inputs$lulc_vect_path,
   "2. LULC Reference Path",          params$inputs$lulc_ref_path,
-  "3. Estuary Vector",               params$inputs$estuari_vect_path,
-  "4. River Vector",                 params$inputs$river_vect_path,
-  "5. TSS Raster",                   params$inputs$tss_rast_path,
-  "6. Disaster Risk Vector",         params$inputs$disaster_risk_vect_path,
+  "3. River Vector",                 params$inputs$river_vect_path,
+  "4. TSS Raster",                   params$inputs$tss_rast_path,
+  "5. Disaster Risk Vector",         params$inputs$disaster_risk_vect_path,
   
   "Coastal & Marine Data",         "",
   "1. Protected Areas",              params$inputs$protected_area_vect_path,
@@ -290,15 +289,19 @@ DT::datatable(params$result$matriks_padu_ke)
 
 ::: {.panel-tabset}
 
-#### Peta Estuari
+#### Peta Sungai
 
-```{r input-peta-estuari}
+```{r input-peta-sungai}
 #| echo: false
 #| error: false
 #| warning: false
 #| message: false
-estuari <- params$result$estuari_vect["NAMOBJ"]
-plot_with_autokey(estuari)
+if (!is.null(params$result$river_vect)) {
+  river_geom <- sf::st_geometry(params$result$river_vect)
+  plot(river_geom, col = "#08519c", main = "Peta Jaringan Sungai")
+} else {
+  cat("*Data vektor sungai tidak tersedia.*")
+}
 ```
 
 #### Peta TSS

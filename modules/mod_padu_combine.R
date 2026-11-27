@@ -496,24 +496,30 @@ padu_combine_server <- function(id, output_dir) {
           } else {
             n <- length(padu_list)
             append_log(paste0("Tabel bobot tidak diunggah. ",
-                              "Menggunakan bobot seragam (1/", n, ")."))
-            sample_df <- padu_list[[1]]
-            idx_cols  <- grep("^idx_padu_", names(sample_df), value = TRUE)
-            if (length(idx_cols) != length(padu_list)) {
-              labels <- gsub("^idx_padu_|\\.gpkg$", "", basename(files_to_use))
-            } else {
-              labels <- idx_cols
-            }
-            padu_idx_weight <- data.frame(index = labels, weight = rep(1 / n, n))
+                              "Menggunakan bobot seragam (1/", n, ") per unit secara otomatis."))
+            padu_idx_weight <- NULL
           }
           
           incProgress(0.2, detail = "Menghitung indeks kombinasi...")
           append_log("Menghitung indeks PADU kombinasi...")
-          idx_padu_map <- calculate_padu_index(
-            padu_list       = padu_list,
-            idx_padu_map    = idx_serasi_map,
-            padu_idx_weight = padu_idx_weight
+          warn_msgs <- character(0)
+          idx_padu_map <- withCallingHandlers(
+            calculate_padu_index(
+              padu_list       = padu_list,
+              idx_padu_map    = idx_serasi_map,
+              padu_idx_weight = padu_idx_weight
+            ),
+            warning = function(w) {
+              msg <- conditionMessage(w)
+              warn_msgs <<- c(warn_msgs, msg)
+              append_log(paste("PERINGATAN:", msg))
+              invokeRestart("muffleWarning")
+            }
           )
+          if (length(warn_msgs) > 0) {
+            showNotification(paste(unique(warn_msgs), collapse = " | "),
+                             type = "warning", duration = 8)
+          }
           append_log("Perhitungan indeks kombinasi selesai.")
           
           if ("length" %in% colnames(idx_padu_map)) {

@@ -242,7 +242,7 @@ render_padu_data_toggle(
   output_dir   = padu_data_output_dir,
   module_dir   = "Analisis PADU-HS",
   title        = "PADU-HS (Hidrologi dan Sedimentasi)",
-  figure_files = c("jarak_ke_estuari.png", "tss.png")
+  figure_files = c("buffer_sungai.png", "tss.png")
 )
 ```
 
@@ -309,17 +309,20 @@ render_padu_toggle <- function(data, id, title, description, index_col,
   
   idx_tbl <- sf::st_drop_geometry(data)
   
+  finite_vals <- idx_tbl[[index_col]]
+  finite_vals <- finite_vals[is.finite(finite_vals)]
+
   summary_stats <- data.frame(
     Statistik = c(
       "Jumlah Unit Perencanaan", "Indeks Rata-rata",
       "Indeks Minimum", "Indeks Maksimum", "Total Luas (ha)"
     ),
     Nilai = c(
-      as.character(nrow(idx_tbl)),                         
-      fmt2(mean(idx_tbl[[index_col]], na.rm = TRUE)),    
-      fmt2(min(idx_tbl[[index_col]],  na.rm = TRUE)),
-      fmt2(max(idx_tbl[[index_col]],  na.rm = TRUE)),
-      fmt2(sum(idx_tbl$area_ha,       na.rm = TRUE))
+      as.character(nrow(idx_tbl)),
+      if (length(finite_vals) > 0) fmt2(mean(finite_vals)) else "-",
+      if (length(finite_vals) > 0) fmt2(min(finite_vals))  else "-",
+      if (length(finite_vals) > 0) fmt2(max(finite_vals))  else "-",
+      fmt2(sum(idx_tbl$area_ha, na.rm = TRUE))
     ),
     stringsAsFactors = FALSE
   )
@@ -405,7 +408,7 @@ render_padu_toggle(
   data = params$result$idx_padu_hs_map,
   id = "hs",
   title = "PADU-HS (Hidrologi dan Sedimentasi)",
-  description = "Menilai kepaduan lingkungan berdasarkan kondisi hidrologis dan sedimentasi.",
+  description = "Menilai kepaduan lingkungan berdasarkan kualifikasi buffer sungai dan konsentrasi Total Suspended Solids (TSS).",
   index_col = "idx_padu_hs",
   legend_title = "Indeks PADU-HS",
   module_dir = "Analisis PADU-HS"

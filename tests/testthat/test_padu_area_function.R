@@ -1012,4 +1012,173 @@ test_that("Downstream reconciliation layer lookup correctly integrates fungsi an
   expect_equal(res_reconciled$idx_padu_final, c(0.8, 0.75))
 })
 
+# ============================================================
+# NA Preservation & Per-Unit Weight Rescaling in calculate_padu_index()
+# ============================================================
+
+test_that("calculate_padu_index preserves NA in individual columns and rescales weights per id_pu", {
+  poly <- make_test_poly()
+  idx_map <- sf::st_sf(
+    id_pu = 1:3,
+    fungsi = c("lindung", "lindung", "budidaya"),
+    geometry = rep(poly, 3)
+  )
+
+  # id_pu 1: all indicators present; id_pu 2: HS is NA; id_pu 3: SE is NA
+  padu_ke  <- data.frame(id_pu = 1:3, idx_padu_ke  = c(0.8, 0.8, 0.4))
+  padu_hs  <- data.frame(id_pu = 1:3, idx_padu_hs  = c(0.6, NA_real_, 0.5))
+  padu_kh  <- data.frame(id_pu = 1:3, idx_padu_kh  = c(0.4, 0.4, 0.2))
+  padu_ki  <- data.frame(id_pu = 1:3, idx_padu_ki  = c(0.5, 0.5, 0.6))
+  padu_rtp <- data.frame(id_pu = 1:3, idx_padu_rtp = c(0.3, 0.3, 0.8))
+  padu_se  <- data.frame(id_pu = 1:3, idx_padu_se  = c(0.7, 0.7, NA_real_))
+
+  weights <- data.frame(
+    Kode = c("ke", "hs", "kh", "ki", "rtp", "se"),
+    Bobot = c(0.20, 0.20, 0.20, 0.15, 0.15, 0.10)
+  )
+
+  expect_warning(
+    res <- calculate_padu_index(
+      list(padu_ke, padu_hs, padu_kh, padu_ki, padu_rtp, padu_se),
+      idx_map,
+      padu_idx_weight = weights
+    ),
+    "partial NA"
+  )
+
+  # Individual NA values must NOT be coerced to 0
+  expect_true(is.na(res$idx_padu_hs[2]))
+  expect_true(is.na(res$idx_padu_se[3]))
+
+  # Row 1 (lindung, all MFL present): ke=0.20, hs=0.20, kh=0.20, ki=0.15 -> sum=0.75
+  exp_row1 <- (0.8 * 0.20 + 0.6 * 0.20 + 0.4 * 0.20 + 0.5 * 0.15) / 0.75
+  expect_equal(res$idx_padu_lindung[1], exp_row1, tolerance = 1e-6)
+  expect_equal(res$idx_padu_final[1], exp_row1, tolerance = 1e-6)
+
+  # Row 2 (lindung, HS = NA): only ke=0.20, kh=0.20, ki=0.15 -> sum=0.55
+  exp_row2 <- (0.8 * 0.20 + 0.4 * 0.20 + 0.5 * 0.15) / 0.55
+  expect_equal(res$idx_padu_lindung[2], exp_row2, tolerance = 1e-6)
+  expect_equal(res$idx_padu_final[2], exp_row2, tolerance = 1e-6)
+
+  # Row 3 (budidaya, SE = NA): only rtp=0.15, ki=0.15 -> sum=0.30
+  exp_row3 <- (0.8 * 0.15 + 0.6 * 0.15) / 0.30
+  expect_equal(res$idx_padu_budidaya[3], exp_row3, tolerance = 1e-6)
+  expect_equal(res$idx_padu_final[3], exp_row3, tolerance = 1e-6)
+})
+
+test_that("calculate_padu_index handles zero-sum remaining weights, empty-pillar fallback, and all-NA rows", {
+  poly <- make_test_poly()
+  idx_map <- sf::st_sf(
+    id_pu = 1:3,
+    fungsi = c("budidaya", "lindung", "lindung"),
+    geometry = rep(poly, 3)
+  )
+
+  # Row 1 (budidaya): SE=NA (w=0.5), RTp=0.8 (w=0), KI=0.4 (w=0) -> zero-sum fallback -> (0.8 + 0.4)/2 = 0.6
+  # Row 2 (lindung): all MFL (KE, KI) NA, MFB (RTp=0.9, SE=0.5) non-NA -> falls back to idx_padu_all
+  # Row 3 (lindung): all indicators NA -> idx_padu_final = NA_real_
+  padu_ke  <- data.frame(id_pu = 1:3, idx_padu_ke  = c(0.5, NA_real_, NA_real_))
+  padu_ki  <- data.frame(id_pu = 1:3, idx_padu_ki  = c(0.4, NA_real_, NA_real_))
+  padu_rtp <- data.frame(id_pu = 1:3, idx_padu_rtp = c(0.8, 0.9, NA_real_))
+  padu_se  <- data.frame(id_pu = 1:3, idx_padu_se  = c(NA_real_, 0.5, NA_real_))
+
+  weights <- data.frame(
+    Kode = c("ke", "ki", "rtp", "se"),
+    Bobot = c(0.5, 0.0, 0.0, 0.5)
+  )
+
+  warnings_seen <- character(0)
+  res <- withCallingHandlers(
+    calculate_padu_index(
+      list(padu_ke, padu_ki, padu_rtp, padu_se),
+      idx_map,
+      padu_idx_weight = weights
+    ),
+    warning = function(w) {
+      warnings_seen <<- c(warnings_seen, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  expect_equal(res$idx_padu_budidaya[1], 0.6, tolerance = 1e-6)
+  expect_equal(res$idx_padu_final[1], 0.6, tolerance = 1e-6)
+
+  expect_true(is.na(res$idx_padu_lindung[2]))
+  expect_equal(res$idx_padu_all[2], 0.5, tolerance = 1e-6) # SE only has weight 0.5 (RTp has weight 0)
+  expect_equal(res$idx_padu_final[2], 0.5, tolerance = 1e-6)
+
+  expect_true(is.na(res$idx_padu_all[3]))
+  expect_true(is.na(res$idx_padu_lindung[3]))
+  expect_true(is.na(res$idx_padu_final[3]))
+
+  expect_true(any(grepl("partial NA", warnings_seen, ignore.case = TRUE)))
+  expect_true(any(grepl("all.*NA", warnings_seen, ignore.case = TRUE)))
+})
+
+test_that("padu_combine_server preserves NA values and NULL default weights end-to-end", {
+  skip_if_not_installed("shiny")
+  mod_path <- if (file.exists("modules/mod_padu_combine.R")) {
+    "modules/mod_padu_combine.R"
+  } else {
+    "../../modules/mod_padu_combine.R"
+  }
+  skip_if_not(file.exists(mod_path), "mod_padu_combine.R not found")
+
+  env <- new.env(parent = globalenv())
+  old_wd <- getwd()
+  proj_dir <- if (file.exists("modules/mod_padu_combine.R")) "." else "../.."
+  setwd(proj_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+  source("modules/mod_padu_combine.R", local = env)
+
+  tmp_out <- tempfile("padu_combine_e2e_")
+  dir.create(file.path(tmp_out, "Analisis PADU-KE"), recursive = TRUE)
+  dir.create(file.path(tmp_out, "Analisis PADU-HS"), recursive = TRUE)
+  on.exit(unlink(tmp_out, recursive = TRUE), add = TRUE)
+
+  poly <- make_test_poly()
+  serasi_sf <- sf::st_sf(
+    id_pu = 1:2,
+    RTRW = c("HL", "HL"),
+    RZWP3K = c("KKP", "KKP"),
+    fungsi = c("lindung", "lindung"),
+    idx_serasi = c(0.8, 0.8),
+    geometry = rep(poly, 2)
+  )
+  ke_sf <- sf::st_sf(id_pu = 1:2, idx_padu_ke = c(0.8, 0.6), geometry = rep(poly, 2))
+  hs_sf <- sf::st_sf(id_pu = 1:2, idx_padu_hs = c(0.4, NA_real_), geometry = rep(poly, 2))
+  sf::st_write(ke_sf, file.path(tmp_out, "Analisis PADU-KE", "idx_padu_ke.gpkg"), quiet = TRUE)
+  sf::st_write(hs_sf, file.path(tmp_out, "Analisis PADU-HS", "idx_padu_hs.gpkg"), quiet = TRUE)
+
+  shiny::testServer(
+    env$padu_combine_server,
+    args = list(output_dir = shiny::reactive(tmp_out)),
+    {
+      session$userData$module_results <- list(
+        serasi = list(result = list(idx_serasi_map = serasi_sf))
+      )
+      session$setInputs(btn_run = 1)
+      out <- session$userData$module_results$padu_combine
+      expect_false(is.null(out))
+      expect_null(out$result$weight_table)
+      res_tbl <- out$result$idx_padu_table
+      expect_true(is.na(res_tbl$idx_padu_hs[2]))
+      expect_equal(res_tbl$idx_padu_final, c(0.6, 0.6), tolerance = 1e-6)
+      gpkg_file <- file.path(tmp_out, "Analisis PADU-Kombinasi", "idx_padu_combine.gpkg")
+      xlsx_file <- file.path(tmp_out, "Analisis PADU-Kombinasi", "idx_padu_combine.xlsx")
+      expect_true(file.exists(gpkg_file))
+      expect_true(file.exists(xlsx_file))
+
+      gpkg_tbl <- sf::st_drop_geometry(sf::st_read(gpkg_file, quiet = TRUE))
+      xlsx_tbl <- openxlsx::read.xlsx(xlsx_file)
+      expect_true(is.na(gpkg_tbl$idx_padu_hs[2]))
+      expect_true(is.na(xlsx_tbl$idx_padu_hs[2]))
+      expect_equal(gpkg_tbl$idx_padu_final, c(0.6, 0.6), tolerance = 1e-6)
+      expect_equal(xlsx_tbl$idx_padu_final, c(0.6, 0.6), tolerance = 1e-6)
+    }
+  )
+})
+
+
+
 
