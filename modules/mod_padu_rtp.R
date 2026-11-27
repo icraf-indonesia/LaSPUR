@@ -77,6 +77,7 @@ padu_rtp_server <- function(id, output_dir) {
       pel_vect = NULL,
       industry_euc_dist = NULL,
       pelayaran_euc_dist = NULL,
+      popdens_rast = NULL,
       analysis_result = NULL,
       gpkg_path = NULL,
       xlsx_path = NULL,
@@ -128,7 +129,17 @@ padu_rtp_server <- function(id, output_dir) {
                                  "Unggah Raster Jarak yang Sudah Ada (.tif)" = "raster"),
                      selected = "raster", inline = FALSE),
         uiOutput(ns("ui_pel_file")),
-        
+
+        hr(),
+
+        tags$p(tags$i(class = "bi bi-people-fill me-1"), "3. Peta Kepadatan Populasi Penduduk (jiwa/ha)",
+               style = "font-weight: 600; margin-bottom: 4px;"),
+        tags$small(style = "color: #6c757d; display: block; margin-bottom: 8px;",
+                   "Layer raster kepadatan penduduk per satuan luas (.tif)."),
+        fileInput(ns("popdens_file_rast"), label = NULL,
+                  accept = c(".tif", ".tiff", ".geotiff"), multiple = FALSE),
+        uiOutput(ns("popdens_status")),
+
         hr(),
         .step_nav(ns, back_id = NULL, next_id = "btn_next_1", next_label = "Lanjut ke Langkah 2")
       )
@@ -287,7 +298,25 @@ padu_rtp_server <- function(id, output_dir) {
         showNotification(paste("Gagal memuat raster alur pelayaran:", e$message), type = "error")
       })
     })
-    
+
+    observeEvent(input$popdens_file_rast, {
+      req(input$popdens_file_rast)
+      tryCatch({
+        rv$popdens_rast <- load_and_validate_raster(input$popdens_file_rast$datapath)
+        showNotification("Raster kepadatan penduduk berhasil dimuat.", type = "message")
+      }, error = function(e) {
+        rv$popdens_rast <- NULL
+        showNotification(paste("Gagal memuat raster kepadatan penduduk:", e$message), type = "error")
+      })
+    })
+
+    output$popdens_status <- renderUI({
+      if (!is.null(rv$popdens_rast)) {
+        div(class = "alert alert-success mt-2 mb-0 py-1 px-2", style = "font-size: 0.85rem;",
+            tags$i(class = "bi bi-check-circle me-1"), "Peta kepadatan penduduk siap.")
+      }
+    })
+
     observeEvent(input$btn_next_1, {
       if (is.null(serasi_in$idx_serasi_map())) {
         showNotification("Harap siapkan peta SERASI.", type = "warning"); return()
@@ -308,11 +337,15 @@ padu_rtp_server <- function(id, output_dir) {
       } else if (is.null(input$pel_file_rast) || is.null(rv$pelayaran_euc_dist)) {
         showNotification("Harap unggah raster jarak alur pelayaran.", type = "warning"); return()
       }
+      if (is.null(input$popdens_file_rast) || is.null(rv$popdens_rast)) {
+        showNotification("Harap unggah raster kepadatan penduduk (jiwa/ha).", type = "warning"); return()
+      }
       rv$unlocked <- max(rv$unlocked, 2)
       go_to_panel("step2")
     })
     
     output$step2_ui <- renderUI({
+      if (rv$unlocked < 2) return(.locked_panel())
       tagList(
         tags$p(tags$i(class = "bi bi-sliders me-1"), "Parameter",
                style = "font-weight: 600; margin-bottom: 4px;"),
@@ -341,13 +374,18 @@ padu_rtp_server <- function(id, output_dir) {
       }
       
       raw_serasi <- serasi_in$idx_serasi_map()
-      req(raw_serasi, rv$industry_euc_dist, rv$pelayaran_euc_dist)
-      
+      if (is.null(raw_serasi) || is.null(rv$industry_euc_dist) ||
+          is.null(rv$pelayaran_euc_dist) || is.null(rv$popdens_rast)) {
+        showNotification("Harap lengkapi peta SERASI, jarak industri, jarak alur pelayaran, dan kepadatan penduduk.",
+                         type = "error", duration = 5)
+        return()
+      }
+
       rv$analysis_result <- NULL; rv$gpkg_path <- NULL
       rv$xlsx_path <- NULL; rv$log_messages <- ""
-      
+
       append_log("Memulai analisis PADU-RTp...")
-      
+
       withProgress(message = "Menjalankan Analisis PADU-RTp", value = 0, {
         tryCatch({
           incProgress(0.1, detail = "Memuat data...")
@@ -357,35 +395,36 @@ padu_rtp_server <- function(id, output_dir) {
             idx_map <- raw_serasi
           }
           append_log("Peta SERASI berhasil dimuat.")
-          
+
           incProgress(0.1, detail = "Mempersiapkan perhitungan...")
           append_log("Menghitung indeks PADU-RTp...")
-          
+
           padu_rtp <- calculate_padu_rtp(
             idx_serasi_map      = idx_map,
             industry_euc_dist   = rv$industry_euc_dist,
             pelayaran_euc_dist  = rv$pelayaran_euc_dist,
+            popdens_rast        = rv$popdens_rast,
             industry_max_dist   = input$max_ind_dist,
             pelayaran_max_dist  = input$max_pel_dist
           )
           incProgress(0.6, detail = "Perhitungan selesai...")
           append_log("Perhitungan indeks selesai.")
           idx_padu_rtp_map <- padu_rtp$idx_padu_rtp_map
-          
+
           incProgress(0.1, detail = "Menyimpan hasil...")
           padu_rtp_dir <- file.path(output_dir(), "Analisis PADU-RTp")
           if (!dir.exists(padu_rtp_dir))
             dir.create(padu_rtp_dir, recursive = TRUE, showWarnings = FALSE)
-          
+
           gpkg_path <- file.path(padu_rtp_dir, "idx_padu_rtp.gpkg")
           xlsx_path <- file.path(padu_rtp_dir, "idx_padu_rtp.xlsx")
           sf::st_write(idx_padu_rtp_map, gpkg_path, delete_dsn = TRUE, quiet = TRUE)
           res_table <- as_tibble(sf::st_drop_geometry(idx_padu_rtp_map))
           openxlsx::write.xlsx(res_table, xlsx_path)
-          
+
           rv$gpkg_path <- gpkg_path; rv$xlsx_path <- xlsx_path
           rv$analysis_result <- list(map = idx_padu_rtp_map, table = res_table)
-          
+
           out <- list(
             inputs = list(
               start_time             = Sys.time(),
@@ -397,6 +436,7 @@ padu_rtp_server <- function(id, output_dir) {
               ind_tif_path           = input$ind_file_rast,
               pel_shp_path           = input$pel_file_vect,
               pel_tif_path           = input$pel_file_rast,
+              popdens_tif_path       = input$popdens_file_rast,
               max_ind_dist           = input$max_ind_dist,
               max_pel_dist           = input$max_pel_dist,
               output_dir             = output_dir()
@@ -405,11 +445,12 @@ padu_rtp_server <- function(id, output_dir) {
               idx_serasi_map     = idx_map,
               industry_euc_dist  = rv$industry_euc_dist,
               pelayaran_euc_dist = rv$pelayaran_euc_dist,
+              popdens_rast       = rv$popdens_rast,
               idx_padu_rtp_map   = idx_padu_rtp_map,
               idx_padu_rtp_table = res_table
             )
           )
-          
+
           log_dir <- file.path(padu_rtp_dir, "log")
           if (!dir.exists(log_dir))
             dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
@@ -417,9 +458,9 @@ padu_rtp_server <- function(id, output_dir) {
             inputs <- out$inputs
             save(inputs, file = file.path(log_dir, "idx_padu_rtp_log.rda"))
           }, error = function(e) warning("Gagal menulis log: ", e$message))
-          
+
           session$userData$module_results$padu_rtp <- out
-          
+
           plot_continuous_map(map = idx_padu_rtp_map, column = "idx_padu_rtp",
                               title = "Peta Indeks PADU-RTp", legend = "Indeks PADU-RTp",
                               low = "red", high = "lightgreen",
@@ -432,6 +473,11 @@ padu_rtp_server <- function(id, output_dir) {
                               title = "Peta Jarak ke Alur Pelayaran", legend = "Meter",
                               low = "darkblue", high = "yellow",
                               filepath = file.path(log_dir, "jarak_ke_alur_pelayaran.png"))
+          plot_continuous_map(map = rv$popdens_rast, column = NA,
+                              title = "Peta Kepadatan Populasi Penduduk",
+                              legend = "Penduduk (jiwa/ha)",
+                              low = "darkblue", high = "yellow",
+                              filepath = file.path(log_dir, "kepadatan_penduduk.png"))
           
           append_log(paste("Peta disimpan \u2192", gpkg_path))
           append_log(paste("Tabel disimpan \u2192", xlsx_path))
@@ -473,9 +519,12 @@ padu_rtp_server <- function(id, output_dir) {
         "admin" = "Administrasi", "area_ha" = "Luas (ha)",
         "pelayaran_dist_mean" = "Jarak ke Alur Pelayaran (m)",
         "industry_dist_mean" = "Jarak ke Area Industri (m)",
+        "popdens" = "Kepadatan Penduduk (jiwa/ha)",
         "idx_padu_rtp" = "Indeks PADU-RTp"),
       table_round_cols = c("Luas (ha)", "Jarak ke Alur Pelayaran (m)",
-                           "Jarak ke Area Industri (m)", "Indeks PADU-RTp")
+                           "Jarak ke Area Industri (m)",
+                           "Kepadatan Penduduk (jiwa/ha)",
+                           "Indeks PADU-RTp")
     )
     
     render_result_server(input, output, session, rv, padu_rtp_config)

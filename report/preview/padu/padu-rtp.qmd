@@ -10,9 +10,19 @@ execute:
 source("R/utils.R")
 ```
 
-Analisis **PADU-RTP** (Keterpaduan Rencana Tata Ruang dan Pelayaran/Industri) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan ruang berbasis jarak dan tingkat aksesibilitas terhadap kawasan industri serta alur pelayaran berdasarkan Peta Indeks SERASI.
+Analisis **PADU-RTP** (Risiko dan Tekanan) bertujuan untuk mengidentifikasi dan mengevaluasi keterpaduan ruang berbasis jarak ke kawasan industri dan alur pelayaran serta kepadatan populasi penduduk (`jiwa/ha`) berdasarkan Peta Indeks SERASI.
 
-Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, data **Jarak ke Industri**, dan data **Jarak ke Alur Pelayaran** (baik berupa data Vektor yang dihitung jaraknya secara otomatis maupun data Raster jarak/Euclidean Distance yang sudah ada).
+Pada tahap ini, pengguna menyiapkan **Peta Indeks SERASI**, data **Jarak ke Industri**, data **Jarak ke Alur Pelayaran** (baik berupa data Vektor yang dihitung jaraknya secara otomatis maupun data Raster jarak/Euclidean Distance yang sudah ada), serta data **Kepadatan Populasi Penduduk** (`.tif`).
+
+# Struktur Metodologi & Formula
+
+1. **Tekanan Jarak (`dist_pressure_mean`)**:
+   $$\text{filter\_industry} = 1 - \min\left(\frac{\text{industry\_dist}}{d_{\max,\text{ind}}}, 1\right), \quad \text{filter\_pelayaran} = 1 - \min\left(\frac{\text{pelayaran\_dist}}{d_{\max,\text{pel}}}, 1\right)$$
+   $$\text{dist\_pressure\_mean} = \frac{\text{filter\_industry} + \text{filter\_pelayaran}}{2}$$
+2. **Tekanan Kepadatan Penduduk (`popdens_norm`)**:
+   Nilai `popdens` (`jiwa/ha`) diekstrak rata-rata per unit perencanaan (`NA` pada wilayah perairan/lepas pantai diisi `0`) dan dinormalisasi min-max lintas unit perencanaan (`0` jika seluruh unit bernilai seragam).
+3. **Indeks PADU-RTp Final (`idx_padu_rtp`)**:
+   $$\text{idx\_padu\_rtp} = \max\left(0,\; 1 - \frac{\text{dist\_pressure\_mean} + \text{popdens\_norm}}{2}\right)$$
 
 # Input Mandatory
 
@@ -22,8 +32,9 @@ Bagian ini berisi data yang wajib tersedia sebelum proses analisis dapat dijalan
 |----|----|----|----|
 | **No.** | **Data** | **Format** | **Peran** |
 | 1 | Peta Indeks SERASI | Vektor | Input spasial utama hasil analisis SERASI |
-| 2 | Peta Jarak ke Industri | Vektor / Raster | Acuan jarak/aksesibilitas terhadap kawasan industri |
-| 3 | Peta Jarak ke Alur Pelayaran | Vektor / Raster | Acuan jarak/aksesibilitas terhadap alur pelayaran |
+| 2 | Peta Jarak ke Industri | Vektor / Raster | Acuan jarak terhadap kawasan industri |
+| 3 | Peta Jarak ke Alur Pelayaran | Vektor / Raster | Acuan jarak terhadap alur pelayaran |
+| 4 | Peta Kepadatan Populasi Penduduk | Raster (`.tif`) | Acuan tekanan demografi penduduk (`jiwa/ha`) |
 
 ------------------------------------------------------------------------
 
@@ -192,3 +203,46 @@ check_raster(
   data_path("raster", "padu_rtp", "EucD_AlurPl_training.tif")
 )
 ```
+
+------------------------------------------------------------------------
+
+## Peta Kepadatan Populasi Penduduk
+
+Data kepadatan populasi penduduk (`jiwa/ha`) diunggah dalam format raster GeoTIFF (`.tif`).
+
+#### Data yang Digunakan
+
+| Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
+|-----------|--------|------------|--------|------------|-----|
+| Population Density | GeoTIFF | Raster kepadatan penduduk (`jiwa/ha`). | WorldPop | 2025 | — |
+
+#### Preview
+
+```{r}
+create_raster_map(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+```
+
+#### Spesifikasi Teknis
+```{r}
+get_raster_metadata(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+```
+
+#### Pemeriksaan Data
+```{r}
+check_raster(
+  data_path("raster", "padu_se", "population_density_sulteng_2025_100m_Worldpop_v1.tif")
+)
+```
+
+# Skema Data Output
+
+Hasil analisis PADU-RTp diekspor ke direktori output dalam format **GeoPackage (`idx_padu_rtp.gpkg`)** dan **Spreadsheet Excel (`idx_padu_rtp.xlsx`)** dengan atribut:
+
+- `id_pu`: Identifikasi unik unit perencanaan
+- `industry_dist_mean`, `pelayaran_dist_mean`, `popdens`: Nilai rata-rata jarak (m) dan kepadatan penduduk (`jiwa/ha`)
+- `filter_industry`, `filter_pelayaran`, `dist_pressure_mean`, `popdens_norm`: Skor tekanan ternormalisasi (`0`–`1`)
+- `idx_padu_rtp`: Nilai indeks PADU-RTp akhir (`1` = tekanan terendah / kepaduan tertinggi)

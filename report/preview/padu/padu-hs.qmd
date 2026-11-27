@@ -10,9 +10,9 @@ execute:
 source("R/utils.R")
 ```
 
-Analisis **PADU-HS (Hidrologi dan Sedimentasi)** merupakan bagian dari analisis PADU yang menggunakan informasi karakteristik hidrologi dan sedimentasi untuk menilai keterpaduan ruang darat dan laut.
+Analisis **PADU-HS (Hidrologi dan Sedimentasi)** merupakan bagian dari analisis PADU yang menilai keterpaduan koridor hidrologis darat-laut melalui kualifikasi **buffer sungai** (`river_index`) dan tingkat kejernihan perairan berdasarkan **Total Suspended Solid (TSS)** pada unit perencanaan terkualifikasi (`tss_index`).
 
-Pada tahap ini digunakan **Peta Indeks SERASI**, **Peta Total Suspended Solid (TSS)**, dan **Peta Jarak Estuari** sebagai input analisis. Peta Jarak Estuari dapat disediakan dalam bentuk raster atau vektor sesuai format data yang digunakan oleh pengguna.
+Pada tahap ini digunakan **Peta Indeks SERASI**, **Peta Total Suspended Solid (TSS)**, dan **Data Vektor Sungai** sebagai input analisis.
 
 # Input Mandatory
 
@@ -20,9 +20,9 @@ Bagian ini berisi data yang wajib tersedia sebelum proses analisis PADU-HS dapat
 
 | No. | Data | Format | Peran |
 |----|----|----|----|
-| 1 | Peta Indeks SERASI | Vektor | Input hasil analisis SERASI yang menjadi dasar analisis PADU-HS. |
-| 2 | Peta Total Suspended Solid (TSS) | Raster | Input parameter Total Suspended Solid dalam analisis PADU-HS. |
-| 3 | Peta Jarak Estuari | Raster / Vektor | Input jarak terhadap kawasan estuari dalam analisis PADU-HS. |
+| 1 | Peta Indeks SERASI | Vektor | Input hasil analisis SERASI yang menjadi dasar unit perencanaan analisis PADU-HS. |
+| 2 | Peta Total Suspended Solid (TSS) | Raster | Input parameter konsentrasi Total Suspended Solid (mg/L) pada unit terkualifikasi. |
+| 3 | Data Vektor Sungai | Vektor (`.shp` / `.gpkg`) | Input jaringan atau badan sungai (`LINESTRING`/`MULTILINESTRING` atau `POLYGON`/`MULTIPOLYGON`) untuk membentuk buffer kualifikasi hidrologis. |
 
 ## Peta Indeks SERASI
 
@@ -35,9 +35,6 @@ Data dapat tersedia dalam format **GeoPackage (.gpkg)** atau **Shapefile (.shp)*
 ### Data yang Digunakan
 
 | Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
-|-----------|--------|------------|--------|------------|-----|
-
-|  |  |  |  |  |  |
 |----|----|----|----|----|----|
 | Peta Indeks SERASI | GeoPackage / Shapefile | Hasil analisis SERASI yang digunakan sebagai input spasial untuk analisis PADU-HS. | LaSPUR | \- | \- |
 
@@ -63,7 +60,7 @@ check_vector( data_path( "vector", "serasi", "step1", "idx_serasi_overlaps.gpkg"
 
 ### Deskripsi
 
-Peta **Total Suspended Solid (TSS)** merupakan data raster yang digunakan untuk merepresentasikan konsentrasi material tersuspensi di perairan. Informasi TSS digunakan sebagai salah satu parameter dalam analisis **PADU-HS** untuk menggambarkan karakteristik sedimentasi pada wilayah analisis.
+Peta **Total Suspended Solid (TSS)** merupakan data raster yang digunakan untuk merepresentasikan konsentrasi material tersuspensi di perairan (mg/L). Informasi TSS diekstrak secara rata-rata tertimbang luas (*area-weighted mean*, `fill_na = NA`) hanya pada unit perencanaan yang memenuhi kualifikasi buffer sungai (`river_index = 1`), lalu dinormalisasi terbalik sehingga konsentrasi TSS yang lebih rendah memperoleh skor kejernihan lebih tinggi.
 
 ### Data yang Digunakan
 
@@ -107,99 +104,39 @@ check_raster(
 )
 ```
 
-## Peta Jarak Estuari
+## Data Vektor Sungai
 
 ### Deskripsi
 
-Peta Jarak Estuari merupakan data spasial yang digunakan untuk merepresentasikan jarak setiap lokasi terhadap kawasan estuari sebagai salah satu parameter dalam analisis **PADU-HS**.
+Data Vektor Sungai merupakan data spasial vektor yang merepresentasikan jaringan atau badan sungai untuk membentuk koridor **Buffer Sungai** secara otomatis pada sistem koordinat metrik. Unit perencanaan yang beririsan dengan buffer memperoleh `river_index = 1`, sedangkan unit di luar buffer memperoleh `NA` (tidak terkualifikasi).
 
-Peta Jarak Estuari dapat disediakan dalam dua bentuk data, yaitu:
+Data vektor sungai dapat disediakan dalam format:
 
-1.  **Raster jarak Euclidean** dalam format GeoTIFF; atau
-
-2.  **Data vektor kawasan estuari** dalam format Shapefile yang digunakan sebagai sumber informasi kawasan estuari.
-
-Pengguna cukup menyediakan salah satu format yang sesuai dengan kebutuhan proses analisis.
+1.  **Shapefile (`.shp`)** beserta file pendukung (`.dbf`, `.prj`, `.shx`, opsional `.cpg`); atau
+2.  **GeoPackage (`.gpkg`)** tunggal.
 
 ### Data yang Digunakan
 
 | Nama Data | Format | Keterangan | Sumber | Tahun Data | URL |
 |----|----|----|----|----|----|
-| Peta Jarak Estuari | GeoTIFF | Raster jarak Euclidean terhadap kawasan estuari. | — | — | — |
-| Peta Kawasan Estuari | Shapefile | Data vektor kawasan estuari yang dapat digunakan sebagai alternatif input untuk menghasilkan informasi jarak estuari. | — | — | — |
-
-### Preview (Format Raster)
+| Data Vektor Sungai | Shapefile / GeoPackage | Data vektor jaringan/badan sungai bertipe garis (`LINESTRING`/`MULTILINESTRING`) atau poligon (`POLYGON`/`MULTIPOLYGON`) dengan CRS terdefinisi. | — | — | — |
 
 ```{r}
-create_raster_map(
-  data_path(
-    "raster",
-    "padu_hs",
-    "EucD_Estuari_training.tif"
-  )
+#| results: asis
+river_candidates <- c(
+  data_path("vector", "padu_hs", "river_training.gpkg"),
+  data_path("vector", "padu_hs", "river_training.shp"),
+  data_path("vector", "padu_hs", "Sungai_training.shp")
 )
-```
-
-### Spesifikasi Teknis (Format Raster)
-
-```{r}
-get_raster_metadata(
-  data_path(
-    "raster",
-    "padu_hs",
-    "EucD_Estuari_training.tif"
-  )
-)
-```
-
-### Pemeriksaan Data (Format Raster)
-
-```{r}
-check_raster(
-  data_path(
-    "raster",
-    "padu_hs",
-    "EucD_Estuari_training.tif"
-  )
-)
-```
-
-### Preview (Format Vektor)
-
-```{r}
-create_vector_map(
-  data_path(
-    "vector",
-    "padu_hs",
-    "ST_Estuari_PT_training.shp"
-  )
-)
-```
-
-### Spesifikasi Teknis (Format Vektor)
-
-```{r}
-get_vector_metadata(
-  data_path(
-    "vector",
-    "padu_hs",
-    "ST_Estuari_PT_training.shp"
-  )
-)
-```
-
-### Pemeriksaan Data (Format Vektor)
-
-```{r}
-check_vector(
-  data_path(
-    "vector",
-    "padu_hs",
-    "ST_Estuari_PT_training.shp"
-  )
-)
+river_sample <- river_candidates[file.exists(river_candidates)][1]
+if (!is.na(river_sample)) {
+  print(create_vector_map(river_sample))
+} else {
+  cat("*Dataset vektor sungai contoh belum tersedia pada direktori data pelatihan.*\n")
+}
 ```
 
 # Parameter
 
-Jarak Estuari Maksimum (meter) adalah **5000**.
+- **Radius Buffer Sungai (meter)** (`buffer_radius`): **5000** m (default). Buffer dihitung otomatis pada CRS metrik (UTM) sebelum uji perpotongan dengan unit perencanaan.
+- **Ambang Batas Kejernihan Air** (`tss_good_threshold`): **20** mg/L (default internal) digunakan apabila seluruh unit perencanaan terkualifikasi memiliki nilai `tss_mean` yang seragam (`max_tss == min_tss`).

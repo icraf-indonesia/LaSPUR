@@ -45,7 +45,7 @@ Analisis **PADU** bertujuan untuk meningkatkan keterpaduan setiap unit perencana
 | Sub-Indeks | Nama | Deskripsi |
 |------------|------|-----------|
 | **PADU-KE** | Keterpaduan Lahan dan Perairan | Sub-indeks PADU untuk Keterpaduan Penggunaan Lahan dan Perairan. |
-| **PADU-HS** | Hidrologi dan Sedimentasi | Sub-indeks PADU untuk Hidrologi Sedimentasi (estuari dan area dengan kandungan padatan tersuspensi/TSS tinggi). |
+| **PADU-HS** | Hidrologi dan Sedimentasi | Sub-indeks PADU untuk Hidrologi dan Sedimentasi (kualifikasi buffer sungai dan konsentrasi padatan tersuspensi/TSS pada unit terkualifikasi). |
 | **PADU-KL** | Kawasan Lindung Terintegrasi | Sub-indeks PADU untuk Kawasan Lindung. |
 | **PADU-KH** | Komposisi Habitat | Sub-indeks PADU untuk Komposisi Habitat (mangrove, terumbu karang, lamun). |
 | **PADU-RTp** | Risiko dan Tekanan | Sub-indeks PADU untuk Risiko dan Tekanan (jarak ke industri dan alur pelayaran). |
